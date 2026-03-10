@@ -1,14 +1,27 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { User } from '@/types';
 import { clearAuthSession, getAuthSession, persistAuthSession } from '@/lib/api/session';
-import { getCurrentUser, loginUser, logoutUser, refreshUserSession, registerUser, type SignupInput } from '@/services/authApi';
+import {
+  getCurrentUser,
+  loginUser,
+  logoutUser,
+  refreshUserSession,
+  registerUser,
+  requestOtp,
+  verifyOtp,
+  type OtpChallengeResponse,
+  type OtpVerificationResponse,
+  type SignupInput,
+} from '@/services/authApi';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isInitializing: boolean;
-  login: (identifier: string, password: string) => Promise<User>;
+  login: (identifier: string, pin: string) => Promise<User>;
   signup: (input: SignupInput) => Promise<User>;
+  requestOtp: (identifier: string) => Promise<OtpChallengeResponse>;
+  verifyOtp: (identifier: string, otp: string) => Promise<OtpVerificationResponse>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<User | null>;
 }
@@ -93,8 +106,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const login = useCallback(async (identifier: string, password: string) => {
-    const result = await loginUser(identifier, password);
+  const login = useCallback(async (identifier: string, pin: string) => {
+    const result = await loginUser(identifier, pin);
     persistAuthSession(result.session);
     setUser(currentUser => mergeUser(result.user, currentUser));
     return result.user;
@@ -102,8 +115,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signup = useCallback(async (input: SignupInput) => {
     await registerUser(input);
-    return login(input.email?.trim() || input.phoneNumber, input.password);
+    return login(input.identifier, input.pin);
   }, [login]);
+
+  const handleRequestOtp = useCallback((identifier: string) => requestOtp(identifier), []);
+  const handleVerifyOtp = useCallback((identifier: string, otp: string) => verifyOtp(identifier, otp), []);
 
   const logout = useCallback(async () => {
     const session = getAuthSession();
@@ -126,9 +142,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isInitializing,
     login,
     signup,
+    requestOtp: handleRequestOtp,
+    verifyOtp: handleVerifyOtp,
     logout,
     refreshProfile,
-  }), [isInitializing, login, logout, refreshProfile, signup, user]);
+  }), [handleRequestOtp, handleVerifyOtp, isInitializing, login, logout, refreshProfile, signup, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

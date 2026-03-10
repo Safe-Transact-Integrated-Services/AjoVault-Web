@@ -39,12 +39,21 @@ interface RefreshTokenResponse {
   refreshTokenExpiresAtUtc: string;
 }
 
+export interface OtpChallengeResponse {
+  message: string;
+  defaultOtp: string;
+}
+
+export interface OtpVerificationResponse {
+  verified: boolean;
+  message: string;
+}
+
 export interface SignupInput {
+  identifier: string;
   firstName: string;
   lastName: string;
-  phoneNumber: string;
-  email?: string;
-  password: string;
+  pin: string;
 }
 
 export interface AuthResult {
@@ -96,13 +105,30 @@ const mapSession = (response: LoginUserResponse | RefreshTokenResponse): AuthSes
   refreshTokenExpiresAt: response.refreshTokenExpiresAtUtc,
 });
 
-export const loginUser = async (identifier: string, password: string): Promise<AuthResult> => {
+export const requestOtp = (identifier: string) =>
+  apiRequest<OtpChallengeResponse>('/api/identity/request-otp', {
+    method: 'POST',
+    auth: false,
+    json: normalizeIdentifierPayload(identifier),
+  });
+
+export const verifyOtp = (identifier: string, otp: string) =>
+  apiRequest<OtpVerificationResponse>('/api/identity/verify-otp', {
+    method: 'POST',
+    auth: false,
+    json: {
+      ...normalizeIdentifierPayload(identifier),
+      otp,
+    },
+  });
+
+export const loginUser = async (identifier: string, pin: string): Promise<AuthResult> => {
   const response = await apiRequest<LoginUserResponse>('/api/identity/login', {
     method: 'POST',
     auth: false,
     json: {
       ...normalizeIdentifierPayload(identifier),
-      password,
+      pin,
     },
   });
 
@@ -117,11 +143,10 @@ export const registerUser = async (input: SignupInput) => {
     method: 'POST',
     auth: false,
     json: {
+      ...normalizeIdentifierPayload(input.identifier),
       firstName: input.firstName.trim(),
       lastName: input.lastName.trim(),
-      email: input.email?.trim() || undefined,
-      phoneNumber: input.phoneNumber.trim(),
-      password: input.password,
+      pin: input.pin,
     },
   });
 
