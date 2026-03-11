@@ -1,6 +1,7 @@
-import { getAccessToken } from './session';
+import { notifyAuthSessionExpired } from './authEvents';
+import { clearAuthSession, getAccessToken } from './session';
 
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:51708').replace(/\/+$/, '');
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'https://localhost:51707').replace(/\/+$/, '');
 
 interface ApiProblemDetails {
   title?: string;
@@ -65,6 +66,11 @@ export const apiRequest = async <T>(path: string, options: ApiRequestOptions = {
   });
 
   if (!response.ok) {
+    if (auth && response.status === 401) {
+      clearAuthSession();
+      notifyAuthSessionExpired();
+    }
+
     throw await toApiError(response);
   }
 
@@ -73,7 +79,7 @@ export const apiRequest = async <T>(path: string, options: ApiRequestOptions = {
   }
 
   const contentType = response.headers.get('content-type');
-  if (contentType?.includes('application/json')) {
+  if (isJsonContentType(contentType)) {
     return response.json() as Promise<T>;
   }
 
@@ -86,7 +92,7 @@ const toApiError = async (response: Response) => {
   let fieldErrors: Record<string, string[]> | undefined;
 
   const contentType = response.headers.get('content-type');
-  if (contentType?.includes('application/json')) {
+  if (isJsonContentType(contentType)) {
     const data = await response.json() as ApiProblemDetails;
     message = data.title ?? message;
     detail = data.detail;
@@ -100,3 +106,6 @@ const toApiError = async (response: Response) => {
 
   return new ApiError(message, response.status, detail, fieldErrors);
 };
+
+const isJsonContentType = (contentType: string | null) =>
+  contentType?.toLowerCase().includes('json') ?? false;

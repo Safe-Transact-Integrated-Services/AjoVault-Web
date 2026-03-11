@@ -1,6 +1,5 @@
-import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, TrendingUp } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { creditPassportKeys, getCreditPassportScore } from '@/services/creditPassportApi';
@@ -9,7 +8,6 @@ const kycLabels = { none: 'Not Verified', basic: 'Basic', verified: 'Verified', 
 const kycColors = { none: 'bg-destructive/10 text-destructive', basic: 'bg-warning/10 text-warning', verified: 'bg-success/10 text-success', premium: 'bg-accent/10 text-accent' };
 
 const Profile = () => {
-  const navigate = useNavigate();
   const { user, isInitializing } = useAuth();
   const creditPassportQuery = useQuery({
     queryKey: creditPassportKeys.score,
@@ -34,10 +32,6 @@ const Profile = () => {
 
   return (
     <div className="min-h-screen px-4 py-6 safe-top">
-      <button onClick={() => navigate(-1)} className="mb-6 flex items-center gap-1 text-sm text-muted-foreground">
-        <ArrowLeft className="h-4 w-4" /> Back
-      </button>
-
       <div className="mb-8 flex flex-col items-center">
         <div className="mb-3 flex h-20 w-20 items-center justify-center rounded-full bg-primary text-2xl font-bold text-primary-foreground">
           {initials}

@@ -6,25 +6,53 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import PinPad from '@/components/shared/PinPad';
 import { useAuth } from '@/contexts/AuthContext';
-import { getDefaultAuthenticatedPath } from '@/lib/auth';
-import { getApiErrorMessage } from '@/lib/api/http';
+import { getDefaultUserLoginPath } from '@/lib/auth';
+import { getApiErrorMessage, isApiError } from '@/lib/api/http';
+
+interface LoginLocationState {
+  from?: { pathname?: string };
+  identifier?: string;
+  justSignedUp?: boolean;
+}
 
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const locationState = location.state as LoginLocationState | null;
   const { login, isAuthenticated, user } = useAuth();
-  const [identifier, setIdentifier] = useState('');
+  const [identifier, setIdentifier] = useState(() => locationState?.identifier ?? '');
   const [showPin, setShowPin] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState(() =>
+    locationState?.justSignedUp ? 'Account created successfully. Sign in with your new PIN.' : ''
+  );
   const [loading, setLoading] = useState(false);
   const [pinPadKey, setPinPadKey] = useState(0);
+
+  const clearPinError = () => {
+    if (error) {
+      setError('');
+    }
+  };
+
+  const getLoginPinError = (err: unknown) => {
+    if (!isApiError(err)) {
+      return 'Unable to sign in with those credentials.';
+    }
+
+    if (err.status === 401) {
+      return 'Incorrect PIN. Try again, or go back to change your phone number or email.';
+    }
+
+    return getApiErrorMessage(err, 'Unable to sign in with those credentials.');
+  };
 
   useEffect(() => {
     if (!isAuthenticated || !user) {
       return;
     }
 
-    navigate(getDefaultAuthenticatedPath(user), { replace: true });
+    navigate(getDefaultUserLoginPath(user), { replace: true });
   }, [isAuthenticated, navigate, user]);
 
   const handlePinComplete = async (pin: string) => {
@@ -33,10 +61,10 @@ const Login = () => {
 
     try {
       const signedInUser = await login(identifier, pin);
-      const redirectPath = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
-      navigate(redirectPath ?? getDefaultAuthenticatedPath(signedInUser), { replace: true });
+      const redirectPath = locationState?.from?.pathname;
+      navigate(redirectPath ?? getDefaultUserLoginPath(signedInUser), { replace: true });
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Unable to sign in with those credentials.'));
+      setError(getLoginPinError(err));
       setPinPadKey(current => current + 1);
     } finally {
       setLoading(false);
@@ -67,13 +95,21 @@ const Login = () => {
             <p className="mt-1 text-muted-foreground">Enter your phone number or email to continue</p>
           </div>
 
+          {notice && <p className="text-sm text-accent">{notice}</p>}
+
           <div className="space-y-2">
             <Label htmlFor="identifier">Phone Number or Email</Label>
             <Input
               id="identifier"
               placeholder="+234 800 000 0000 or you@example.com"
               value={identifier}
-              onChange={event => setIdentifier(event.target.value)}
+              onChange={event => {
+                setIdentifier(event.target.value);
+                if (notice) {
+                  setNotice('');
+                }
+                clearPinError();
+              }}
               className="h-12"
             />
           </div>
@@ -96,6 +132,8 @@ const Login = () => {
             title="Enter your PIN"
             subtitle={loading ? 'Signing in...' : `Logging in as ${identifier}`}
             error={error}
+            disabled={loading}
+            onInput={clearPinError}
             onComplete={handlePinComplete}
           />
         </div>

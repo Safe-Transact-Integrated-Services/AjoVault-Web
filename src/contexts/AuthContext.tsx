@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { AUTH_SESSION_EXPIRED_EVENT } from '@/lib/api/authEvents';
 import type { User } from '@/types';
 import { clearAuthSession, getAuthSession, persistAuthSession } from '@/lib/api/session';
 import {
@@ -19,7 +20,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isInitializing: boolean;
   login: (identifier: string, pin: string) => Promise<User>;
-  signup: (input: SignupInput) => Promise<User>;
+  signup: (input: SignupInput) => Promise<void>;
   requestOtp: (identifier: string) => Promise<OtpChallengeResponse>;
   verifyOtp: (identifier: string, otp: string) => Promise<OtpVerificationResponse>;
   logout: () => Promise<void>;
@@ -106,6 +107,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const handleSessionExpired = () => {
+      clearAuthSession();
+      setUser(null);
+    };
+
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
+
+    return () => {
+      window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
+    };
+  }, []);
+
   const login = useCallback(async (identifier: string, pin: string) => {
     const result = await loginUser(identifier, pin);
     persistAuthSession(result.session);
@@ -115,8 +133,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signup = useCallback(async (input: SignupInput) => {
     await registerUser(input);
-    return login(input.identifier, input.pin);
-  }, [login]);
+  }, []);
 
   const handleRequestOtp = useCallback((identifier: string) => requestOtp(identifier), []);
   const handleVerifyOtp = useCallback((identifier: string, otp: string) => verifyOtp(identifier, otp), []);

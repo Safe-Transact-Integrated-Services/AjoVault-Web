@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import PinPad from '@/components/shared/PinPad';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDefaultAuthenticatedPath } from '@/lib/auth';
-import { getApiErrorMessage } from '@/lib/api/http';
+import { getApiErrorMessage, isApiError } from '@/lib/api/http';
 
 type Step = 'identifier' | 'otp' | 'details' | 'pin';
 
@@ -21,9 +21,25 @@ const Signup = () => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [otpHint, setOtpHint] = useState('123456');
+  const [otpMessage, setOtpMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [pinPadKey, setPinPadKey] = useState(0);
+
+  const clearError = () => {
+    if (error) {
+      setError('');
+    }
+  };
+
+  const getOtpErrorMessage = (err: unknown) => {
+    if (!isApiError(err)) {
+      return 'Unable to verify OTP.';
+    }
+
+    const otpFieldError = err.fieldErrors?.Otp?.[0] ?? err.fieldErrors?.otp?.[0];
+    return otpFieldError ?? getApiErrorMessage(err, 'Unable to verify OTP.');
+  };
 
   useEffect(() => {
     if (!isAuthenticated || !user) {
@@ -36,10 +52,13 @@ const Signup = () => {
   const handleIdentifierSubmit = async () => {
     setLoading(true);
     setError('');
+    setOtpMessage('');
 
     try {
       const response = await requestOtp(identifier);
       setOtpHint(response.defaultOtp);
+      setOtp('');
+      setOtpMessage(response.message);
       setStep('otp');
     } catch (err) {
       setError(getApiErrorMessage(err, 'Unable to request OTP.'));
@@ -49,14 +68,32 @@ const Signup = () => {
   };
 
   const handleOtpSubmit = async () => {
+    const normalizedOtp = otp.replace(/\D/g, '').trim();
+
+    if (normalizedOtp.length !== 6) {
+      setError('OTP must be exactly 6 digits.');
+      setOtp('');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
-      await verifyOtp(identifier, otp);
+      const response = await verifyOtp(identifier, normalizedOtp);
+
+      if (!response.verified) {
+        setOtp('');
+        setError(response.message || 'OTP verification failed.');
+        return;
+      }
+
+      setOtp(normalizedOtp);
+      setOtpMessage(response.message);
       setStep('details');
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Unable to verify OTP.'));
+      setOtp('');
+      setError(getOtpErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -74,14 +111,14 @@ const Signup = () => {
     setError('');
 
     try {
-      const signedUpUser = await signup({
+      await signup({
         identifier,
         firstName,
         lastName,
         pin,
       });
 
-      navigate(getDefaultAuthenticatedPath(signedUpUser), { replace: true });
+      navigate('/login', { replace: true, state: { identifier, justSignedUp: true } });
     } catch (err) {
       setError(getApiErrorMessage(err, 'Unable to create your account.'));
       setPinPadKey(current => current + 1);
@@ -94,6 +131,7 @@ const Signup = () => {
     if (step === 'otp') {
       setStep('identifier');
       setError('');
+      setOtpMessage('');
       return;
     }
 
@@ -138,7 +176,10 @@ const Signup = () => {
                 <Input
                   placeholder="+234 800 000 0000 or you@example.com"
                   value={identifier}
-                  onChange={event => setIdentifier(event.target.value)}
+                  onChange={event => {
+                    setIdentifier(event.target.value);
+                    clearError();
+                  }}
                   className="h-12"
                 />
               </div>
@@ -163,17 +204,34 @@ const Signup = () => {
                 <Input
                   placeholder="123456"
                   value={otp}
-                  onChange={event => setOtp(event.target.value)}
+                  onChange={event => {
+                    setOtp(event.target.value.replace(/\D/g, ''));
+                    clearError();
+                  }}
                   maxLength={6}
+                  inputMode="numeric"
                   className="h-12 text-center text-xl tracking-[0.5em]"
                 />
               </div>
 
-              <p className="text-center text-sm text-muted-foreground">For local testing, use OTP {otpHint}</p>
+              <div className="space-y-2 text-center">
+                <p className="text-sm text-muted-foreground">For local testing, use OTP {otpHint}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOtp(otpHint);
+                    clearError();
+                  }}
+                  className="text-sm font-medium text-accent"
+                >
+                  Use test OTP
+                </button>
+                {otpMessage && <p className="text-xs text-muted-foreground">{otpMessage}</p>}
+              </div>
 
               {error && <p className="text-sm text-destructive">{error}</p>}
 
-              <Button className="h-12 w-full" onClick={handleOtpSubmit} disabled={otp.length < 6 || loading}>
+              <Button className="h-12 w-full" onClick={handleOtpSubmit} disabled={otp.replace(/\D/g, '').length < 6 || loading}>
                 {loading ? 'Verifying...' : 'Verify'}
               </Button>
             </div>
@@ -192,7 +250,10 @@ const Signup = () => {
                   <Input
                     placeholder="Adaeze"
                     value={firstName}
-                    onChange={event => setFirstName(event.target.value)}
+                    onChange={event => {
+                      setFirstName(event.target.value);
+                      clearError();
+                    }}
                     className="h-12"
                   />
                 </div>
@@ -202,7 +263,10 @@ const Signup = () => {
                   <Input
                     placeholder="Okafor"
                     value={lastName}
-                    onChange={event => setLastName(event.target.value)}
+                    onChange={event => {
+                      setLastName(event.target.value);
+                      clearError();
+                    }}
                     className="h-12"
                   />
                 </div>
@@ -227,6 +291,8 @@ const Signup = () => {
                 title="Create your PIN"
                 subtitle={loading ? 'Creating account...' : 'Use a 4-digit PIN to secure your account'}
                 error={error}
+                disabled={loading}
+                onInput={clearError}
                 onComplete={handlePinComplete}
               />
             </div>

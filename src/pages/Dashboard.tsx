@@ -18,27 +18,28 @@ import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { creditPassportKeys, getCreditPassportScore } from '@/services/creditPassportApi';
-import {
-  mockCircles,
-  mockNotifications,
-  mockSavingsPlans,
-  mockTransactions,
-  mockUser,
-  mockWallet,
-  formatCurrency,
-  formatDate,
-} from '@/services/mockData';
+import { dashboardKeys, getDashboardSummary } from '@/services/dashboardApi';
+import { formatCurrency, formatDate } from '@/services/mockData';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [showBalance, setShowBalance] = useState(true);
-  const unreadCount = mockNotifications.filter(notification => !notification.read).length;
+  const dashboardQuery = useQuery({
+    queryKey: dashboardKeys.summary,
+    queryFn: getDashboardSummary,
+    enabled: !!user,
+  });
   const creditPassportQuery = useQuery({
     queryKey: creditPassportKeys.score,
     queryFn: getCreditPassportScore,
     enabled: !!user,
   });
+  const unreadCount = dashboardQuery.data?.unreadNotificationCount ?? 0;
+  const wallet = dashboardQuery.data?.wallet;
+  const savings = dashboardQuery.data?.savings;
+  const circles = dashboardQuery.data?.circles;
+  const recentActivities = dashboardQuery.data?.recentActivities ?? [];
 
   const quickActions = [
     { icon: ArrowDownLeft, label: 'Fund', path: '/wallet/fund', color: 'bg-accent/10 text-accent' },
@@ -52,7 +53,7 @@ const Dashboard = () => {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <p className="text-sm text-muted-foreground">Good morning</p>
-          <h1 className="font-display text-xl font-bold text-foreground">{user?.firstName || mockUser.firstName}</h1>
+          <h1 className="font-display text-xl font-bold text-foreground">{user?.firstName ?? 'there'}</h1>
         </div>
         <button onClick={() => navigate('/notifications')} className="relative p-2">
           <Bell className="h-6 w-6 text-foreground" />
@@ -76,10 +77,17 @@ const Dashboard = () => {
           </button>
         </div>
         <p className="mt-1 text-2xl font-bold">
-          {showBalance ? formatCurrency(mockWallet.available) : '********'}
+          {showBalance
+            ? dashboardQuery.isLoading
+              ? 'Loading...'
+              : formatCurrency(wallet?.availableBalance ?? 0, wallet?.currency ?? 'NGN')
+            : '********'}
         </p>
-        {mockWallet.pending > 0 && showBalance && (
-          <p className="mt-1 text-xs opacity-70">Pending: {formatCurrency(mockWallet.pending)}</p>
+        {(wallet?.pendingBalance ?? 0) > 0 && showBalance && (
+          <p className="mt-1 text-xs opacity-70">Pending: {formatCurrency(wallet?.pendingBalance ?? 0, wallet?.currency ?? 'NGN')}</p>
+        )}
+        {dashboardQuery.isError && (
+          <p className="mt-2 text-xs opacity-80">Unable to load the latest dashboard summary.</p>
         )}
       </motion.div>
 
@@ -107,9 +115,9 @@ const Dashboard = () => {
             <PiggyBank className="h-4 w-4" />
             <span className="text-xs font-medium">Active Savings</span>
           </div>
-          <p className="mt-2 text-lg font-bold text-foreground">{mockSavingsPlans.filter(plan => plan.status === 'active').length}</p>
+          <p className="mt-2 text-lg font-bold text-foreground">{savings?.activeCount ?? 0}</p>
           <p className="text-xs text-muted-foreground">
-            {formatCurrency(mockSavingsPlans.reduce((sum, plan) => sum + plan.savedAmount, 0))} saved
+            {formatCurrency(savings?.totalSavedAmount ?? 0)} saved
           </p>
         </button>
         <button onClick={() => navigate('/circles')} className="rounded-xl border border-border bg-card p-4 text-left">
@@ -117,8 +125,8 @@ const Dashboard = () => {
             <Users className="h-4 w-4" />
             <span className="text-xs font-medium">Active Circles</span>
           </div>
-          <p className="mt-2 text-lg font-bold text-foreground">{mockCircles.filter(circle => circle.status === 'active').length}</p>
-          <p className="text-xs text-muted-foreground">{mockCircles.reduce((sum, circle) => sum + circle.memberCount, 0)} members</p>
+          <p className="mt-2 text-lg font-bold text-foreground">{circles?.activeCount ?? 0}</p>
+          <p className="text-xs text-muted-foreground">{circles?.memberCount ?? 0} members</p>
         </button>
       </div>
 
@@ -150,7 +158,7 @@ const Dashboard = () => {
           </div>
         </div>
         <Badge className="border-success/20 bg-success/10 text-success">
-          {creditPassportQuery.data?.score ?? user?.creditScore ?? mockUser.creditScore}
+          {creditPassportQuery.data?.score ?? user?.creditScore ?? 0}
         </Badge>
       </button>
 
@@ -160,8 +168,20 @@ const Dashboard = () => {
           <button onClick={() => navigate('/wallet/history')} className="text-xs font-medium text-accent">See All</button>
         </div>
         <div className="space-y-2">
-          {mockTransactions.slice(0, 5).map(transaction => (
-            <div key={transaction.id} className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
+          {dashboardQuery.isLoading && (
+            <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+              Loading recent activity...
+            </div>
+          )}
+
+          {!dashboardQuery.isLoading && recentActivities.length === 0 && (
+            <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+              No activity yet.
+            </div>
+          )}
+
+          {recentActivities.slice(0, 5).map(transaction => (
+            <div key={transaction.activityId} className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
               <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${transaction.type === 'credit' ? 'bg-success/10' : 'bg-muted'}`}>
                 {transaction.type === 'credit'
                   ? <ArrowDownLeft className="h-4 w-4 text-success" />

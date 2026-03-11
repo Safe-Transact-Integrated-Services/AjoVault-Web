@@ -7,6 +7,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { AdminAuthProvider } from '@/contexts/AdminAuthContext';
 
 import AppLayout from '@/components/layout/AppLayout';
+import MobilePageLayout from '@/components/layout/MobilePageLayout';
 import AgentLayout from '@/components/layout/AgentLayout';
 import AdminLayout from '@/components/layout/AdminLayout';
 import AdminRouteGuard from '@/components/layout/AdminRouteGuard';
@@ -84,9 +85,11 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-              <Route path="/" element={<Welcome />} />
-              <Route path="/signup" element={<Signup />} />
-              <Route path="/login" element={<Login />} />
+              <Route element={<MobilePageLayout />}>
+                <Route path="/" element={<Welcome />} />
+                <Route path="/signup" element={<Signup />} />
+                <Route path="/login" element={<Login />} />
+              </Route>
               <Route path="/agent/login" element={<AgentLogin />} />
               <Route path="/agent/apply" element={<BecomeAgent />} />
 
@@ -95,44 +98,40 @@ const App = () => (
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/wallet" element={<WalletHome />} />
                   <Route path="/savings" element={<SavingsHome />} />
+                  <Route path="/savings/create" element={<CreateSavings />} />
+                  <Route path="/savings/:id" element={<SavingsDetail />} />
                   <Route path="/circles" element={<CirclesHome />} />
+                  <Route path="/circles/create" element={<CreateCircle />} />
+                  <Route path="/circles/join" element={<JoinCircle />} />
+                  <Route path="/circles/:id" element={<CircleDetail />} />
+                  <Route path="/circles/:id/contribute" element={<CircleContribute />} />
+                  <Route path="/circles/:id/invite" element={<CircleInvite />} />
+                  <Route path="/circles/:id/payout" element={<CirclePayout />} />
+                  <Route path="/circles/join/:code" element={<CircleJoinInvite />} />
+                  <Route path="/group-goals" element={<GroupGoalsHome />} />
+                  <Route path="/group-goals/create" element={<CreateGroupGoal />} />
+                  <Route path="/group-goals/:id" element={<GroupGoalDetail />} />
+                  <Route path="/group-goals/:id/contribute" element={<GroupGoalContribute />} />
                   <Route path="/more" element={<MorePage />} />
+                  <Route path="/more/profile" element={<Profile />} />
+                  <Route path="/more/settings" element={<Settings />} />
+                  <Route path="/wallet/fund" element={<FundWallet />} />
+                  <Route path="/wallet/transfer" element={<Transfer />} />
+                  <Route path="/wallet/bills" element={<BillPayment />} />
+                  <Route path="/wallet/history" element={<TransactionHistory />} />
+                  <Route path="/notifications" element={<Notifications />} />
+                  <Route path="/more/kyc" element={<KycUpgrade />} />
+                  <Route path="/credit-passport" element={<CreditPassport />} />
+                  <Route path="/cooperative" element={<CooperativeHome />} />
+                  <Route path="/cooperative/members" element={<CooperativeMembers />} />
+                  <Route path="/cooperative/programs" element={<CooperativePrograms />} />
+                  <Route path="/cooperative/loans" element={<CooperativeLoans />} />
+                  <Route path="/fundraising" element={<FundraisingHome />} />
+                  <Route path="/fundraising/create" element={<CreateFundraiser />} />
+                  <Route path="/fundraising/:id" element={<FundraiserDetail />} />
+                  <Route path="/fundraising/:id/donate" element={<DonateFundraiser />} />
+                  <Route path="/fundraising/donate/:code" element={<DonateFundraiser />} />
                 </Route>
-
-                <Route path="/wallet/fund" element={<FundWallet />} />
-                <Route path="/wallet/transfer" element={<Transfer />} />
-                <Route path="/wallet/bills" element={<BillPayment />} />
-                <Route path="/wallet/history" element={<TransactionHistory />} />
-                <Route path="/savings/create" element={<CreateSavings />} />
-                <Route path="/savings/:id" element={<SavingsDetail />} />
-                <Route path="/circles/create" element={<CreateCircle />} />
-                <Route path="/circles/join" element={<JoinCircle />} />
-                <Route path="/circles/:id" element={<CircleDetail />} />
-                <Route path="/circles/:id/contribute" element={<CircleContribute />} />
-                <Route path="/circles/:id/invite" element={<CircleInvite />} />
-                <Route path="/circles/:id/payout" element={<CirclePayout />} />
-                <Route path="/circles/join/:code" element={<CircleJoinInvite />} />
-                <Route path="/notifications" element={<Notifications />} />
-                <Route path="/more/profile" element={<Profile />} />
-                <Route path="/more/kyc" element={<KycUpgrade />} />
-                <Route path="/more/settings" element={<Settings />} />
-                <Route path="/credit-passport" element={<CreditPassport />} />
-
-                <Route path="/cooperative" element={<CooperativeHome />} />
-                <Route path="/cooperative/members" element={<CooperativeMembers />} />
-                <Route path="/cooperative/programs" element={<CooperativePrograms />} />
-                <Route path="/cooperative/loans" element={<CooperativeLoans />} />
-
-                <Route path="/group-goals" element={<GroupGoalsHome />} />
-                <Route path="/group-goals/create" element={<CreateGroupGoal />} />
-                <Route path="/group-goals/:id" element={<GroupGoalDetail />} />
-                <Route path="/group-goals/:id/contribute" element={<GroupGoalContribute />} />
-
-                <Route path="/fundraising" element={<FundraisingHome />} />
-                <Route path="/fundraising/create" element={<CreateFundraiser />} />
-                <Route path="/fundraising/:id" element={<FundraiserDetail />} />
-                <Route path="/fundraising/:id/donate" element={<DonateFundraiser />} />
-                <Route path="/fundraising/donate/:code" element={<DonateFundraiser />} />
               </Route>
 
               <Route element={<AgentLayout />}>
@@ -168,3 +167,6 @@ const App = () => (
 );
 
 export default App;
+
+
+
