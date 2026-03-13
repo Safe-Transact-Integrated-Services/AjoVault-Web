@@ -25,7 +25,7 @@ const MorePage = () => {
         </div>
         <div className="flex-1">
           <p className="font-semibold text-foreground">{user?.firstName} {user?.lastName}</p>
-          <p className="text-sm text-muted-foreground">{user?.phone}</p>
+          <p className="text-sm text-muted-foreground">{user?.phone || user?.email || 'No primary contact yet'}</p>
         </div>
         <ChevronRight className="h-5 w-5 text-muted-foreground" />
       </button>

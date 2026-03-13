@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-const JoinCircle = () => {
+const JoinGroupGoal = () => {
   const navigate = useNavigate();
   const [code, setCode] = useState('');
 
@@ -19,26 +19,26 @@ const JoinCircle = () => {
 
       <div className="space-y-6">
         <div>
-          <h1 className="font-display text-2xl font-bold">Join a Circle</h1>
+          <h1 className="font-display text-2xl font-bold">Join a Group Goal</h1>
           <p className="mt-1 text-muted-foreground">Enter the invite code shared with you.</p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="circle-invite-code">Invite Code</Label>
+          <Label htmlFor="group-goal-invite-code">Invite Code</Label>
           <Input
-            id="circle-invite-code"
+            id="group-goal-invite-code"
             value={normalizedCode}
             onChange={event => setCode(event.target.value)}
-            placeholder="AJO-XXXXXX"
+            placeholder="GOAL-XXXXXX"
             className="h-14 text-center font-mono text-xl tracking-wider"
-            maxLength={12}
+            maxLength={13}
           />
         </div>
 
         <Button
           className="h-12 w-full"
-          onClick={() => navigate(`/circles/join/${encodeURIComponent(normalizedCode)}`)}
-          disabled={normalizedCode.length < 8}
+          onClick={() => navigate(`/group-goals/join/${encodeURIComponent(normalizedCode)}`)}
+          disabled={normalizedCode.length < 10}
         >
           Continue
         </Button>
@@ -47,4 +47,4 @@ const JoinCircle = () => {
   );
 };
 
-export default JoinCircle;
+export default JoinGroupGoal;

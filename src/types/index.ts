@@ -22,7 +22,7 @@ export interface WalletBalance {
 export interface Transaction {
   id: string;
   type: 'credit' | 'debit';
-  category: 'fund' | 'transfer' | 'savings' | 'circle' | 'airtime' | 'data' | 'electricity' | 'cable' | 'withdrawal';
+  category: 'fund' | 'transfer' | 'savings' | 'circle' | 'group_goal' | 'fundraising' | 'airtime' | 'data' | 'electricity' | 'cable' | 'withdrawal';
   amount: number;
   currency: string;
   description: string;

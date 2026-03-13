@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, ArrowLeft, LoaderCircle, ShieldCheck, Wallet } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertCircle, ArrowLeft, Building2, LoaderCircle, ShieldCheck, Wallet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Receipt from '@/components/shared/Receipt';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -16,6 +17,7 @@ import {
   initializePaymentCheckout,
   type PaymentCheckoutStatusResponse,
 } from '@/services/paymentApi';
+import { ensureWalletVirtualAccount, getMyWallet, walletKeys } from '@/services/walletApi';
 import { formatCurrency } from '@/services/mockData';
 import { toast } from 'sonner';
 
@@ -26,12 +28,18 @@ const providerName = 'Paystack';
 
 const FundWallet = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
+  const walletQuery = useQuery({
+    queryKey: walletKeys.me,
+    queryFn: getMyWallet,
+  });
   const [step, setStep] = useState<Step>('amount');
   const [amount, setAmount] = useState('');
   const [customerEmail, setCustomerEmail] = useState(user?.email ?? '');
   const [error, setError] = useState('');
   const [isLaunchingCheckout, setIsLaunchingCheckout] = useState(false);
+  const [isProvisioningVirtualAccount, setIsProvisioningVirtualAccount] = useState(false);
   const [receipt, setReceipt] = useState<PaymentCheckoutStatusResponse | null>(null);
 
   useEffect(() => {
@@ -43,6 +51,7 @@ const FundWallet = () => {
   const amountValue = Number(amount || '0');
   const normalizedEmail = customerEmail.trim();
   const displayAmount = formatCurrency(amountValue || 0);
+  const virtualAccount = walletQuery.data?.virtualAccount ?? null;
 
   const validateDetails = () => {
     if (!Number.isFinite(amountValue) || amountValue < 100) {
@@ -92,6 +101,10 @@ const FundWallet = () => {
       setStep('receipt');
 
       if (checkoutStatus.status === 'Success') {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: walletKeys.me }),
+          queryClient.invalidateQueries({ queryKey: walletKeys.ledger }),
+        ]);
         toast.success('Wallet funding confirmed.');
       } else if (checkoutStatus.status === 'Pending') {
         toast('Payment received. Confirmation is still pending.');
@@ -109,6 +122,23 @@ const FundWallet = () => {
       toast.error(message);
     } finally {
       setIsLaunchingCheckout(false);
+    }
+  };
+
+  const handleProvisionVirtualAccount = async () => {
+    setError('');
+    setIsProvisioningVirtualAccount(true);
+
+    try {
+      await ensureWalletVirtualAccount();
+      await queryClient.invalidateQueries({ queryKey: walletKeys.me });
+      toast.success('Dedicated transfer account is ready.');
+    } catch (virtualAccountError) {
+      const message = getApiErrorMessage(virtualAccountError, 'Unable to create your transfer account.');
+      setError(message);
+      toast.error(message);
+    } finally {
+      setIsProvisioningVirtualAccount(false);
     }
   };
 
@@ -214,6 +244,45 @@ const FundWallet = () => {
             />
             <p className="text-xs text-muted-foreground">Paystack requires an email address for wallet funding.</p>
           </div>
+
+          <Card className="space-y-4 rounded-2xl border-border bg-card p-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-xl bg-primary/10 p-3 text-primary">
+                <Building2 className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-foreground">Bank transfer account</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Fund your wallet by bank transfer into your dedicated Paystack virtual account.
+                </p>
+              </div>
+            </div>
+
+            {walletQuery.isLoading && (
+              <p className="text-sm text-muted-foreground">Loading transfer account...</p>
+            )}
+
+            {!walletQuery.isLoading && virtualAccount && (
+              <div className="grid gap-2 rounded-xl border border-border bg-background/80 p-4 text-sm">
+                <SummaryRow label="Bank" value={virtualAccount.bankName} />
+                <SummaryRow label="Account Number" value={virtualAccount.accountNumber} />
+                <SummaryRow label="Account Name" value={virtualAccount.accountName} />
+                <SummaryRow label="Provider" value={virtualAccount.provider} />
+              </div>
+            )}
+
+            {!walletQuery.isLoading && !virtualAccount && (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 w-full"
+                onClick={handleProvisionVirtualAccount}
+                disabled={isProvisioningVirtualAccount}
+              >
+                {isProvisioningVirtualAccount ? 'Creating transfer account...' : 'Generate transfer account'}
+              </Button>
+            )}
+          </Card>
 
           {error && (
             <Alert variant="destructive">

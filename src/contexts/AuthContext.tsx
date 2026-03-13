@@ -9,10 +9,12 @@ import {
   refreshUserSession,
   registerUser,
   requestOtp,
+  updateCurrentUser,
   verifyOtp,
   type OtpChallengeResponse,
   type OtpVerificationResponse,
   type SignupInput,
+  type UpdateProfileInput,
 } from '@/services/authApi';
 
 interface AuthContextType {
@@ -23,6 +25,7 @@ interface AuthContextType {
   signup: (input: SignupInput) => Promise<void>;
   requestOtp: (identifier: string) => Promise<OtpChallengeResponse>;
   verifyOtp: (identifier: string, otp: string) => Promise<OtpVerificationResponse>;
+  updateProfile: (input: UpdateProfileInput) => Promise<User>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<User | null>;
 }
@@ -137,6 +140,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const handleRequestOtp = useCallback((identifier: string) => requestOtp(identifier), []);
   const handleVerifyOtp = useCallback((identifier: string, otp: string) => verifyOtp(identifier, otp), []);
+  const updateProfile = useCallback(async (input: UpdateProfileInput) => {
+    const result = await updateCurrentUser(input);
+    setUser(currentUser => mergeUser(result, currentUser));
+    return result;
+  }, []);
 
   const logout = useCallback(async () => {
     const session = getAuthSession();
@@ -161,9 +169,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signup,
     requestOtp: handleRequestOtp,
     verifyOtp: handleVerifyOtp,
+    updateProfile,
     logout,
     refreshProfile,
-  }), [handleRequestOtp, handleVerifyOtp, isInitializing, login, logout, refreshProfile, signup, user]);
+  }), [handleRequestOtp, handleVerifyOtp, isInitializing, login, logout, refreshProfile, signup, updateProfile, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

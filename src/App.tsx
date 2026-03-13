@@ -59,8 +59,10 @@ import CooperativeLoans from '@/pages/cooperative/CooperativeLoans';
 
 import GroupGoalsHome from '@/pages/groupgoals/GroupGoalsHome';
 import CreateGroupGoal from '@/pages/groupgoals/CreateGroupGoal';
+import JoinGroupGoal from '@/pages/groupgoals/JoinGroupGoal';
 import GroupGoalDetail from '@/pages/groupgoals/GroupGoalDetail';
 import GroupGoalContribute from '@/pages/groupgoals/GroupGoalContribute';
+import GroupGoalJoinInvite from '@/pages/groupgoals/GroupGoalJoinInvite';
 import FundraisingHome from '@/pages/fundraising/FundraisingHome';
 import CreateFundraiser from '@/pages/fundraising/CreateFundraiser';
 import FundraiserDetail from '@/pages/fundraising/FundraiserDetail';
@@ -89,6 +91,7 @@ const App = () => (
                 <Route path="/" element={<Welcome />} />
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/login" element={<Login />} />
+                <Route path="/fundraising/donate/:code" element={<DonateFundraiser />} />
               </Route>
               <Route path="/agent/login" element={<AgentLogin />} />
               <Route path="/agent/apply" element={<BecomeAgent />} />
@@ -110,6 +113,8 @@ const App = () => (
                   <Route path="/circles/join/:code" element={<CircleJoinInvite />} />
                   <Route path="/group-goals" element={<GroupGoalsHome />} />
                   <Route path="/group-goals/create" element={<CreateGroupGoal />} />
+                  <Route path="/group-goals/join" element={<JoinGroupGoal />} />
+                  <Route path="/group-goals/join/:code" element={<GroupGoalJoinInvite />} />
                   <Route path="/group-goals/:id" element={<GroupGoalDetail />} />
                   <Route path="/group-goals/:id/contribute" element={<GroupGoalContribute />} />
                   <Route path="/more" element={<MorePage />} />
@@ -130,7 +135,6 @@ const App = () => (
                   <Route path="/fundraising/create" element={<CreateFundraiser />} />
                   <Route path="/fundraising/:id" element={<FundraiserDetail />} />
                   <Route path="/fundraising/:id/donate" element={<DonateFundraiser />} />
-                  <Route path="/fundraising/donate/:code" element={<DonateFundraiser />} />
                 </Route>
               </Route>
 

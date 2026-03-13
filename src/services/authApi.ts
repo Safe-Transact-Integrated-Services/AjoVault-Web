@@ -39,6 +39,11 @@ interface RefreshTokenResponse {
   refreshTokenExpiresAtUtc: string;
 }
 
+interface UpdateMyProfileRequest {
+  fullName: string;
+  phoneNumber?: string | null;
+}
+
 export interface OtpChallengeResponse {
   message: string;
   defaultOtp: string;
@@ -56,10 +61,25 @@ export interface SignupInput {
   pin: string;
 }
 
+export interface UpdateProfileInput {
+  firstName: string;
+  lastName: string;
+  phone: string;
+}
+
 export interface AuthResult {
   user: User;
   session: AuthSession;
 }
+
+const normalizeIdentityEmail = (email?: string | null) => {
+  const value = email?.trim();
+  if (!value || value.endsWith('@phone.ajovault.local')) {
+    return undefined;
+  }
+
+  return value;
+};
 
 const normalizeIdentifierPayload = (identifier: string) => {
   const value = identifier.trim();
@@ -88,7 +108,7 @@ export const mapIdentityProfileToUser = (profile: IdentityUserProfileResponse): 
     firstName,
     lastName,
     phone: profile.phoneNumber ?? '',
-    email: profile.email || undefined,
+    email: normalizeIdentityEmail(profile.email),
     kycTier: 'none',
     creditScore: 0,
     role: profile.role,
@@ -165,6 +185,20 @@ export const refreshUserSession = async (refreshToken: string): Promise<AuthSess
 
 export const getCurrentUser = async (): Promise<User> => {
   const response = await apiRequest<IdentityUserProfileResponse>('/api/identity/me');
+  return mapIdentityProfileToUser(response);
+};
+
+export const updateCurrentUser = async (input: UpdateProfileInput): Promise<User> => {
+  const payload: UpdateMyProfileRequest = {
+    fullName: `${input.firstName.trim()} ${input.lastName.trim()}`.trim(),
+    phoneNumber: input.phone.trim() || null,
+  };
+
+  const response = await apiRequest<IdentityUserProfileResponse>('/api/identity/me', {
+    method: 'PUT',
+    json: payload,
+  });
+
   return mapIdentityProfileToUser(response);
 };
 

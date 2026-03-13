@@ -1,64 +1,77 @@
 import { useState } from 'react';
-import { ArrowLeft, Copy, Mail, MessageSquare, Share2, CheckCircle, Users } from 'lucide-react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { ArrowLeft, CheckCircle, Copy, Mail, MessageSquare, Share2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card } from '@/components/ui/card';
-import { mockCircles, formatCurrency } from '@/services/mockData';
-import { motion } from 'framer-motion';
+import { circlesKeys, getCircle, sendCircleInvite } from '@/services/circlesApi';
+import { getApiErrorMessage } from '@/lib/api/http';
+import { formatCurrency } from '@/services/mockData';
 import { toast } from 'sonner';
 
-type InviteMethod = 'code' | 'email' | 'sms';
+type InviteMethod = 'email' | 'sms' | null;
 
 const CircleInvite = () => {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const circle = mockCircles.find(c => c.id === id);
-  const [method, setMethod] = useState<InviteMethod | null>(null);
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [sent, setSent] = useState(false);
-  const inviteCode = 'AJO-' + (id || '').slice(-3).toUpperCase() + Math.random().toString(36).substr(2, 3).toUpperCase();
+  const [method, setMethod] = useState<InviteMethod>(null);
+  const [contact, setContact] = useState('');
+  const [sent, setSent] = useState('');
 
-  if (!circle) { navigate(-1); return null; }
+  const circleQuery = useQuery({
+    queryKey: id ? circlesKeys.detail(id) : circlesKeys.detail('missing'),
+    queryFn: () => getCircle(id!),
+    enabled: !!id,
+  });
 
-  const handleCopyCode = () => {
-    navigator.clipboard?.writeText(inviteCode);
-    toast.success('Invite code copied!');
-  };
+  const circle = circleQuery.data;
 
-  const handleCopyLink = () => {
-    const link = `${window.location.origin}/circles/join/${inviteCode}`;
-    navigator.clipboard?.writeText(link);
-    toast.success('Invite link copied!');
-  };
+  if (circleQuery.isLoading) {
+    return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading circle...</div>;
+  }
 
-  const handleSendEmail = async () => {
-    if (!email) return;
-    setSent(true);
-    toast.success(`Invitation sent to ${email}`);
-  };
+  if (!circle) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4 text-center text-muted-foreground">
+        {getApiErrorMessage(circleQuery.error, 'Circle not found.')}
+      </div>
+    );
+  }
 
-  const handleSendSMS = async () => {
-    if (!phone) return;
-    setSent(true);
-    toast.success(`SMS invitation sent to ${phone}`);
+  const handleSend = async () => {
+    if (!id || !method || !contact.trim()) {
+      return;
+    }
+
+    try {
+      await sendCircleInvite({
+        circleId: id,
+        channel: method,
+        memberContact: contact,
+      });
+      setSent(contact);
+      toast.success(`${method.toUpperCase()} invite queued.`);
+    } catch (inviteError) {
+      toast.error(getApiErrorMessage(inviteError, 'Unable to send invite.'));
+    }
   };
 
   if (sent) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center space-y-4">
+      <div className="flex min-h-screen flex-col items-center justify-center space-y-4 px-6 text-center">
         <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-success/10 mx-auto mb-4">
+          <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-success/10">
             <CheckCircle className="h-10 w-10 text-success" />
           </div>
-          <h2 className="font-display text-xl font-bold">Invitation Sent!</h2>
-          <p className="text-sm text-muted-foreground max-w-xs mt-2">
-            {method === 'email' ? `Email sent to ${email}` : `SMS sent to ${phone}`} with instructions to join {circle.name}.
+          <h2 className="font-display text-xl font-bold">Invitation Sent</h2>
+          <p className="mt-2 max-w-xs text-sm text-muted-foreground">
+            {method === 'email' ? `Email sent to ${sent}` : `SMS sent to ${sent}`} with instructions to join {circle.name}.
           </p>
-          <div className="flex gap-3 mt-6">
-            <Button variant="outline" onClick={() => { setSent(false); setMethod(null); setEmail(''); setPhone(''); }}>
+          <div className="mt-6 flex gap-3">
+            <Button variant="outline" onClick={() => { setSent(''); setMethod(null); setContact(''); }}>
               Invite Another
             </Button>
             <Button onClick={() => navigate(`/circles/${id}`)}>Done</Button>
@@ -74,49 +87,41 @@ const CircleInvite = () => {
         <ArrowLeft className="h-4 w-4" /> Back
       </button>
 
-      <h1 className="font-display text-2xl font-bold mb-2">Invite Members</h1>
-      <p className="text-sm text-muted-foreground mb-6">
-        {circle.name} · {circle.memberCount}/{circle.maxMembers} members
+      <h1 className="mb-2 font-display text-2xl font-bold">Invite Members</h1>
+      <p className="mb-6 text-sm text-muted-foreground">
+        {circle.name} - {circle.memberCount}/{circle.maxMembers} members
       </p>
 
       {!method && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-          {/* Invite Code Card */}
-          <Card className="p-5 space-y-4">
+          <Card className="space-y-4 p-5">
             <div className="flex items-center gap-2 text-sm font-medium text-foreground">
               <Share2 className="h-4 w-4 text-accent" /> Share Invite Code
             </div>
-            <div className="bg-muted rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold font-mono text-accent tracking-wider">{inviteCode}</p>
-              <p className="text-xs text-muted-foreground mt-1">Members can join at /circles/join</p>
+            <div className="rounded-lg bg-muted p-4 text-center">
+              <p className="font-mono text-2xl font-bold tracking-wider text-accent">{circle.inviteCode}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Members can join at /circles/join</p>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" className="flex-1 gap-2" onClick={handleCopyCode}>
+              <Button variant="outline" className="flex-1 gap-2" onClick={() => { navigator.clipboard?.writeText(circle.inviteCode); toast.success('Invite code copied.'); }}>
                 <Copy className="h-4 w-4" /> Copy Code
               </Button>
-              <Button variant="outline" className="flex-1 gap-2" onClick={handleCopyLink}>
+              <Button variant="outline" className="flex-1 gap-2" onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}/circles/join/${circle.inviteCode}`); toast.success('Invite link copied.'); }}>
                 <Share2 className="h-4 w-4" /> Copy Link
               </Button>
             </div>
           </Card>
 
-          {/* Other invite methods */}
-          <p className="text-xs text-muted-foreground text-center">Or invite directly via</p>
+          <p className="text-center text-xs text-muted-foreground">Or invite directly via</p>
 
           <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => setMethod('email')}
-              className="flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-4 transition-colors hover:border-accent"
-            >
+            <button onClick={() => setMethod('email')} className="flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-4 transition-colors hover:border-accent">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
                 <Mail className="h-5 w-5 text-primary" />
               </div>
               <span className="text-sm font-medium text-foreground">Email</span>
             </button>
-            <button
-              onClick={() => setMethod('sms')}
-              className="flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-4 transition-colors hover:border-accent"
-            >
+            <button onClick={() => setMethod('sms')} className="flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-4 transition-colors hover:border-accent">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/10">
                 <MessageSquare className="h-5 w-5 text-accent" />
               </div>
@@ -124,8 +129,7 @@ const CircleInvite = () => {
             </button>
           </div>
 
-          {/* Circle summary */}
-          <Card className="p-4 space-y-2 text-sm">
+          <Card className="space-y-2 p-4 text-sm">
             <div className="flex justify-between"><span className="text-muted-foreground">Contribution</span><span className="font-medium">{formatCurrency(circle.amount)} / {circle.frequency}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Slots Remaining</span><span className="font-medium">{circle.maxMembers - circle.memberCount}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Payout Type</span><span className="font-medium capitalize">{circle.payoutType}</span></div>
@@ -133,42 +137,27 @@ const CircleInvite = () => {
         </motion.div>
       )}
 
-      {method === 'email' && (
+      {method && (
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
-          <Card className="p-5 space-y-4">
+          <Card className="space-y-4 p-5">
             <div className="flex items-center gap-2 font-medium">
-              <Mail className="h-4 w-4 text-primary" /> Invite via Email
+              {method === 'email' ? <Mail className="h-4 w-4 text-primary" /> : <MessageSquare className="h-4 w-4 text-accent" />}
+              Invite via {method === 'email' ? 'Email' : 'SMS'}
             </div>
             <div className="space-y-2">
-              <Label>Email Address</Label>
-              <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="friend@email.com" className="h-12" />
+              <Label htmlFor="circle-invite-contact">{method === 'email' ? 'Email Address' : 'Phone Number'}</Label>
+              <Input
+                id="circle-invite-contact"
+                type={method === 'email' ? 'email' : 'tel'}
+                value={contact}
+                onChange={event => setContact(event.target.value)}
+                placeholder={method === 'email' ? 'friend@email.com' : '08012345678'}
+                className="h-12"
+              />
             </div>
-            <p className="text-xs text-muted-foreground">
-              They'll receive an email with the invite code and a link to join {circle.name}.
-            </p>
           </Card>
-          <Button className="w-full h-12" onClick={handleSendEmail} disabled={!email || !email.includes('@')}>
-            Send Email Invitation
-          </Button>
-        </motion.div>
-      )}
-
-      {method === 'sms' && (
-        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
-          <Card className="p-5 space-y-4">
-            <div className="flex items-center gap-2 font-medium">
-              <MessageSquare className="h-4 w-4 text-accent" /> Invite via SMS
-            </div>
-            <div className="space-y-2">
-              <Label>Phone Number</Label>
-              <Input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+234 801 234 5678" className="h-12" />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              They'll receive an SMS with the invite code to join {circle.name}.
-            </p>
-          </Card>
-          <Button className="w-full h-12" onClick={handleSendSMS} disabled={!phone || phone.length < 10}>
-            Send SMS Invitation
+          <Button className="h-12 w-full" onClick={handleSend} disabled={!contact.trim()}>
+            Send {method === 'email' ? 'Email' : 'SMS'} Invitation
           </Button>
         </motion.div>
       )}
@@ -177,4 +166,3 @@ const CircleInvite = () => {
 };
 
 export default CircleInvite;
-

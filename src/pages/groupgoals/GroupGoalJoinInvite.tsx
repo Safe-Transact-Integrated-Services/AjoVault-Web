@@ -1,22 +1,21 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Calendar, CheckCircle, Shield, Users, Wallet } from 'lucide-react';
+import { ArrowLeft, Calendar, CheckCircle, Shield, Target, Users, Wallet } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PinPad from '@/components/shared/PinPad';
-import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { circlesKeys, getCircleInvitePreview, joinCircle } from '@/services/circlesApi';
-import { dashboardKeys } from '@/services/dashboardApi';
+import { Progress } from '@/components/ui/progress';
 import { getApiErrorMessage } from '@/lib/api/http';
 import { formatCurrency, formatDate } from '@/services/mockData';
+import { getGroupGoalInvitePreview, groupGoalsKeys, joinGroupGoal } from '@/services/groupGoalsApi';
 import { toast } from 'sonner';
 
 type Step = 'preview' | 'confirm' | 'success';
 
-const CircleJoinInvite = () => {
+const GroupGoalJoinInvite = () => {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -26,18 +25,18 @@ const CircleJoinInvite = () => {
   const [pinPadKey, setPinPadKey] = useState(0);
 
   const previewQuery = useQuery({
-    queryKey: circlesKeys.invite(code ?? ''),
-    queryFn: () => getCircleInvitePreview(code!),
+    queryKey: groupGoalsKeys.invite(code ?? ''),
+    queryFn: () => getGroupGoalInvitePreview(code!),
     enabled: !!code,
   });
 
-  const circle = previewQuery.data;
+  const goal = previewQuery.data;
 
   if (previewQuery.isLoading) {
     return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading invite...</div>;
   }
 
-  if (!circle) {
+  if (!goal) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4 text-center text-muted-foreground">
         {getApiErrorMessage(previewQuery.error, 'Invite not found.')}
@@ -54,15 +53,12 @@ const CircleJoinInvite = () => {
     setError('');
 
     try {
-      const result = await joinCircle(code, pin);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: circlesKeys.list }),
-        queryClient.invalidateQueries({ queryKey: dashboardKeys.summary }),
-      ]);
+      const result = await joinGroupGoal(code, pin);
+      await queryClient.invalidateQueries({ queryKey: groupGoalsKeys.list });
       setStep('success');
-      toast.success(`${result.groupName} joined.`);
+      toast.success(`${result.goalName} joined.`);
     } catch (joinError) {
-      const message = getApiErrorMessage(joinError, 'Unable to join this circle.');
+      const message = getApiErrorMessage(joinError, 'Unable to join this group goal.');
       setError(message);
       setPinPadKey(current => current + 1);
       toast.error(message);
@@ -81,7 +77,7 @@ const CircleJoinInvite = () => {
               return;
             }
 
-            navigate('/circles/join');
+            navigate('/group-goals/join');
           }}
           className="mb-6 flex items-center gap-1 text-sm text-muted-foreground"
         >
@@ -96,42 +92,52 @@ const CircleJoinInvite = () => {
               <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
                 <Users className="h-8 w-8 text-primary" />
               </div>
-              <h1 className="font-display text-2xl font-bold">You're Invited!</h1>
-              <p className="mt-1 text-sm text-muted-foreground">You've been invited to join a savings circle.</p>
-              <Badge variant="secondary" className="mt-2 font-mono">{circle.inviteCode}</Badge>
+              <h1 className="font-display text-2xl font-bold">Join Group Goal</h1>
+              <p className="mt-1 text-sm text-muted-foreground">Save together toward a shared target.</p>
             </div>
 
-            <Card className="space-y-3 p-5">
-              <h2 className="font-display text-lg font-bold">{circle.name}</h2>
-              <p className="text-sm text-muted-foreground">{circle.description || 'Rotating contribution circle'}</p>
+            <Card className="space-y-4 p-5">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">{goal.category}</p>
+                <h2 className="mt-1 font-display text-lg font-bold">{goal.name}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{goal.description || 'Shared target savings goal'}</p>
+              </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-2">
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Progress</span>
+                  <span className="font-medium">{formatCurrency(goal.currentBalance)} / {formatCurrency(goal.targetAmount)}</span>
+                </div>
+                <Progress value={goal.progressPercent} className="h-2" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-1">
                 <div className="flex items-center gap-2">
                   <Wallet className="h-4 w-4 text-accent" />
                   <div>
                     <p className="text-xs text-muted-foreground">Contribution</p>
-                    <p className="text-sm font-bold">{formatCurrency(circle.amount)}</p>
+                    <p className="text-sm font-bold">{formatCurrency(goal.contributionAmount)}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-primary" />
                   <div>
-                    <p className="text-xs text-muted-foreground">Frequency</p>
-                    <p className="text-sm font-bold capitalize">{circle.frequency}</p>
+                    <p className="text-xs text-muted-foreground">Deadline</p>
+                    <p className="text-sm font-bold">{formatDate(goal.deadline)}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-accent" />
                   <div>
                     <p className="text-xs text-muted-foreground">Members</p>
-                    <p className="text-sm font-bold">{circle.memberCount}/{circle.maxMembers}</p>
+                    <p className="text-sm font-bold">{goal.memberCount}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Shield className="h-4 w-4 text-primary" />
                   <div>
-                    <p className="text-xs text-muted-foreground">Payout</p>
-                    <p className="text-sm font-bold capitalize">{circle.payoutType}</p>
+                    <p className="text-xs text-muted-foreground">Created by</p>
+                    <p className="text-sm font-bold">{goal.creatorName}</p>
                   </div>
                 </div>
               </div>
@@ -139,15 +145,14 @@ const CircleJoinInvite = () => {
 
             <Card className="border-accent/20 bg-accent/5 p-4">
               <p className="text-xs text-muted-foreground">
-                <strong className="text-foreground">How it works:</strong> every {circle.frequency}, each member contributes {formatCurrency(circle.amount)}.
-                One member receives the pooled payout of about {formatCurrency(circle.payoutAmount)} each cycle.
+                <strong className="text-foreground">How it works:</strong> members contribute {formatCurrency(goal.contributionAmount)} every {goal.frequency}. Funds stay pooled against the shared target until the goal is complete.
               </p>
             </Card>
 
-            {circle.alreadyJoined && (
+            {goal.alreadyJoined && (
               <Alert>
                 <AlertTitle>Already joined</AlertTitle>
-                <AlertDescription>You already belong to this circle.</AlertDescription>
+                <AlertDescription>You already belong to this group goal.</AlertDescription>
               </Alert>
             )}
 
@@ -158,11 +163,11 @@ const CircleJoinInvite = () => {
                 setPinPadKey(current => current + 1);
                 setStep('confirm');
               }}
-              disabled={circle.alreadyJoined || circle.slotsRemaining <= 0}
+              disabled={goal.alreadyJoined || goal.status !== 'active'}
             >
-              {circle.slotsRemaining <= 0 ? 'Circle is full' : 'Join This Circle'}
+              {goal.status !== 'active' ? 'Goal is not open for joining' : 'Join This Goal'}
             </Button>
-            <Button variant="ghost" className="w-full" onClick={() => navigate('/circles')}>
+            <Button variant="ghost" className="w-full" onClick={() => navigate('/group-goals')}>
               Not Now
             </Button>
           </motion.div>
@@ -173,7 +178,7 @@ const CircleJoinInvite = () => {
             <PinPad
               key={pinPadKey}
               title="Confirm Joining"
-              subtitle={`Join ${circle.name}`}
+              subtitle={`Join ${goal.name}`}
               error={error}
               disabled={isSubmitting}
               onInput={() => setError('')}
@@ -183,21 +188,21 @@ const CircleJoinInvite = () => {
         )}
 
         {step === 'success' && (
-          <motion.div key="success" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center pt-20 text-center space-y-4">
+          <motion.div key="success" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center space-y-4 pt-20 text-center">
             <div className="flex h-20 w-20 items-center justify-center rounded-full bg-success/10">
               <CheckCircle className="h-10 w-10 text-success" />
             </div>
-            <h2 className="font-display text-xl font-bold">Welcome to {circle.name}!</h2>
+            <h2 className="font-display text-xl font-bold">You joined {goal.name}</h2>
             <p className="max-w-xs text-sm text-muted-foreground">
-              Your next contribution of {formatCurrency(circle.amount)} is due on {formatDate(circle.nextContributionDate)}.
+              Your fixed contribution is {formatCurrency(goal.contributionAmount)} and the target is {formatCurrency(goal.targetAmount)} by {formatDate(goal.deadline)}.
             </p>
             <Card className="w-full space-y-2 p-4 text-sm">
-              <div className="flex justify-between"><span className="text-muted-foreground">Circle</span><span className="font-bold">{circle.name}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Contribution</span><span className="font-medium">{formatCurrency(circle.amount)} / {circle.frequency}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Invite Code</span><span className="font-mono text-xs">{circle.inviteCode}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Goal</span><span className="font-bold">{goal.name}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Contribution</span><span className="font-medium">{formatCurrency(goal.contributionAmount)} / {goal.frequency}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Invite Code</span><span className="font-mono text-xs">{goal.inviteCode}</span></div>
             </Card>
-            <Button className="h-12 w-full" onClick={() => navigate('/circles')}>
-              Go to Circles
+            <Button className="h-12 w-full" onClick={() => navigate('/group-goals')}>
+              Go to Group Goals
             </Button>
           </motion.div>
         )}
@@ -206,4 +211,4 @@ const CircleJoinInvite = () => {
   );
 };
 
-export default CircleJoinInvite;
+export default GroupGoalJoinInvite;

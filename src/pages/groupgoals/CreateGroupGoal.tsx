@@ -1,46 +1,118 @@
 import { useState } from 'react';
-import { ArrowLeft, Home, Car, Monitor, GraduationCap, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft, Copy, GraduationCap, Home, Mail, MessageSquare, Monitor, Package, Share2, Car } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { motion, AnimatePresence } from 'framer-motion';
+import { createGroupGoal, groupGoalsKeys, sendGroupGoalInvite, type GroupGoalCategory, type GroupGoalDetail } from '@/services/groupGoalsApi';
+import { getApiErrorMessage } from '@/lib/api/http';
+import { formatCurrency } from '@/services/mockData';
 import { toast } from 'sonner';
 
-type Step = 'category' | 'details' | 'schedule' | 'review';
+type Step = 'category' | 'details' | 'schedule' | 'review' | 'invite';
+type InviteMethod = 'email' | 'sms' | null;
 
-const categories = [
+const categories: { type: GroupGoalCategory; label: string; desc: string; icon: typeof Home }[] = [
   { type: 'property', label: 'Property', desc: 'Land, house, or building', icon: Home },
   { type: 'vehicle', label: 'Vehicle', desc: 'Car, bus, or motorcycle', icon: Car },
   { type: 'equipment', label: 'Equipment', desc: 'Office or business equipment', icon: Monitor },
   { type: 'education', label: 'Education', desc: 'School fees or training', icon: GraduationCap },
-  { type: 'other', label: 'Other', desc: 'Any other group goal', icon: Package },
+  { type: 'other', label: 'Other', desc: 'Any other shared goal', icon: Package },
 ];
 
-const frequencies = ['Weekly', 'Monthly'];
+const steps: Step[] = ['category', 'details', 'schedule', 'review', 'invite'];
 
 const CreateGroupGoal = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>('category');
-  const [category, setCategory] = useState('');
+  const [category, setCategory] = useState<GroupGoalCategory>('other');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [target, setTarget] = useState('');
   const [contribution, setContribution] = useState('');
-  const [frequency, setFrequency] = useState('Monthly');
+  const [frequency, setFrequency] = useState<'weekly' | 'monthly'>('monthly');
   const [deadline, setDeadline] = useState('');
+  const [goal, setGoal] = useState<GroupGoalDetail | null>(null);
+  const [inviteMethod, setInviteMethod] = useState<InviteMethod>(null);
+  const [memberContact, setMemberContact] = useState('');
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const stepIndex = steps.indexOf(step);
 
   const goBack = () => {
-    if (step === 'details') setStep('category');
-    else if (step === 'schedule') setStep('details');
-    else if (step === 'review') setStep('schedule');
-    else navigate(-1);
+    const index = steps.indexOf(step);
+    if (index > 0) {
+      setError('');
+      setStep(steps[index - 1]);
+      return;
+    }
+
+    navigate(-1);
   };
 
-  const handleCreate = () => {
-    toast.success('Group goal created! Share the invite link with members.');
-    navigate('/group-goals');
+  const handleCreate = async () => {
+    const targetAmount = Number(target);
+    const contributionAmount = Number(contribution);
+
+    if (!name.trim() || !Number.isFinite(targetAmount) || targetAmount <= 0 || !Number.isFinite(contributionAmount) || contributionAmount <= 0 || !deadline) {
+      setError('Enter a valid name, target amount, contribution amount, and deadline.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      const createdGoal = await createGroupGoal({
+        name,
+        description,
+        category,
+        targetAmount,
+        contributionAmount,
+        frequency,
+        deadline,
+      });
+
+      setGoal(createdGoal);
+      await queryClient.invalidateQueries({ queryKey: groupGoalsKeys.list });
+      setStep('invite');
+      toast.success('Group goal created.');
+    } catch (createError) {
+      setError(getApiErrorMessage(createError, 'Unable to create this group goal.'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSendInvite = async () => {
+    if (!goal || !inviteMethod) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      const result = await sendGroupGoalInvite({
+        goalId: goal.id,
+        channel: inviteMethod,
+        memberContact,
+      });
+
+      toast.success(`${result.channel.toUpperCase()} invite queued.`);
+      setInviteMethod(null);
+      setMemberContact('');
+    } catch (inviteError) {
+      setError(getApiErrorMessage(inviteError, 'Unable to send invite.'));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -50,8 +122,8 @@ const CreateGroupGoal = () => {
       </button>
 
       <div className="mb-6 flex gap-1">
-        {['category', 'details', 'schedule', 'review'].map((s, i) => (
-          <div key={s} className={`h-1 flex-1 rounded-full ${['category', 'details', 'schedule', 'review'].indexOf(step) >= i ? 'bg-accent' : 'bg-muted'}`} />
+        {steps.map((_, index) => (
+          <div key={index} className={`h-1 flex-1 rounded-full ${stepIndex >= index ? 'bg-accent' : 'bg-muted'}`} />
         ))}
       </div>
 
@@ -59,20 +131,24 @@ const CreateGroupGoal = () => {
         <motion.div key={step} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
           {step === 'category' && (
             <div className="space-y-6">
-              <h1 className="font-display text-2xl font-bold text-foreground">What are you saving for?</h1>
+              <h1 className="font-display text-2xl font-bold">What is the shared goal?</h1>
               <div className="space-y-3">
-                {categories.map(c => (
+                {categories.map(option => (
                   <button
-                    key={c.type}
-                    onClick={() => { setCategory(c.type); setStep('details'); }}
-                    className="flex w-full items-center gap-4 rounded-xl border border-border bg-card p-4 text-left hover:border-accent transition-colors"
+                    key={option.type}
+                    type="button"
+                    onClick={() => {
+                      setCategory(option.type);
+                      setStep('details');
+                    }}
+                    className="flex w-full items-center gap-4 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-accent"
                   >
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent/10">
-                      <c.icon className="h-6 w-6 text-accent" />
+                      <option.icon className="h-6 w-6 text-accent" />
                     </div>
                     <div>
-                      <p className="font-semibold text-foreground">{c.label}</p>
-                      <p className="text-xs text-muted-foreground">{c.desc}</p>
+                      <p className="font-semibold text-foreground">{option.label}</p>
+                      <p className="text-xs text-muted-foreground">{option.desc}</p>
                     </div>
                   </button>
                 ))}
@@ -82,54 +158,147 @@ const CreateGroupGoal = () => {
 
           {step === 'details' && (
             <div className="space-y-6">
-              <h1 className="font-display text-2xl font-bold text-foreground">Goal Details</h1>
+              <h1 className="font-display text-2xl font-bold">Goal Details</h1>
               <div className="space-y-4">
-                <div className="space-y-2"><Label>Goal Name</Label><Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g., Family Land in Lekki" className="h-12" /></div>
-                <div className="space-y-2"><Label>Description</Label><Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Describe what you're saving for..." rows={3} /></div>
-                <div className="space-y-2"><Label>Target Amount (₦)</Label><Input type="number" value={target} onChange={e => setTarget(e.target.value)} placeholder="5,000,000" className="h-12" /></div>
+                <div className="space-y-2">
+                  <Label htmlFor="group-goal-name">Goal Name</Label>
+                  <Input id="group-goal-name" value={name} onChange={event => setName(event.target.value)} placeholder="Family land purchase" className="h-12" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="group-goal-description">Description</Label>
+                  <Textarea id="group-goal-description" value={description} onChange={event => setDescription(event.target.value)} placeholder="Describe what the group is saving toward." rows={3} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="group-goal-target">Target Amount (N)</Label>
+                  <Input id="group-goal-target" type="number" value={target} onChange={event => setTarget(event.target.value.replace(/[^\d]/g, ''))} placeholder="5000000" className="h-12" />
+                </div>
               </div>
-              <Button className="w-full h-12" onClick={() => setStep('schedule')} disabled={!name || !target}>Continue</Button>
+              <Button className="h-12 w-full" onClick={() => setStep('schedule')} disabled={!name.trim() || !target}>
+                Continue
+              </Button>
             </div>
           )}
 
           {step === 'schedule' && (
             <div className="space-y-6">
-              <h1 className="font-display text-2xl font-bold text-foreground">Contribution Schedule</h1>
+              <h1 className="font-display text-2xl font-bold">Contribution Schedule</h1>
               <div className="space-y-4">
-                <div className="space-y-2"><Label>Contribution Per Member (₦)</Label><Input type="number" value={contribution} onChange={e => setContribution(e.target.value)} placeholder="200,000" className="h-12" /></div>
+                <div className="space-y-2">
+                  <Label htmlFor="group-goal-contribution">Contribution Per Member (N)</Label>
+                  <Input id="group-goal-contribution" type="number" value={contribution} onChange={event => setContribution(event.target.value.replace(/[^\d]/g, ''))} placeholder="200000" className="h-12" />
+                </div>
                 <div className="space-y-2">
                   <Label>Frequency</Label>
                   <div className="flex gap-2">
-                    {frequencies.map(f => (
-                      <button key={f} onClick={() => setFrequency(f)} className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${frequency === f ? 'border-accent bg-accent/10 text-accent' : 'border-border text-foreground'}`}>{f}</button>
+                    {(['weekly', 'monthly'] as const).map(value => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setFrequency(value)}
+                        className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${frequency === value ? 'border-accent bg-accent/10 text-accent' : 'border-border text-foreground'}`}
+                      >
+                        {value}
+                      </button>
                     ))}
                   </div>
                 </div>
-                <div className="space-y-2"><Label>Deadline</Label><Input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} className="h-12" /></div>
+                <div className="space-y-2">
+                  <Label htmlFor="group-goal-deadline">Deadline</Label>
+                  <Input id="group-goal-deadline" type="date" value={deadline} onChange={event => setDeadline(event.target.value)} className="h-12" />
+                </div>
               </div>
-              <Button className="w-full h-12" onClick={() => setStep('review')} disabled={!contribution || !deadline}>Continue</Button>
+              <Button className="h-12 w-full" onClick={() => setStep('review')} disabled={!contribution || !deadline}>
+                Continue
+              </Button>
             </div>
           )}
 
           {step === 'review' && (
             <div className="space-y-6">
-              <h1 className="font-display text-2xl font-bold text-foreground">Review Goal</h1>
-              <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-                {[
-                  ['Goal Name', name],
-                  ['Category', category],
-                  ['Target', `₦${Number(target).toLocaleString()}`],
-                  ['Contribution', `₦${Number(contribution).toLocaleString()} / ${frequency}`],
-                  ['Deadline', deadline],
-                ].map(([l, v]) => (
-                  <div key={l} className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">{l}</span>
-                    <span className="font-medium text-foreground capitalize">{v}</span>
-                  </div>
-                ))}
+              <h1 className="font-display text-2xl font-bold">Review Goal</h1>
+
+              <div className="rounded-xl border border-border bg-card p-4 text-sm">
+                <div className="flex justify-between py-1"><span className="text-muted-foreground">Goal Name</span><span className="font-medium text-foreground">{name}</span></div>
+                <div className="flex justify-between py-1"><span className="text-muted-foreground">Category</span><span className="font-medium capitalize text-foreground">{category}</span></div>
+                <div className="flex justify-between py-1"><span className="text-muted-foreground">Target</span><span className="font-medium text-foreground">{formatCurrency(Number(target || 0))}</span></div>
+                <div className="flex justify-between py-1"><span className="text-muted-foreground">Contribution</span><span className="font-medium text-foreground">{formatCurrency(Number(contribution || 0))} / {frequency}</span></div>
+                <div className="flex justify-between py-1"><span className="text-muted-foreground">Deadline</span><span className="font-medium text-foreground">{deadline}</span></div>
               </div>
+
               {description && <p className="text-sm text-muted-foreground">{description}</p>}
-              <Button className="w-full h-12" onClick={handleCreate}>Create & Invite Members</Button>
+
+              {error && (
+                <Alert variant="destructive">
+                  <AlertTitle>Unable to continue</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              <Button className="h-12 w-full" onClick={handleCreate} disabled={isSubmitting}>
+                {isSubmitting ? 'Creating...' : 'Create and Get Invite Link'}
+              </Button>
+            </div>
+          )}
+
+          {step === 'invite' && goal && (
+            <div className="space-y-6">
+              <h1 className="font-display text-2xl font-bold">Invite Members</h1>
+
+              <div className="rounded-xl border border-border bg-card p-6 text-center space-y-4">
+                <p className="text-sm text-muted-foreground">Share this code with your members</p>
+                <p className="font-mono text-3xl font-bold tracking-wider text-accent">{goal.inviteCode}</p>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1 gap-2" onClick={() => { navigator.clipboard?.writeText(goal.inviteCode); toast.success('Invite code copied.'); }}>
+                    <Copy className="h-4 w-4" /> Copy Code
+                  </Button>
+                  <Button variant="outline" className="flex-1 gap-2" onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}/group-goals/join/${goal.inviteCode}`); toast.success('Invite link copied.'); }}>
+                    <Share2 className="h-4 w-4" /> Copy Link
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Button variant="outline" className="h-12 gap-2" onClick={() => setInviteMethod('email')}>
+                  <Mail className="h-4 w-4" /> Email
+                </Button>
+                <Button variant="outline" className="h-12 gap-2" onClick={() => setInviteMethod('sms')}>
+                  <MessageSquare className="h-4 w-4" /> SMS
+                </Button>
+              </div>
+
+              {inviteMethod && (
+                <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+                  <Label htmlFor="group-goal-member-contact">{inviteMethod === 'email' ? 'Email Address' : 'Phone Number'}</Label>
+                  <Input
+                    id="group-goal-member-contact"
+                    type={inviteMethod === 'email' ? 'email' : 'tel'}
+                    value={memberContact}
+                    onChange={event => setMemberContact(event.target.value)}
+                    placeholder={inviteMethod === 'email' ? 'friend@email.com' : '08012345678'}
+                    className="h-12"
+                  />
+                  <Button className="h-12 w-full" onClick={handleSendInvite} disabled={isSubmitting || !memberContact.trim()}>
+                    Send {inviteMethod.toUpperCase()} Invite
+                  </Button>
+                </div>
+              )}
+
+              {error && (
+                <Alert variant="destructive">
+                  <AlertTitle>Unable to continue</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              <div className="space-y-2 rounded-xl border border-border bg-card p-4 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">Goal</span><span className="font-medium text-foreground">{goal.name}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Target</span><span className="font-medium text-foreground">{formatCurrency(goal.targetAmount)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Contribution</span><span className="font-medium text-foreground">{formatCurrency(goal.contributionAmount)} / {goal.frequency}</span></div>
+              </div>
+
+              <Button className="h-12 w-full" onClick={() => navigate(`/group-goals/${goal.id}`)}>
+                Go to Goal
+              </Button>
             </div>
           )}
         </motion.div>
