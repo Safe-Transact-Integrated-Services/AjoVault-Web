@@ -78,6 +78,7 @@ export interface CircleMember {
 export interface Notification {
   id: string;
   type: 'reminder' | 'alert' | 'milestone' | 'info';
+  category?: 'savings' | 'circle' | 'group_goal' | 'system';
   title: string;
   message: string;
   read: boolean;

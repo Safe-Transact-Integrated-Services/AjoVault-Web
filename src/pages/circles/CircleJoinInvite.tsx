@@ -8,13 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { circlesKeys, getCircleInvitePreview, joinCircle } from '@/services/circlesApi';
+import { circlesKeys, getCircleInvitePreview, joinCircle, rejectCircleInvite } from '@/services/circlesApi';
 import { dashboardKeys } from '@/services/dashboardApi';
 import { getApiErrorMessage } from '@/lib/api/http';
 import { formatCurrency, formatDate } from '@/services/mockData';
 import { toast } from 'sonner';
 
-type Step = 'preview' | 'confirm' | 'success';
+type Step = 'preview' | 'confirm' | 'success' | 'declined';
 
 const CircleJoinInvite = () => {
   const { code } = useParams<{ code: string }>();
@@ -65,6 +65,31 @@ const CircleJoinInvite = () => {
       const message = getApiErrorMessage(joinError, 'Unable to join this circle.');
       setError(message);
       setPinPadKey(current => current + 1);
+      toast.error(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!code) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      await rejectCircleInvite(code);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: circlesKeys.invite(code) }),
+        queryClient.invalidateQueries({ queryKey: dashboardKeys.summary }),
+      ]);
+      setStep('declined');
+      toast.success('Circle invite declined.');
+    } catch (rejectError) {
+      const message = getApiErrorMessage(rejectError, 'Unable to reject this circle invite.');
+      setError(message);
       toast.error(message);
     } finally {
       setIsSubmitting(false);
@@ -151,6 +176,13 @@ const CircleJoinInvite = () => {
               </Alert>
             )}
 
+            {circle.invitationStatus?.toLowerCase() === 'rejected' && (
+              <Alert>
+                <AlertTitle>Invite declined</AlertTitle>
+                <AlertDescription>You already declined this circle invite.</AlertDescription>
+              </Alert>
+            )}
+
             <Button
               className="h-12 w-full"
               onClick={() => {
@@ -158,10 +190,19 @@ const CircleJoinInvite = () => {
                 setPinPadKey(current => current + 1);
                 setStep('confirm');
               }}
-              disabled={circle.alreadyJoined || circle.slotsRemaining <= 0}
+              disabled={circle.alreadyJoined || circle.slotsRemaining <= 0 || circle.invitationStatus?.toLowerCase() === 'rejected'}
             >
-              {circle.slotsRemaining <= 0 ? 'Circle is full' : 'Join This Circle'}
+              {circle.invitationStatus?.toLowerCase() === 'rejected'
+                ? 'Invite declined'
+                : circle.slotsRemaining <= 0
+                  ? 'Circle is full'
+                  : 'Join This Circle'}
             </Button>
+            {circle.hasPendingInvitation && circle.invitationStatus?.toLowerCase() !== 'rejected' && (
+              <Button variant="outline" className="w-full" onClick={() => void handleReject()} disabled={isSubmitting || circle.alreadyJoined}>
+                Decline Invite
+              </Button>
+            )}
             <Button variant="ghost" className="w-full" onClick={() => navigate('/circles')}>
               Not Now
             </Button>
@@ -198,6 +239,21 @@ const CircleJoinInvite = () => {
             </Card>
             <Button className="h-12 w-full" onClick={() => navigate('/circles')}>
               Go to Circles
+            </Button>
+          </motion.div>
+        )}
+
+        {step === 'declined' && (
+          <motion.div key="declined" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center pt-20 text-center space-y-4">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted">
+              <ArrowLeft className="h-10 w-10 text-muted-foreground" />
+            </div>
+            <h2 className="font-display text-xl font-bold">Invite declined</h2>
+            <p className="max-w-xs text-sm text-muted-foreground">
+              You declined the invite to join {circle.name}. The admin can send you a new invite later.
+            </p>
+            <Button className="h-12 w-full" onClick={() => navigate('/notifications')}>
+              Back to Notifications
             </Button>
           </motion.div>
         )}

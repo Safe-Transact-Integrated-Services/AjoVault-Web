@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowUpRight, Plus } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Plus, UserPlus } from 'lucide-react';
 import PinPad from '@/components/shared/PinPad';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -219,10 +219,13 @@ const SavingsDetail = () => {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <Button className="h-12 gap-2" onClick={startContribution}><Plus className="h-4 w-4" /> Contribute</Button>
         <Button variant="outline" className="h-12 gap-2" onClick={() => setShowWithdraw(true)}>
           <ArrowUpRight className="h-4 w-4" /> Withdraw
+        </Button>
+        <Button variant="outline" className="h-12 gap-2" onClick={() => navigate('/savings/invite')}>
+          <UserPlus className="h-4 w-4" /> Invite
         </Button>
       </div>
 

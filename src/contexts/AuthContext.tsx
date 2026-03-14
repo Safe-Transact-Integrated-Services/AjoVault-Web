@@ -11,20 +11,23 @@ import {
   requestOtp,
   updateCurrentUser,
   verifyOtp,
+  type AuthContactInput,
   type OtpChallengeResponse,
   type OtpVerificationResponse,
   type SignupInput,
   type UpdateProfileInput,
 } from '@/services/authApi';
+import { loginAgent } from '@/services/agentApi';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isInitializing: boolean;
   login: (identifier: string, pin: string) => Promise<User>;
+  loginAgent: (agentCode: string, pin: string) => Promise<User>;
   signup: (input: SignupInput) => Promise<void>;
-  requestOtp: (identifier: string) => Promise<OtpChallengeResponse>;
-  verifyOtp: (identifier: string, otp: string) => Promise<OtpVerificationResponse>;
+  requestOtp: (input: AuthContactInput) => Promise<OtpChallengeResponse>;
+  verifyOtp: (input: AuthContactInput, otp: string) => Promise<OtpVerificationResponse>;
   updateProfile: (input: UpdateProfileInput) => Promise<User>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<User | null>;
@@ -45,7 +48,6 @@ export const useAuth = () => {
 const mergeUser = (nextUser: User, currentUser: User | null): User => ({
   ...nextUser,
   creditScore: currentUser?.creditScore ?? nextUser.creditScore,
-  kycTier: currentUser?.kycTier ?? nextUser.kycTier,
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -134,12 +136,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return result.user;
   }, []);
 
+  const handleAgentLogin = useCallback(async (agentCode: string, pin: string) => {
+    const result = await loginAgent(agentCode, pin);
+    persistAuthSession(result.session);
+    setUser(currentUser => mergeUser(result.user, currentUser));
+    return result.user;
+  }, []);
+
   const signup = useCallback(async (input: SignupInput) => {
     await registerUser(input);
   }, []);
 
-  const handleRequestOtp = useCallback((identifier: string) => requestOtp(identifier), []);
-  const handleVerifyOtp = useCallback((identifier: string, otp: string) => verifyOtp(identifier, otp), []);
+  const handleRequestOtp = useCallback((input: AuthContactInput) => requestOtp(input), []);
+  const handleVerifyOtp = useCallback((input: AuthContactInput, otp: string) => verifyOtp(input, otp), []);
   const updateProfile = useCallback(async (input: UpdateProfileInput) => {
     const result = await updateCurrentUser(input);
     setUser(currentUser => mergeUser(result, currentUser));
@@ -166,13 +175,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAuthenticated: !!user,
     isInitializing,
     login,
+    loginAgent: handleAgentLogin,
     signup,
     requestOtp: handleRequestOtp,
     verifyOtp: handleVerifyOtp,
     updateProfile,
     logout,
     refreshProfile,
-  }), [handleRequestOtp, handleVerifyOtp, isInitializing, login, logout, refreshProfile, signup, updateProfile, user]);
+  }), [handleAgentLogin, handleRequestOtp, handleVerifyOtp, isInitializing, login, logout, refreshProfile, signup, updateProfile, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

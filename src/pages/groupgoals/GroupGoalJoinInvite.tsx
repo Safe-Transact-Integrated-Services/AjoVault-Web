@@ -10,10 +10,10 @@ import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { getApiErrorMessage } from '@/lib/api/http';
 import { formatCurrency, formatDate } from '@/services/mockData';
-import { getGroupGoalInvitePreview, groupGoalsKeys, joinGroupGoal } from '@/services/groupGoalsApi';
+import { getGroupGoalInvitePreview, groupGoalsKeys, joinGroupGoal, rejectGroupGoalInvite } from '@/services/groupGoalsApi';
 import { toast } from 'sonner';
 
-type Step = 'preview' | 'confirm' | 'success';
+type Step = 'preview' | 'confirm' | 'success' | 'declined';
 
 const GroupGoalJoinInvite = () => {
   const { code } = useParams<{ code: string }>();
@@ -61,6 +61,28 @@ const GroupGoalJoinInvite = () => {
       const message = getApiErrorMessage(joinError, 'Unable to join this group goal.');
       setError(message);
       setPinPadKey(current => current + 1);
+      toast.error(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!code) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      await rejectGroupGoalInvite(code);
+      await queryClient.invalidateQueries({ queryKey: groupGoalsKeys.invite(code) });
+      setStep('declined');
+      toast.success('Group goal invite declined.');
+    } catch (rejectError) {
+      const message = getApiErrorMessage(rejectError, 'Unable to reject this group goal invite.');
+      setError(message);
       toast.error(message);
     } finally {
       setIsSubmitting(false);
@@ -156,6 +178,13 @@ const GroupGoalJoinInvite = () => {
               </Alert>
             )}
 
+            {goal.invitationStatus?.toLowerCase() === 'rejected' && (
+              <Alert>
+                <AlertTitle>Invite declined</AlertTitle>
+                <AlertDescription>You already declined this group goal invite.</AlertDescription>
+              </Alert>
+            )}
+
             <Button
               className="h-12 w-full"
               onClick={() => {
@@ -163,10 +192,19 @@ const GroupGoalJoinInvite = () => {
                 setPinPadKey(current => current + 1);
                 setStep('confirm');
               }}
-              disabled={goal.alreadyJoined || goal.status !== 'active'}
+              disabled={goal.alreadyJoined || goal.status !== 'active' || goal.invitationStatus?.toLowerCase() === 'rejected'}
             >
-              {goal.status !== 'active' ? 'Goal is not open for joining' : 'Join This Goal'}
+              {goal.invitationStatus?.toLowerCase() === 'rejected'
+                ? 'Invite declined'
+                : goal.status !== 'active'
+                  ? 'Goal is not open for joining'
+                  : 'Join This Goal'}
             </Button>
+            {goal.hasPendingInvitation && goal.invitationStatus?.toLowerCase() !== 'rejected' && (
+              <Button variant="outline" className="w-full" onClick={() => void handleReject()} disabled={isSubmitting || goal.alreadyJoined}>
+                Decline Invite
+              </Button>
+            )}
             <Button variant="ghost" className="w-full" onClick={() => navigate('/group-goals')}>
               Not Now
             </Button>
@@ -203,6 +241,21 @@ const GroupGoalJoinInvite = () => {
             </Card>
             <Button className="h-12 w-full" onClick={() => navigate('/group-goals')}>
               Go to Group Goals
+            </Button>
+          </motion.div>
+        )}
+
+        {step === 'declined' && (
+          <motion.div key="declined" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center space-y-4 pt-20 text-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted">
+              <ArrowLeft className="h-10 w-10 text-muted-foreground" />
+            </div>
+            <h2 className="font-display text-xl font-bold">Invite declined</h2>
+            <p className="max-w-xs text-sm text-muted-foreground">
+              You declined the invite to join {goal.name}. The admin can send you a new invite later.
+            </p>
+            <Button className="h-12 w-full" onClick={() => navigate('/notifications')}>
+              Back to Notifications
             </Button>
           </motion.div>
         )}

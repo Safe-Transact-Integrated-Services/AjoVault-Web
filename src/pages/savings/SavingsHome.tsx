@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, PiggyBank } from 'lucide-react';
+import { Plus, PiggyBank, UserPlus } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -26,9 +26,14 @@ const SavingsHome = () => {
     <div className="px-4 py-6 safe-top">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="font-display text-xl font-bold text-foreground">Savings</h1>
-        <Button size="sm" onClick={() => navigate('/savings/create')} className="gap-1">
-          <Plus className="h-4 w-4" /> New Plan
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => navigate('/savings/invite')} className="gap-1">
+            <UserPlus className="h-4 w-4" /> Invite
+          </Button>
+          <Button size="sm" onClick={() => navigate('/savings/create')} className="gap-1">
+            <Plus className="h-4 w-4" /> New Plan
+          </Button>
+        </div>
       </div>
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6 rounded-2xl bg-primary p-5 text-primary-foreground">

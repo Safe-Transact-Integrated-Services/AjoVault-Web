@@ -1,13 +1,12 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Calendar, Share2, Target, Users, Wallet } from 'lucide-react';
+import { ArrowLeft, Calendar, UserPlus, Users, Wallet } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { getApiErrorMessage } from '@/lib/api/http';
 import { formatCurrency, formatDate } from '@/services/mockData';
 import { getGroupGoal, groupGoalsKeys } from '@/services/groupGoalsApi';
-import { toast } from 'sonner';
 
 const categoryLabels: Record<string, string> = {
   property: 'Property',
@@ -39,25 +38,6 @@ const GroupGoalDetail = () => {
       </div>
     );
   }
-
-  const handleShare = async () => {
-    const inviteUrl = `${window.location.origin}/group-goals/join/${goal.inviteCode}`;
-
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: goal.name,
-          text: `Join ${goal.name} on AjoVault`,
-          url: inviteUrl,
-        });
-      } else {
-        await navigator.clipboard.writeText(inviteUrl);
-        toast.success('Invite link copied.');
-      }
-    } catch {
-      toast.error('Unable to share invite right now.');
-    }
-  };
 
   return (
     <div className="min-h-screen px-4 py-6 safe-top pb-24">
@@ -149,8 +129,8 @@ const GroupGoalDetail = () => {
       <div className="fixed bottom-20 left-0 right-0 px-4">
         <div className="mx-auto max-w-lg space-y-2">
           {goal.canInvite && (
-            <Button variant="outline" className="h-11 w-full gap-2" onClick={handleShare}>
-              <Share2 className="h-4 w-4" /> Share Invite
+            <Button variant="outline" className="h-11 w-full gap-2" onClick={() => navigate(`/group-goals/${goal.id}/invite`)}>
+              <UserPlus className="h-4 w-4" /> Invite Members
             </Button>
           )}
           <Button className="h-12 w-full" onClick={() => navigate(`/group-goals/${goal.id}/contribute`)} disabled={!goal.canContribute}>

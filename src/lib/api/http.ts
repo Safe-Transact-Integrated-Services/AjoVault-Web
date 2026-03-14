@@ -66,12 +66,14 @@ export const apiRequest = async <T>(path: string, options: ApiRequestOptions = {
   });
 
   if (!response.ok) {
-    if (auth && response.status === 401) {
+    const apiError = await toApiError(response);
+
+    if (auth && shouldExpireAuthSession(response, apiError)) {
       clearAuthSession();
       notifyAuthSessionExpired();
     }
 
-    throw await toApiError(response);
+    throw apiError;
   }
 
   if (response.status === 204) {
@@ -109,3 +111,24 @@ const toApiError = async (response: Response) => {
 
 const isJsonContentType = (contentType: string | null) =>
   contentType?.toLowerCase().includes('json') ?? false;
+
+const shouldExpireAuthSession = (response: Response, error: ApiError) => {
+  if (response.status !== 401) {
+    return false;
+  }
+
+  const authHeader = response.headers.get('www-authenticate')?.toLowerCase() ?? '';
+  if (authHeader.includes('bearer')) {
+    return true;
+  }
+
+  return SESSION_EXPIRED_MESSAGES.has(error.message);
+};
+
+const SESSION_EXPIRED_MESSAGES = new Set([
+  'Authentication required.',
+  'Unable to resolve the current user.',
+  'Refresh token is invalid.',
+  'Refresh token has expired.',
+  'Unauthorized',
+]);

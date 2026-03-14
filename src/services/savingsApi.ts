@@ -89,10 +89,33 @@ export interface ContributeSavingsPlanInput {
   pin: string;
 }
 
+export interface SavingsInviteResponse {
+  invitationId: string;
+  userId?: string | null;
+  status: string;
+  link: string;
+}
+
+export interface SavingsInvitationDetail {
+  invitationId: string;
+  inviterName: string;
+  channel: 'platform' | 'email' | 'sms';
+  status: string;
+  memberContact?: string | null;
+  createdAtUtc: string;
+}
+
+export interface SavingsInviteDecisionResponse {
+  invitationId: string;
+  status: string;
+  link: string;
+}
+
 export const savingsKeys = {
   all: ['savings'] as const,
   plans: ['savings', 'plans'] as const,
   detail: (planId: string) => ['savings', 'plans', planId] as const,
+  invitation: (invitationId: string) => ['savings', 'invitations', invitationId] as const,
 };
 
 export const getSavingsPlans = async (): Promise<SavingsPlan[]> => {
@@ -122,6 +145,31 @@ export const createSavingsPlan = async (input: CreateSavingsPlanInput): Promise<
 
   return mapSavingsPlanDetail(response);
 };
+
+export const inviteSavingsUser = async (
+  input: { platformUserId?: string; memberContact?: string; channel: 'platform' | 'email' | 'sms' },
+): Promise<SavingsInviteResponse> =>
+  apiRequest<SavingsInviteResponse>('/api/savings/invitations', {
+    method: 'POST',
+    json: {
+      platformUserId: input.platformUserId,
+      memberContact: input.memberContact?.trim() || undefined,
+      channel: input.channel,
+    },
+  });
+
+export const getSavingsInvitation = async (invitationId: string) =>
+  apiRequest<SavingsInvitationDetail>(`/api/savings/invitations/${encodeURIComponent(invitationId)}`);
+
+export const acceptSavingsInvitation = async (invitationId: string) =>
+  apiRequest<SavingsInviteDecisionResponse>(`/api/savings/invitations/${encodeURIComponent(invitationId)}/accept`, {
+    method: 'POST',
+  });
+
+export const rejectSavingsInvitation = async (invitationId: string) =>
+  apiRequest<SavingsInviteDecisionResponse>(`/api/savings/invitations/${encodeURIComponent(invitationId)}/reject`, {
+    method: 'POST',
+  });
 
 export const contributeToSavingsPlan = async (planId: string, input: ContributeSavingsPlanInput) =>
   apiRequest<SavingsContributionResponse>(`/api/savings/plans/${encodeURIComponent(planId)}/contributions`, {

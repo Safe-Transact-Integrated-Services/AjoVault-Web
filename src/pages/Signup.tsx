@@ -10,13 +10,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getDefaultAuthenticatedPath } from '@/lib/auth';
 import { getApiErrorMessage, isApiError } from '@/lib/api/http';
 
-type Step = 'identifier' | 'otp' | 'details' | 'pin';
+type Step = 'contact' | 'otp' | 'details' | 'pin';
 
 const Signup = () => {
   const navigate = useNavigate();
   const { signup, requestOtp, verifyOtp, isAuthenticated, user } = useAuth();
-  const [step, setStep] = useState<Step>('identifier');
-  const [identifier, setIdentifier] = useState('');
+  const [step, setStep] = useState<Step>('contact');
+  const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -31,6 +32,16 @@ const Signup = () => {
       setError('');
     }
   };
+
+  const trimmedEmail = email.trim();
+  const trimmedPhoneNumber = phoneNumber.trim();
+  const hasContact = !!trimmedEmail || !!trimmedPhoneNumber;
+  const contactPayload = {
+    email: trimmedEmail || undefined,
+    phoneNumber: trimmedPhoneNumber || undefined,
+  };
+  const contactSummary = [trimmedEmail, trimmedPhoneNumber].filter(Boolean).join(' or ');
+  const loginIdentifier = trimmedEmail || trimmedPhoneNumber;
 
   const getOtpErrorMessage = (err: unknown) => {
     if (!isApiError(err)) {
@@ -50,12 +61,17 @@ const Signup = () => {
   }, [isAuthenticated, navigate, user]);
 
   const handleIdentifierSubmit = async () => {
+    if (!hasContact) {
+      setError('Enter at least an email address or phone number.');
+      return;
+    }
+
     setLoading(true);
     setError('');
     setOtpMessage('');
 
     try {
-      const response = await requestOtp(identifier);
+      const response = await requestOtp(contactPayload);
       setOtpHint(response.defaultOtp);
       setOtp('');
       setOtpMessage(response.message);
@@ -80,7 +96,7 @@ const Signup = () => {
     setError('');
 
     try {
-      const response = await verifyOtp(identifier, normalizedOtp);
+      const response = await verifyOtp(contactPayload, normalizedOtp);
 
       if (!response.verified) {
         setOtp('');
@@ -112,13 +128,14 @@ const Signup = () => {
 
     try {
       await signup({
-        identifier,
+        email: trimmedEmail || undefined,
+        phoneNumber: trimmedPhoneNumber || undefined,
         firstName,
         lastName,
         pin,
       });
 
-      navigate('/login', { replace: true, state: { identifier, justSignedUp: true } });
+      navigate('/login', { replace: true, state: { identifier: loginIdentifier, justSignedUp: true } });
     } catch (err) {
       setError(getApiErrorMessage(err, 'Unable to create your account.'));
       setPinPadKey(current => current + 1);
@@ -129,7 +146,7 @@ const Signup = () => {
 
   const goBack = () => {
     if (step === 'otp') {
-      setStep('identifier');
+      setStep('contact');
       setError('');
       setOtpMessage('');
       return;
@@ -164,29 +181,48 @@ const Signup = () => {
           exit={{ opacity: 0, x: -30 }}
           transition={{ duration: 0.25 }}
         >
-          {step === 'identifier' && (
+          {step === 'contact' && (
             <div className="space-y-6">
               <div>
                 <h1 className="font-display text-2xl font-bold">Create Account</h1>
-                <p className="mt-1 text-muted-foreground">Enter your phone number or email to get started</p>
+                <p className="mt-1 text-muted-foreground">Enter your email, phone number, or both to get started</p>
               </div>
 
-              <div className="space-y-2">
-                <Label>Phone Number or Email</Label>
-                <Input
-                  placeholder="+234 800 000 0000 or you@example.com"
-                  value={identifier}
-                  onChange={event => {
-                    setIdentifier(event.target.value);
-                    clearError();
-                  }}
-                  className="h-12"
-                />
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Email Address</Label>
+                  <Input
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={event => {
+                      setEmail(event.target.value);
+                      clearError();
+                    }}
+                    className="h-12"
+                    inputMode="email"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Phone Number</Label>
+                  <Input
+                    placeholder="+234 800 000 0000"
+                    value={phoneNumber}
+                    onChange={event => {
+                      setPhoneNumber(event.target.value);
+                      clearError();
+                    }}
+                    className="h-12"
+                    inputMode="tel"
+                  />
+                </div>
+
+                <p className="text-xs text-muted-foreground">At least one of email or phone number is required.</p>
               </div>
 
               {error && <p className="text-sm text-destructive">{error}</p>}
 
-              <Button className="h-12 w-full" onClick={handleIdentifierSubmit} disabled={!identifier.trim() || loading}>
+              <Button className="h-12 w-full" onClick={handleIdentifierSubmit} disabled={!hasContact || loading}>
                 {loading ? 'Sending OTP...' : 'Continue'}
               </Button>
             </div>
@@ -196,7 +232,7 @@ const Signup = () => {
             <div className="space-y-6">
               <div>
                 <h1 className="font-display text-2xl font-bold">Verify OTP</h1>
-                <p className="mt-1 text-muted-foreground">Enter the 6-digit code sent to {identifier}</p>
+                <p className="mt-1 text-muted-foreground">Enter the 6-digit code sent to {contactSummary}</p>
               </div>
 
               <div className="space-y-2">

@@ -51,15 +51,24 @@ interface GroupGoalInvitePreviewResponse {
   inviteCode: string;
   progressPercent: number;
   alreadyJoined: boolean;
+  hasPendingInvitation: boolean;
+  invitationStatus?: string | null;
 }
 
 interface GroupGoalInviteResponse {
   invitationId: string;
   goalId: string;
-  channel: 'code' | 'email' | 'sms';
+  channel: 'platform' | 'code' | 'email' | 'sms';
   status: string;
   inviteCode: string;
   inviteLink: string;
+}
+
+interface GroupGoalInviteDecisionResponse {
+  invitationId: string;
+  goalId: string;
+  status: string;
+  inviteCode: string;
 }
 
 interface JoinGroupGoalResponse {
@@ -126,15 +135,24 @@ export interface GroupGoalDetail extends GroupGoalSummary {
 export interface GroupGoalInvitePreview extends Omit<GroupGoalSummary, 'role' | 'createdAt'> {
   inviteCode: string;
   alreadyJoined: boolean;
+  hasPendingInvitation: boolean;
+  invitationStatus?: string;
 }
 
 export interface GroupGoalInviteResult {
   invitationId: string;
   goalId: string;
-  channel: 'code' | 'email' | 'sms';
+  channel: 'platform' | 'code' | 'email' | 'sms';
   status: string;
   inviteCode: string;
   inviteLink: string;
+}
+
+export interface GroupGoalInviteDecisionResult {
+  invitationId: string;
+  goalId: string;
+  status: string;
+  inviteCode: string;
 }
 
 export interface GroupGoalJoinResult {
@@ -172,7 +190,8 @@ export interface CreateGroupGoalInput {
 
 export interface SendGroupGoalInviteInput {
   goalId: string;
-  channel: 'code' | 'email' | 'sms';
+  channel: 'platform' | 'code' | 'email' | 'sms';
+  platformUserId?: string;
   memberContact?: string;
 }
 
@@ -230,6 +249,8 @@ export const getGroupGoalInvitePreview = async (code: string): Promise<GroupGoal
     progressPercent: response.progressPercent,
     inviteCode: response.inviteCode,
     alreadyJoined: response.alreadyJoined,
+    hasPendingInvitation: response.hasPendingInvitation,
+    invitationStatus: response.invitationStatus ?? undefined,
   };
 };
 
@@ -243,9 +264,15 @@ export const sendGroupGoalInvite = async (input: SendGroupGoalInviteInput): Prom
   apiRequest<GroupGoalInviteResponse>(`/api/group-goals/${encodeURIComponent(input.goalId)}/members/invitations`, {
     method: 'POST',
     json: {
+      platformUserId: input.platformUserId,
       channel: input.channel,
       memberContact: input.memberContact?.trim() || undefined,
     },
+  });
+
+export const rejectGroupGoalInvite = async (code: string): Promise<GroupGoalInviteDecisionResult> =>
+  apiRequest<GroupGoalInviteDecisionResponse>(`/api/group-goals/invite/${encodeURIComponent(code.trim().toUpperCase())}/reject`, {
+    method: 'POST',
   });
 
 export const contributeToGroupGoal = async (goalId: string, pin: string): Promise<GroupGoalContributionResult> =>

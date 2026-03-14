@@ -1,24 +1,60 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Shield } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import PinPad from '@/components/shared/PinPad';
+import { useAuth } from '@/contexts/AuthContext';
+import { getApiErrorMessage, isApiError } from '@/lib/api/http';
 
 const AgentLogin = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { loginAgent, isAuthenticated, user } = useAuth();
   const [agentCode, setAgentCode] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [pinPadKey, setPinPadKey] = useState(0);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      return;
+    }
+
+    if (user.role === 'agent') {
+      navigate('/agent', { replace: true });
+      return;
+    }
+
+    navigate('/agent/apply', { replace: true, state: { from: location } });
+  }, [isAuthenticated, location, navigate, user]);
 
   const handleSubmit = () => {
-    if (agentCode.length >= 4) setShowPin(true);
+    if (agentCode.length >= 4) {
+      setError('');
+      setShowPin(true);
+    }
   };
 
-  const handlePinComplete = async (_pin: string) => {
-    await new Promise(r => setTimeout(r, 800));
-    navigate('/agent');
+  const handlePinComplete = async (pin: string) => {
+    setLoading(true);
+    setError('');
+
+    try {
+      await loginAgent(agentCode, pin);
+      navigate('/agent', { replace: true });
+    } catch (err) {
+      if (isApiError(err) && err.status === 401) {
+        setError('Incorrect PIN or inactive agent code.');
+      } else {
+        setError(getApiErrorMessage(err, 'Unable to sign in to the agent portal.'));
+      }
+      setPinPadKey(current => current + 1);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -51,9 +87,12 @@ const AgentLogin = () => {
       ) : (
         <div className="flex flex-col items-center pt-10">
           <PinPad
+            key={pinPadKey}
             title="Enter Agent PIN"
-            subtitle={`Logging in as ${agentCode}`}
+            subtitle={loading ? 'Signing in...' : `Logging in as ${agentCode}`}
             error={error}
+            disabled={loading}
+            onInput={() => error && setError('')}
             onComplete={handlePinComplete}
           />
         </div>

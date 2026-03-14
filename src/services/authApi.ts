@@ -8,6 +8,7 @@ interface IdentityUserProfileResponse {
   email: string;
   phoneNumber?: string | null;
   role: string;
+  kycTier: User['kycTier'];
   isActive: boolean;
   createdAtUtc: string;
   lastLoginAtUtc?: string | null;
@@ -44,6 +45,23 @@ interface UpdateMyProfileRequest {
   phoneNumber?: string | null;
 }
 
+export interface SubmitKycVerificationInput {
+  bvn: string;
+  nin: string;
+  accountNumber: string;
+  bankCode: string;
+}
+
+export interface KycVerificationResponse {
+  status: 'pending' | 'verified';
+  kycTier: User['kycTier'];
+  provider: string;
+  message: string;
+  bvnLast4?: string | null;
+  ninLast4?: string | null;
+  submittedAtUtc: string;
+}
+
 export interface OtpChallengeResponse {
   message: string;
   defaultOtp: string;
@@ -54,8 +72,14 @@ export interface OtpVerificationResponse {
   message: string;
 }
 
+export interface AuthContactInput {
+  email?: string;
+  phoneNumber?: string;
+}
+
 export interface SignupInput {
-  identifier: string;
+  email?: string;
+  phoneNumber?: string;
   firstName: string;
   lastName: string;
   pin: string;
@@ -91,6 +115,16 @@ const normalizeIdentifierPayload = (identifier: string) => {
   return { phoneNumber: value };
 };
 
+const normalizeContactPayload = (input: AuthContactInput) => {
+  const email = input.email?.trim() || undefined;
+  const phoneNumber = input.phoneNumber?.trim() || undefined;
+
+  return {
+    email,
+    phoneNumber,
+  };
+};
+
 const splitFullName = (fullName: string) => {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
 
@@ -109,7 +143,7 @@ export const mapIdentityProfileToUser = (profile: IdentityUserProfileResponse): 
     lastName,
     phone: profile.phoneNumber ?? '',
     email: normalizeIdentityEmail(profile.email),
-    kycTier: 'none',
+    kycTier: profile.kycTier,
     creditScore: 0,
     role: profile.role,
     isActive: profile.isActive,
@@ -125,19 +159,19 @@ const mapSession = (response: LoginUserResponse | RefreshTokenResponse): AuthSes
   refreshTokenExpiresAt: response.refreshTokenExpiresAtUtc,
 });
 
-export const requestOtp = (identifier: string) =>
+export const requestOtp = (input: AuthContactInput) =>
   apiRequest<OtpChallengeResponse>('/api/identity/request-otp', {
     method: 'POST',
     auth: false,
-    json: normalizeIdentifierPayload(identifier),
+    json: normalizeContactPayload(input),
   });
 
-export const verifyOtp = (identifier: string, otp: string) =>
+export const verifyOtp = (input: AuthContactInput, otp: string) =>
   apiRequest<OtpVerificationResponse>('/api/identity/verify-otp', {
     method: 'POST',
     auth: false,
     json: {
-      ...normalizeIdentifierPayload(identifier),
+      ...normalizeContactPayload(input),
       otp,
     },
   });
@@ -163,7 +197,7 @@ export const registerUser = async (input: SignupInput) => {
     method: 'POST',
     auth: false,
     json: {
-      ...normalizeIdentifierPayload(input.identifier),
+      ...normalizeContactPayload(input),
       firstName: input.firstName.trim(),
       lastName: input.lastName.trim(),
       pin: input.pin,
@@ -201,6 +235,17 @@ export const updateCurrentUser = async (input: UpdateProfileInput): Promise<User
 
   return mapIdentityProfileToUser(response);
 };
+
+export const submitKycVerification = (input: SubmitKycVerificationInput) =>
+  apiRequest<KycVerificationResponse>('/api/identity/me/kyc/verify', {
+    method: 'POST',
+    json: {
+      bvn: input.bvn.trim(),
+      nin: input.nin.trim(),
+      accountNumber: input.accountNumber.trim(),
+      bankCode: input.bankCode,
+    },
+  });
 
 export const logoutUser = async (refreshToken: string) => {
   await apiRequest('/api/identity/logout', {

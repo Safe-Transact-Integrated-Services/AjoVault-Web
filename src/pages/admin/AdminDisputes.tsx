@@ -1,204 +1,370 @@
-import { useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Search, Filter, MoreHorizontal, Eye, CheckCircle, ArrowUpCircle, Clock } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { mockAdminDisputes, type AdminDispute } from '@/services/adminMockData';
+import { Eye, Filter, LoaderCircle, MoreHorizontal, Search } from 'lucide-react';
 import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/lib/api/http';
+import {
+  getAdminSupportRequests,
+  supportKeys,
+  updateAdminSupportRequest,
+  type AdminSupportRequest,
+  type SupportPriority,
+  type SupportStatus,
+} from '@/services/supportApi';
+
+const statusColor: Record<string, string> = {
+  open: 'bg-warning/10 text-warning',
+  in_review: 'bg-accent/10 text-accent',
+  resolved: 'bg-success/10 text-success',
+};
+
+const priorityColor: Record<string, string> = {
+  low: 'bg-muted text-muted-foreground',
+  medium: 'bg-warning/10 text-warning',
+  high: 'bg-destructive/10 text-destructive',
+  critical: 'bg-destructive text-destructive-foreground',
+};
+
+const roleColor: Record<string, string> = {
+  customer: 'bg-primary/10 text-primary',
+  agent: 'bg-accent/10 text-accent',
+};
 
 const AdminDisputes = () => {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [selectedDispute, setSelectedDispute] = useState<AdminDispute | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'all' | SupportStatus>('all');
+  const [priorityFilter, setPriorityFilter] = useState<'all' | SupportPriority>('all');
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [responseText, setResponseText] = useState('');
 
-  const filtered = mockAdminDisputes.filter(d => {
-    const matchesSearch = `${d.subject} ${d.userName} ${d.description}`.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || d.status === statusFilter;
-    const matchesPriority = priorityFilter === 'all' || d.priority === priorityFilter;
-    return matchesSearch && matchesStatus && matchesPriority;
+  const disputesQuery = useQuery({
+    queryKey: supportKeys.adminAll,
+    queryFn: getAdminSupportRequests,
   });
 
-  const statusColor: Record<string, string> = {
-    open: 'bg-warning/10 text-warning',
-    in_progress: 'bg-accent/10 text-accent',
-    escalated: 'bg-destructive/10 text-destructive',
-    resolved: 'bg-success/10 text-success',
+  const updateMutation = useMutation({
+    mutationFn: updateAdminSupportRequest,
+    onSuccess: async (_, variables) => {
+      toast(variables.status === 'resolved' ? 'Support request resolved.' : 'Support request updated.');
+      await queryClient.invalidateQueries({ queryKey: supportKeys.adminAll });
+    },
+  });
+
+  const requests = disputesQuery.data ?? [];
+  const filtered = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+    return requests.filter(request => {
+      const matchesSearch = !normalizedSearch
+        || [
+          request.subject,
+          request.message,
+          request.requesterFullName,
+          request.requesterEmail,
+          request.requesterPhoneNumber,
+          request.relatedReference,
+          request.relatedCustomerIdentifier,
+          request.categoryLabel,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(normalizedSearch);
+
+      const matchesStatus = statusFilter === 'all' || request.status === statusFilter;
+      const matchesPriority = priorityFilter === 'all' || request.priority === priorityFilter;
+      return matchesSearch && matchesStatus && matchesPriority;
+    });
+  }, [priorityFilter, requests, search, statusFilter]);
+
+  const selectedRequest = requests.find(request => request.requestId === selectedRequestId) ?? null;
+
+  const statusCounts = {
+    open: requests.filter(request => request.status === 'open').length,
+    in_review: requests.filter(request => request.status === 'in_review').length,
+    resolved: requests.filter(request => request.status === 'resolved').length,
   };
 
-  const priorityColor: Record<string, string> = {
-    low: 'bg-muted text-muted-foreground',
-    medium: 'bg-warning/10 text-warning',
-    high: 'bg-destructive/20 text-destructive',
-    critical: 'bg-destructive text-destructive-foreground',
+  const handleOpenRequest = (request: AdminSupportRequest) => {
+    setSelectedRequestId(request.requestId);
+    setResponseText(request.adminResponse ?? '');
   };
 
-  const typeLabel: Record<string, string> = {
-    failed_transaction: 'Failed Transaction',
-    wrong_debit: 'Wrong Debit',
-    fraud_report: 'Fraud Report',
-    agent_complaint: 'Agent Complaint',
-    other: 'Other',
+  const handleUpdate = async (status: SupportStatus) => {
+    if (!selectedRequest) {
+      return;
+    }
+
+    try {
+      await updateMutation.mutateAsync({
+        requestId: selectedRequest.requestId,
+        status,
+        adminResponse: responseText,
+      });
+      setSelectedRequestId(null);
+      setResponseText('');
+    } catch (error) {
+      toast(getApiErrorMessage(error, 'Unable to update this support request.'));
+    }
+  };
+
+  const handleQuickUpdate = async (request: AdminSupportRequest, status: SupportStatus) => {
+    try {
+      await updateMutation.mutateAsync({
+        requestId: request.requestId,
+        status,
+        adminResponse: request.adminResponse ?? '',
+      });
+    } catch (error) {
+      toast(getApiErrorMessage(error, 'Unable to update this support request.'));
+    }
   };
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-bold text-foreground">Disputes & Issues</h1>
-        <p className="text-sm text-muted-foreground">{mockAdminDisputes.filter(d => d.status !== 'resolved').length} active disputes</p>
+        <p className="text-sm text-muted-foreground">{statusCounts.open + statusCounts.in_review} active issues</p>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {(['open', 'in_progress', 'escalated', 'resolved'] as const).map(status => {
-          const count = mockAdminDisputes.filter(d => d.status === status).length;
-          return (
-            <Card key={status} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setStatusFilter(status === statusFilter ? 'all' : status)}>
-              <CardContent className="p-4">
-                <Badge variant="outline" className={`border-0 text-[10px] mb-2 ${statusColor[status]}`}>{status.replace('_', ' ')}</Badge>
-                <p className="text-2xl font-bold text-foreground">{count}</p>
-              </CardContent>
-            </Card>
-          );
-        })}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        {([
+          ['open', statusCounts.open],
+          ['in_review', statusCounts.in_review],
+          ['resolved', statusCounts.resolved],
+        ] as const).map(([status, count]) => (
+          <Card
+            key={status}
+            className="cursor-pointer transition-shadow hover:shadow-md"
+            onClick={() => setStatusFilter(statusFilter === status ? 'all' : status)}
+          >
+            <CardContent className="p-4">
+              <Badge variant="outline" className={`mb-2 border-0 text-[10px] ${statusColor[status]}`}>
+                {status.replace('_', ' ')}
+              </Badge>
+              <p className="text-2xl font-bold text-foreground">{count}</p>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search disputes..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search issues, requester, reference..."
+            className="pl-9"
+            value={search}
+            onChange={event => setSearch(event.target.value)}
+          />
         </div>
         <div className="flex gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2"><Filter className="h-4 w-4" />{priorityFilter === 'all' ? 'Priority' : priorityFilter}</Button>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Filter className="h-4 w-4" />
+                {priorityFilter === 'all' ? 'Priority' : priorityFilter}
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
-              {['all', 'low', 'medium', 'high', 'critical'].map(p => (
-                <DropdownMenuItem key={p} onClick={() => setPriorityFilter(p)} className="capitalize">{p}</DropdownMenuItem>
+              {(['all', 'low', 'medium', 'high', 'critical'] as const).map(priority => (
+                <DropdownMenuItem key={priority} onClick={() => setPriorityFilter(priority)}>
+                  {priority}
+                </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left">
-                  <th className="p-4 font-medium text-muted-foreground">Subject</th>
-                  <th className="p-4 font-medium text-muted-foreground hidden md:table-cell">Type</th>
-                  <th className="p-4 font-medium text-muted-foreground hidden lg:table-cell">User</th>
-                  <th className="p-4 font-medium text-muted-foreground">Priority</th>
-                  <th className="p-4 font-medium text-muted-foreground text-right hidden sm:table-cell">Amount</th>
-                  <th className="p-4 font-medium text-muted-foreground text-right">Status</th>
-                  <th className="p-4 font-medium text-muted-foreground text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(dispute => (
-                  <tr key={dispute.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="p-4">
-                      <p className="font-medium text-foreground truncate max-w-[200px]">{dispute.subject}</p>
-                      <p className="text-xs text-muted-foreground lg:hidden">{dispute.userName}</p>
-                    </td>
-                    <td className="p-4 text-muted-foreground hidden md:table-cell">{typeLabel[dispute.type]}</td>
-                    <td className="p-4 text-foreground hidden lg:table-cell">{dispute.userName}</td>
-                    <td className="p-4">
-                      <Badge variant="outline" className={`border-0 text-[10px] ${priorityColor[dispute.priority]}`}>{dispute.priority}</Badge>
-                    </td>
-                    <td className="p-4 text-right font-medium text-foreground hidden sm:table-cell">
-                      {dispute.amount ? `₦${dispute.amount.toLocaleString()}` : '-'}
-                    </td>
-                    <td className="p-4 text-right">
-                      <Badge variant="outline" className={`border-0 text-[10px] ${statusColor[dispute.status]}`}>{dispute.status.replace('_', ' ')}</Badge>
-                    </td>
-                    <td className="p-4 text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => { setSelectedDispute(dispute); setResponseText(''); }}><Eye className="mr-2 h-4 w-4" />View & Respond</DropdownMenuItem>
-                          {dispute.status === 'open' && (
-                            <DropdownMenuItem onClick={() => toast.success('Dispute assigned')}><Clock className="mr-2 h-4 w-4" />Assign to me</DropdownMenuItem>
-                          )}
-                          {dispute.status !== 'resolved' && dispute.status !== 'escalated' && (
-                            <DropdownMenuItem onClick={() => toast.info('Dispute escalated')} className="text-destructive"><ArrowUpCircle className="mr-2 h-4 w-4" />Escalate</DropdownMenuItem>
-                          )}
-                          {dispute.status !== 'resolved' && (
-                            <DropdownMenuItem onClick={() => toast.success('Dispute resolved')} className="text-success"><CheckCircle className="mr-2 h-4 w-4" />Mark Resolved</DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {disputesQuery.isLoading ? (
+        <Card className="p-4 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <LoaderCircle className="h-4 w-4 animate-spin" />
+            Loading disputes...
           </div>
-        </CardContent>
-      </Card>
+        </Card>
+      ) : null}
 
-      <Dialog open={!!selectedDispute} onOpenChange={() => setSelectedDispute(null)}>
-        <DialogContent className="max-w-lg">
+      {disputesQuery.isError ? (
+        <Card className="border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
+          {getApiErrorMessage(disputesQuery.error, 'Unable to load support requests.')}
+        </Card>
+      ) : null}
+
+      {!disputesQuery.isLoading && !disputesQuery.isError ? (
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left">
+                    <th className="p-4 font-medium text-muted-foreground">Subject</th>
+                    <th className="hidden p-4 font-medium text-muted-foreground md:table-cell">Category</th>
+                    <th className="hidden p-4 font-medium text-muted-foreground lg:table-cell">Requester</th>
+                    <th className="p-4 font-medium text-muted-foreground">Priority</th>
+                    <th className="hidden p-4 font-medium text-muted-foreground sm:table-cell">Updated</th>
+                    <th className="p-4 text-right font-medium text-muted-foreground">Status</th>
+                    <th className="p-4 text-right font-medium text-muted-foreground">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(request => (
+                    <tr key={request.requestId} className="border-b border-border last:border-0 hover:bg-muted/30">
+                      <td className="p-4">
+                        <p className="max-w-[240px] truncate font-medium text-foreground">{request.subject}</p>
+                        <div className="mt-1 flex flex-wrap gap-2 lg:hidden">
+                          <Badge variant="outline" className={`border-0 text-[10px] ${roleColor[request.requesterRole] ?? roleColor.customer}`}>
+                            {request.requesterRole}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">{request.requesterFullName}</span>
+                        </div>
+                      </td>
+                      <td className="hidden p-4 text-muted-foreground md:table-cell">{request.categoryLabel}</td>
+                      <td className="hidden p-4 lg:table-cell">
+                        <div>
+                          <p className="font-medium text-foreground">{request.requesterFullName}</p>
+                          <p className="text-xs text-muted-foreground">{request.requesterPhoneNumber ?? request.requesterEmail ?? 'No contact'}</p>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <Badge variant="outline" className={`border-0 text-[10px] ${priorityColor[request.priority] ?? priorityColor.medium}`}>
+                          {request.priority}
+                        </Badge>
+                      </td>
+                      <td className="hidden p-4 text-muted-foreground sm:table-cell">
+                        {new Date(request.updatedAtUtc).toLocaleDateString()}
+                      </td>
+                      <td className="p-4 text-right">
+                        <Badge variant="outline" className={`border-0 text-[10px] ${statusColor[request.status] ?? statusColor.open}`}>
+                          {request.status.replace('_', ' ')}
+                        </Badge>
+                      </td>
+                      <td className="p-4 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleOpenRequest(request)}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              View & Respond
+                            </DropdownMenuItem>
+                            {request.status !== 'in_review' ? (
+                              <DropdownMenuItem onClick={() => void handleQuickUpdate(request, 'in_review')}>
+                                Mark In Review
+                              </DropdownMenuItem>
+                            ) : null}
+                            {request.status !== 'resolved' ? (
+                              <DropdownMenuItem onClick={() => handleOpenRequest(request)}>
+                                Resolve
+                              </DropdownMenuItem>
+                            ) : null}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {!filtered.length ? (
+              <div className="p-4 text-sm text-muted-foreground">No disputes matched the current filters.</div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Dialog open={!!selectedRequest} onOpenChange={open => {
+        if (!open) {
+          setSelectedRequestId(null);
+          setResponseText('');
+        }
+      }}>
+        <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>Dispute Details</DialogTitle>
+            <DialogTitle>Issue Details</DialogTitle>
           </DialogHeader>
-          {selectedDispute && (
+
+          {selectedRequest ? (
             <div className="space-y-4">
-              <div className="flex items-start justify-between">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="font-semibold text-foreground">{selectedDispute.subject}</p>
-                  <p className="text-sm text-muted-foreground">{selectedDispute.userName} • {typeLabel[selectedDispute.type]}</p>
+                  <p className="font-semibold text-foreground">{selectedRequest.subject}</p>
+                  <p className="text-sm text-muted-foreground">{selectedRequest.requesterFullName}</p>
                 </div>
                 <div className="flex gap-2">
-                  <Badge variant="outline" className={`border-0 text-[10px] ${priorityColor[selectedDispute.priority]}`}>{selectedDispute.priority}</Badge>
-                  <Badge variant="outline" className={`border-0 text-[10px] ${statusColor[selectedDispute.status]}`}>{selectedDispute.status.replace('_', ' ')}</Badge>
+                  <Badge variant="outline" className={`border-0 text-[10px] ${roleColor[selectedRequest.requesterRole] ?? roleColor.customer}`}>
+                    {selectedRequest.requesterRole}
+                  </Badge>
+                  <Badge variant="outline" className={`border-0 text-[10px] ${priorityColor[selectedRequest.priority] ?? priorityColor.medium}`}>
+                    {selectedRequest.priority}
+                  </Badge>
+                  <Badge variant="outline" className={`border-0 text-[10px] ${statusColor[selectedRequest.status] ?? statusColor.open}`}>
+                    {selectedRequest.status.replace('_', ' ')}
+                  </Badge>
                 </div>
               </div>
 
               <div className="rounded-lg bg-muted/50 p-4">
-                <p className="text-sm text-foreground">{selectedDispute.description}</p>
+                <p className="text-sm text-foreground">{selectedRequest.message}</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="grid gap-3 text-sm sm:grid-cols-2">
                 <div className="rounded-lg bg-muted/50 p-3">
-                  <p className="text-[10px] text-muted-foreground">Amount</p>
-                  <p className="font-medium text-foreground">{selectedDispute.amount ? `₦${selectedDispute.amount.toLocaleString()}` : 'N/A'}</p>
+                  <p className="text-[10px] text-muted-foreground">Category</p>
+                  <p className="font-medium text-foreground">{selectedRequest.categoryLabel}</p>
                 </div>
                 <div className="rounded-lg bg-muted/50 p-3">
-                  <p className="text-[10px] text-muted-foreground">Assigned To</p>
-                  <p className="font-medium text-foreground">{selectedDispute.assignedTo || 'Unassigned'}</p>
+                  <p className="text-[10px] text-muted-foreground">Contact</p>
+                  <p className="font-medium text-foreground">{selectedRequest.requesterPhoneNumber ?? selectedRequest.requesterEmail ?? 'No contact'}</p>
                 </div>
                 <div className="rounded-lg bg-muted/50 p-3">
-                  <p className="text-[10px] text-muted-foreground">Created</p>
-                  <p className="font-medium text-foreground">{new Date(selectedDispute.createdAt).toLocaleDateString()}</p>
+                  <p className="text-[10px] text-muted-foreground">Reference</p>
+                  <p className="font-medium text-foreground">{selectedRequest.relatedReference ?? 'N/A'}</p>
                 </div>
                 <div className="rounded-lg bg-muted/50 p-3">
-                  <p className="text-[10px] text-muted-foreground">Last Updated</p>
-                  <p className="font-medium text-foreground">{new Date(selectedDispute.updatedAt).toLocaleDateString()}</p>
+                  <p className="text-[10px] text-muted-foreground">Related Customer</p>
+                  <p className="font-medium text-foreground">{selectedRequest.relatedCustomerIdentifier ?? 'N/A'}</p>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-3">
+                  <p className="text-[10px] text-muted-foreground">Opened</p>
+                  <p className="font-medium text-foreground">{new Date(selectedRequest.createdAtUtc).toLocaleString()}</p>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-3">
+                  <p className="text-[10px] text-muted-foreground">Updated</p>
+                  <p className="font-medium text-foreground">{new Date(selectedRequest.updatedAtUtc).toLocaleString()}</p>
                 </div>
               </div>
 
-              {selectedDispute.status !== 'resolved' && (
-                <div className="space-y-2">
-                  <Textarea placeholder="Write a response or internal note..." value={responseText} onChange={e => setResponseText(e.target.value)} rows={3} />
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={() => { toast.success('Response sent'); setSelectedDispute(null); }} disabled={!responseText.trim()}>Send Response</Button>
-                    <Button size="sm" variant="outline" onClick={() => { toast.success('Dispute resolved'); setSelectedDispute(null); }}>Mark Resolved</Button>
-                  </div>
+              <div className="space-y-2">
+                <Textarea
+                  placeholder="Write a response or resolution note..."
+                  value={responseText}
+                  onChange={event => setResponseText(event.target.value)}
+                  rows={4}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" disabled={updateMutation.isPending} onClick={() => void handleUpdate('in_review')}>
+                    {updateMutation.isPending ? 'Saving...' : 'Mark In Review'}
+                  </Button>
+                  <Button size="sm" variant="outline" disabled={updateMutation.isPending} onClick={() => void handleUpdate('resolved')}>
+                    Mark Resolved
+                  </Button>
                 </div>
-              )}
+              </div>
             </div>
-          )}
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>

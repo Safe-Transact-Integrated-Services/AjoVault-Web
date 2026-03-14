@@ -2,18 +2,19 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Copy, Mail, MessageSquare, Share2 } from 'lucide-react';
+import { ArrowLeft, Copy, Share2 } from 'lucide-react';
+import PlatformUserInvitePicker from '@/components/shared/PlatformUserInvitePicker';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { circlesKeys, createCircle, sendCircleInvite, type CircleDetail } from '@/services/circlesApi';
 import { dashboardKeys } from '@/services/dashboardApi';
 import { getApiErrorMessage } from '@/lib/api/http';
+import type { PlatformUserSearchResult } from '@/services/platformUsersApi';
 import { toast } from 'sonner';
 
 type Step = 'name' | 'amount' | 'rules' | 'invite';
-type InviteMethod = 'email' | 'sms' | null;
 
 const CreateCircle = () => {
   const navigate = useNavigate();
@@ -28,8 +29,6 @@ const CreateCircle = () => {
   const [circle, setCircle] = useState<CircleDetail | null>(null);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [inviteMethod, setInviteMethod] = useState<InviteMethod>(null);
-  const [memberContact, setMemberContact] = useState('');
 
   const steps: Step[] = ['name', 'amount', 'rules', 'invite'];
   const stepIndex = steps.indexOf(step);
@@ -79,8 +78,8 @@ const CreateCircle = () => {
     }
   };
 
-  const handleSendInvite = async () => {
-    if (!circle || !inviteMethod) {
+  const handleSendInvite = async (user: PlatformUserSearchResult) => {
+    if (!circle) {
       return;
     }
 
@@ -88,17 +87,40 @@ const CreateCircle = () => {
     setError('');
 
     try {
-      const result = await sendCircleInvite({
+      await sendCircleInvite({
         circleId: circle.id,
-        channel: inviteMethod,
-        memberContact,
+        channel: 'platform',
+        platformUserId: user.userId,
       });
 
-      toast.success(`${result.channel.toUpperCase()} invite queued.`);
-      setInviteMethod(null);
-      setMemberContact('');
+      toast.success(`In-app invite sent to ${user.fullName}.`);
     } catch (inviteError) {
       setError(getApiErrorMessage(inviteError, 'Unable to send invite.'));
+      throw inviteError;
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleContactInvite = async (contact: string, channel: 'email' | 'sms') => {
+    if (!circle) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      await sendCircleInvite({
+        circleId: circle.id,
+        channel,
+        memberContact: contact,
+      });
+
+      toast.success(`${channel.toUpperCase()} invite queued for ${contact}.`);
+    } catch (inviteError) {
+      setError(getApiErrorMessage(inviteError, 'Unable to send invite.'));
+      throw inviteError;
     } finally {
       setIsSubmitting(false);
     }
@@ -221,32 +243,14 @@ const CreateCircle = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <Button variant="outline" className="h-12 gap-2" onClick={() => setInviteMethod('email')}>
-                  <Mail className="h-4 w-4" /> Email
-                </Button>
-                <Button variant="outline" className="h-12 gap-2" onClick={() => setInviteMethod('sms')}>
-                  <MessageSquare className="h-4 w-4" /> SMS
-                </Button>
-              </div>
-
-              {inviteMethod && (
-                <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-                  <Label htmlFor="circle-member-contact">{inviteMethod === 'email' ? 'Email Address' : 'Phone Number'}</Label>
-                  <Input
-                    id="circle-member-contact"
-                    type={inviteMethod === 'email' ? 'email' : 'tel'}
-                    value={memberContact}
-                    onChange={event => setMemberContact(event.target.value)}
-                    placeholder={inviteMethod === 'email' ? 'friend@email.com' : '08012345678'}
-                    className="h-12"
-                  />
-                  <Button className="h-12 w-full gap-2" onClick={handleSendInvite} disabled={isSubmitting || !memberContact.trim()}>
-                    {inviteMethod === 'email' ? <Mail className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />}
-                    Send {inviteMethod.toUpperCase()} Invite
-                  </Button>
-                </div>
-              )}
+              <PlatformUserInvitePicker
+                onInvite={handleSendInvite}
+                onInviteContact={handleContactInvite}
+                disabled={isSubmitting}
+                showDirectContactInvite
+                title="Invite Platform Users"
+                description="Search existing AjoVault users by email or phone number, then send an in-app invite."
+              />
 
               {error && (
                 <Alert variant="destructive">

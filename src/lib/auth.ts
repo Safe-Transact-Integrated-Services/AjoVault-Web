@@ -13,8 +13,6 @@ export const getDefaultAuthenticatedPath = (user: Pick<User, 'role'>) => {
 
 export const getDefaultUserLoginPath = (user: Pick<User, 'role'>) => {
   switch (user.role) {
-    case 'agent':
-      return '/agent';
     default:
       return '/dashboard';
   }

@@ -1,150 +1,279 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import {
+  AlertTriangle,
+  ArrowLeftRight,
+  CircleDot,
+  LoaderCircle,
+  PiggyBank,
+  TrendingUp,
+  UserCog,
+  Users,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Users, UserCog, ArrowLeftRight, AlertTriangle, PiggyBank, CircleDot, TrendingUp } from 'lucide-react';
-import { mockAdminStats, mockAdminDisputes, mockAdminTransactions, mockAdminAgents } from '@/services/adminMockData';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { getApiErrorMessage } from '@/lib/api/http';
+import {
+  adminDashboardKeys,
+  getAdminDashboardSummary,
+} from '@/services/adminDashboardApi';
+
+const statusColor: Record<string, string> = {
+  completed: 'bg-success/10 text-success',
+  pending: 'bg-warning/10 text-warning',
+  failed: 'bg-destructive/10 text-destructive',
+  reversed: 'bg-muted text-muted-foreground',
+  open: 'bg-warning/10 text-warning',
+  in_review: 'bg-accent/10 text-accent',
+  resolved: 'bg-success/10 text-success',
+};
+
+const priorityColor: Record<string, string> = {
+  low: 'bg-muted text-muted-foreground',
+  medium: 'bg-warning/10 text-warning',
+  high: 'bg-destructive/10 text-destructive',
+  critical: 'bg-destructive text-destructive-foreground',
+};
+
+const roleColor: Record<string, string> = {
+  customer: 'bg-primary/10 text-primary',
+  agent: 'bg-accent/10 text-accent',
+};
 
 const AdminDashboard = () => {
-  const stats = mockAdminStats;
-  const pendingAgents = mockAdminAgents.filter(a => a.status === 'pending');
-  const recentDisputes = mockAdminDisputes.filter(d => d.status !== 'resolved').slice(0, 4);
-  const recentTxns = mockAdminTransactions.slice(0, 5);
+  const dashboardQuery = useQuery({
+    queryKey: adminDashboardKeys.summary,
+    queryFn: getAdminDashboardSummary,
+  });
 
-  const kpis = [
-    { label: 'Total Users', value: stats.totalUsers.toLocaleString(), sub: `${stats.activeUsers.toLocaleString()} active`, icon: Users, color: 'text-accent' },
-    { label: 'Total Agents', value: stats.totalAgents.toLocaleString(), sub: `${stats.pendingAgents} pending`, icon: UserCog, color: 'text-primary' },
-    { label: "Today's Volume", value: `${stats.currency}${(stats.todayTransactionVolume / 1_000_000).toFixed(1)}M`, sub: `${stats.currency}${(stats.totalTransactionVolume / 1_000_000_000).toFixed(2)}B total`, icon: ArrowLeftRight, color: 'text-success' },
-    { label: 'Open Disputes', value: stats.openDisputes.toString(), sub: 'Needs attention', icon: AlertTriangle, color: 'text-warning' },
-    { label: 'Total Savings', value: `${stats.currency}${(stats.totalSavings / 1_000_000).toFixed(0)}M`, sub: 'Across all users', icon: PiggyBank, color: 'text-accent' },
-    { label: 'Active Circles', value: stats.activeCircles.toLocaleString(), sub: 'Ajo groups', icon: CircleDot, color: 'text-primary' },
-  ];
+  const currencyFormatter = useMemo(() => {
+    const currency = dashboardQuery.data?.kpis.currency ?? 'NGN';
+    return new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
+  }, [dashboardQuery.data?.kpis.currency]);
 
-  const statusColor: Record<string, string> = {
-    completed: 'bg-success/10 text-success',
-    pending: 'bg-warning/10 text-warning',
-    failed: 'bg-destructive/10 text-destructive',
-    reversed: 'bg-muted text-muted-foreground',
-    open: 'bg-warning/10 text-warning',
-    in_progress: 'bg-accent/10 text-accent',
-    escalated: 'bg-destructive/10 text-destructive',
-    resolved: 'bg-success/10 text-success',
-  };
+  const dateFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-NG', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }),
+    [],
+  );
 
-  const priorityColor: Record<string, string> = {
-    low: 'bg-muted text-muted-foreground',
-    medium: 'bg-warning/10 text-warning',
-    high: 'bg-destructive/10 text-destructive',
-    critical: 'bg-destructive text-destructive-foreground',
-  };
+  const dashboard = dashboardQuery.data;
+  const kpis = dashboard
+    ? [
+        {
+          label: 'Total Users',
+          value: dashboard.kpis.totalUsers.toLocaleString(),
+          sub: `${dashboard.kpis.activeUsers.toLocaleString()} active`,
+          icon: Users,
+          color: 'text-accent',
+        },
+        {
+          label: 'Total Agents',
+          value: dashboard.kpis.totalAgents.toLocaleString(),
+          sub: `${dashboard.kpis.pendingAgents} pending`,
+          icon: UserCog,
+          color: 'text-primary',
+        },
+        {
+          label: "Today's Volume",
+          value: currencyFormatter.format(dashboard.kpis.todayTransactionVolume),
+          sub: `${currencyFormatter.format(dashboard.kpis.totalTransactionVolume)} total`,
+          icon: ArrowLeftRight,
+          color: 'text-success',
+        },
+        {
+          label: 'Open Disputes',
+          value: dashboard.kpis.openDisputes.toString(),
+          sub: 'Needs attention',
+          icon: AlertTriangle,
+          color: 'text-warning',
+        },
+        {
+          label: 'Total Savings',
+          value: currencyFormatter.format(dashboard.kpis.totalSavings),
+          sub: 'Across all users',
+          icon: PiggyBank,
+          color: 'text-accent',
+        },
+        {
+          label: 'Active Circles',
+          value: dashboard.kpis.activeCircles.toLocaleString(),
+          sub: 'Live contribution groups',
+          icon: CircleDot,
+          color: 'text-primary',
+        },
+      ]
+    : [];
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Overview of AjoVault platform</p>
+        <p className="text-sm text-muted-foreground">Live overview of AjoVault platform activity</p>
       </div>
 
-      {/* KPI Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {kpis.map((kpi) => (
-          <Card key={kpi.label}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <kpi.icon className={`h-5 w-5 ${kpi.color}`} />
-                <TrendingUp className="h-3 w-3 text-success" />
-              </div>
-              <p className="text-2xl font-bold text-foreground">{kpi.value}</p>
-              <p className="text-xs text-muted-foreground mt-1">{kpi.label}</p>
-              <p className="text-[10px] text-muted-foreground">{kpi.sub}</p>
+      {dashboardQuery.isLoading ? (
+        <Card>
+          <CardContent className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+            <LoaderCircle className="h-4 w-4 animate-spin" />
+            Loading admin dashboard...
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {dashboardQuery.isError ? (
+        <Card className="border-destructive/20 bg-destructive/5">
+          <CardContent className="p-4 text-sm text-destructive">
+            {getApiErrorMessage(dashboardQuery.error, 'Unable to load the admin dashboard.')}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {dashboard ? (
+        <>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+            {kpis.map(kpi => (
+              <Card key={kpi.label}>
+                <CardContent className="p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <kpi.icon className={`h-5 w-5 ${kpi.color}`} />
+                    <TrendingUp className="h-3 w-3 text-success" />
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{kpi.value}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{kpi.label}</p>
+                  <p className="text-[10px] text-muted-foreground">{kpi.sub}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Pending Agent Approvals</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {dashboard.pendingAgentApprovals.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No pending approvals.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {dashboard.pendingAgentApprovals.map(agent => (
+                      <div
+                        key={agent.applicationId}
+                        className="flex items-center justify-between rounded-lg border border-border p-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground">{agent.fullName}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {agent.location}, {agent.state} - {agent.phoneNumber}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            Submitted {dateFormatter.format(new Date(agent.submittedAtUtc))}
+                          </p>
+                        </div>
+                        <Badge className="border-0 bg-warning/10 text-warning">Pending</Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Active Disputes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {dashboard.activeIssues.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No active issues.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {dashboard.activeIssues.map(issue => (
+                      <div
+                        key={issue.requestId}
+                        className="flex items-start justify-between rounded-lg border border-border p-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-foreground">{issue.subject}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <Badge variant="outline" className={`border-0 text-[10px] ${roleColor[issue.requesterRole] ?? roleColor.customer}`}>
+                              {issue.requesterRole}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">{issue.requesterFullName}</span>
+                            <span className="text-xs text-muted-foreground">{issue.categoryLabel}</span>
+                          </div>
+                        </div>
+                        <div className="ml-2 flex flex-col items-end gap-1">
+                          <Badge variant="outline" className={`border-0 text-[10px] ${priorityColor[issue.priority] ?? priorityColor.medium}`}>
+                            {issue.priority}
+                          </Badge>
+                          <Badge variant="outline" className={`border-0 text-[10px] ${statusColor[issue.status] ?? statusColor.open}`}>
+                            {issue.status.replace('_', ' ')}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Recent Transactions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {dashboard.recentTransactions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No recent platform transactions.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left">
+                        <th className="pb-2 font-medium text-muted-foreground">Reference</th>
+                        <th className="pb-2 font-medium text-muted-foreground">Type</th>
+                        <th className="hidden pb-2 font-medium text-muted-foreground md:table-cell">Customer</th>
+                        <th className="hidden pb-2 font-medium text-muted-foreground md:table-cell">Description</th>
+                        <th className="pb-2 text-right font-medium text-muted-foreground">Amount</th>
+                        <th className="pb-2 text-right font-medium text-muted-foreground">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dashboard.recentTransactions.map(tx => (
+                        <tr key={tx.entryId} className="border-b border-border last:border-0">
+                          <td className="py-2.5 font-mono text-xs text-foreground">{tx.reference}</td>
+                          <td className="py-2.5 capitalize text-muted-foreground">{tx.transactionType.replace(/_/g, ' ')}</td>
+                          <td className="hidden py-2.5 text-foreground md:table-cell">{tx.customerName}</td>
+                          <td className="hidden max-w-[260px] py-2.5 text-foreground md:table-cell">
+                            <span className="block truncate">{tx.description}</span>
+                          </td>
+                          <td className="py-2.5 text-right font-medium text-foreground">
+                            {tx.direction === 'credit' ? '+' : '-'}{currencyFormatter.format(tx.amount)}
+                          </td>
+                          <td className="py-2.5 text-right">
+                            <Badge variant="outline" className={`border-0 text-[10px] ${statusColor[tx.status] ?? statusColor.completed}`}>
+                              {tx.status}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
-        ))}
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Pending Agent Approvals */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Pending Agent Approvals</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {pendingAgents.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No pending approvals</p>
-            ) : (
-              <div className="space-y-3">
-                {pendingAgents.map((agent) => (
-                  <div key={agent.id} className="flex items-center justify-between rounded-lg border border-border p-3">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{agent.firstName} {agent.lastName}</p>
-                      <p className="text-xs text-muted-foreground">{agent.location} • {agent.phone}</p>
-                    </div>
-                    <Badge className="bg-warning/10 text-warning border-0">Pending</Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Recent Disputes */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Active Disputes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {recentDisputes.map((d) => (
-                <div key={d.id} className="flex items-start justify-between rounded-lg border border-border p-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{d.subject}</p>
-                    <p className="text-xs text-muted-foreground">{d.userName}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1 ml-2">
-                    <Badge variant="outline" className={`text-[10px] border-0 ${priorityColor[d.priority]}`}>{d.priority}</Badge>
-                    <Badge variant="outline" className={`text-[10px] border-0 ${statusColor[d.status]}`}>{d.status.replace('_', ' ')}</Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recent Transactions */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Recent Transactions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left">
-                  <th className="pb-2 font-medium text-muted-foreground">Reference</th>
-                  <th className="pb-2 font-medium text-muted-foreground">Type</th>
-                  <th className="pb-2 font-medium text-muted-foreground hidden md:table-cell">Sender</th>
-                  <th className="pb-2 font-medium text-muted-foreground hidden md:table-cell">Recipient</th>
-                  <th className="pb-2 font-medium text-muted-foreground text-right">Amount</th>
-                  <th className="pb-2 font-medium text-muted-foreground text-right">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentTxns.map((tx) => (
-                  <tr key={tx.id} className="border-b border-border last:border-0">
-                    <td className="py-2.5 text-foreground font-mono text-xs">{tx.reference}</td>
-                    <td className="py-2.5 capitalize text-muted-foreground">{tx.type.replace('_', ' ')}</td>
-                    <td className="py-2.5 text-foreground hidden md:table-cell">{tx.senderName}</td>
-                    <td className="py-2.5 text-foreground hidden md:table-cell">{tx.recipientName}</td>
-                    <td className="py-2.5 text-right font-medium text-foreground">{tx.currency}{tx.amount.toLocaleString()}</td>
-                    <td className="py-2.5 text-right">
-                      <Badge variant="outline" className={`text-[10px] border-0 ${statusColor[tx.status]}`}>{tx.status}</Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+        </>
+      ) : null}
     </div>
   );
 };

@@ -54,15 +54,24 @@ interface GroupInvitePreviewResponse {
   slotsRemaining: number;
   alreadyJoined: boolean;
   payoutAmount: number;
+  hasPendingInvitation: boolean;
+  invitationStatus?: string | null;
 }
 
 interface MemberInviteResponse {
   invitationId: string;
   groupId: string;
-  channel: 'code' | 'email' | 'sms';
+  channel: 'platform' | 'code' | 'email' | 'sms';
   status: string;
   inviteCode: string;
   inviteLink: string;
+}
+
+interface MemberInviteDecisionResponse {
+  invitationId: string;
+  groupId: string;
+  status: string;
+  inviteCode: string;
 }
 
 interface JoinGroupResponse {
@@ -175,15 +184,24 @@ export interface CircleInvitePreview {
   slotsRemaining: number;
   alreadyJoined: boolean;
   payoutAmount: number;
+  hasPendingInvitation: boolean;
+  invitationStatus?: string;
 }
 
 export interface CircleInviteResult {
   invitationId: string;
   groupId: string;
-  channel: 'code' | 'email' | 'sms';
+  channel: 'platform' | 'code' | 'email' | 'sms';
   status: string;
   inviteCode: string;
   inviteLink: string;
+}
+
+export interface CircleInviteDecisionResult {
+  invitationId: string;
+  groupId: string;
+  status: string;
+  inviteCode: string;
 }
 
 export interface CircleJoinResult {
@@ -249,7 +267,8 @@ export interface CreateCircleInput {
 
 export interface SendCircleInviteInput {
   circleId: string;
-  channel: 'code' | 'email' | 'sms';
+  channel: 'platform' | 'code' | 'email' | 'sms';
+  platformUserId?: string;
   memberContact?: string;
 }
 
@@ -309,6 +328,8 @@ export const getCircleInvitePreview = async (code: string): Promise<CircleInvite
     slotsRemaining: response.slotsRemaining,
     alreadyJoined: response.alreadyJoined,
     payoutAmount: response.payoutAmount,
+    hasPendingInvitation: response.hasPendingInvitation,
+    invitationStatus: response.invitationStatus ?? undefined,
   };
 };
 
@@ -324,9 +345,15 @@ export const sendCircleInvite = async (input: SendCircleInviteInput): Promise<Ci
   apiRequest<MemberInviteResponse>(`/api/groups/${encodeURIComponent(input.circleId)}/members/invitations`, {
     method: 'POST',
     json: {
+      platformUserId: input.platformUserId,
       memberContact: input.memberContact?.trim() || undefined,
       channel: input.channel,
     },
+  });
+
+export const rejectCircleInvite = async (code: string): Promise<CircleInviteDecisionResult> =>
+  apiRequest<MemberInviteDecisionResponse>(`/api/groups/invite/${encodeURIComponent(code.trim().toUpperCase())}/reject`, {
+    method: 'POST',
   });
 
 export const contributeToCircle = async (circleId: string, pin: string): Promise<CircleContributionResult> =>

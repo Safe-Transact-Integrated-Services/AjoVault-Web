@@ -4,6 +4,7 @@ import {
   UserCog,
   ArrowLeftRight,
   AlertTriangle,
+  Mail,
   Settings,
   LogOut,
   Shield,
@@ -34,6 +35,7 @@ const mainItems = [
 ];
 
 const systemItems = [
+  { title: 'Messaging', url: '/admin/messaging', icon: Mail },
   { title: 'Settings', url: '/admin/settings', icon: Settings },
 ];
 

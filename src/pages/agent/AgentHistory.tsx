@@ -1,96 +1,147 @@
-import { useState } from 'react';
-import { ArrowLeft, ArrowDownLeft, ArrowUpRight, UserPlus, FileText, Search } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowLeft, BadgeCheck, Clock3 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { mockAgentTransactions, formatCurrency } from '@/services/agentMockData';
-import { cn } from '@/lib/utils';
+import { getApiErrorMessage } from '@/lib/api/http';
+import { getAgentActivities, type AgentActivity } from '@/services/agentApi';
 
-const typeFilters = ['all', 'cash_in', 'cash_out', 'registration', 'bill_payment'] as const;
-const typeLabels: Record<string, string> = { all: 'All', cash_in: 'Cash In', cash_out: 'Cash Out', registration: 'Register', bill_payment: 'Bills' };
+const currency = new Intl.NumberFormat('en-NG', {
+  style: 'currency',
+  currency: 'NGN',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+
+const titleForActivity = (activity: AgentActivity) => {
+  if (activity.activityType === 'registration') {
+    return activity.customerName ? `Registered ${activity.customerName}` : 'Customer registration';
+  }
+
+  switch (activity.activityType) {
+    case 'cash_in':
+      return 'Cash-in completed';
+    case 'cash_out':
+      return 'Cash-out completed';
+    case 'transfer':
+      return activity.status === 'completed' ? 'Transfer completed' : activity.status === 'pending' ? 'Transfer pending' : 'Transfer failed';
+    case 'bill_payment':
+      return 'Bill payment';
+    case 'balance_enquiry':
+      return 'Balance enquiry';
+    case 'mini_statement':
+      return 'Mini statement';
+    case 'savings':
+      return 'Savings contribution';
+    case 'circle':
+      return 'Circle contribution';
+    case 'group_goal':
+      return 'Group goal contribution';
+    default:
+      return 'Agent activity';
+  }
+};
 
 const AgentHistory = () => {
   const navigate = useNavigate();
-  const [filter, setFilter] = useState<string>('all');
-  const [search, setSearch] = useState('');
+  const [activities, setActivities] = useState<AgentActivity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const isZeroDebitActivity = (activity: AgentActivity) =>
+    (activity.activityType === 'balance_enquiry' || activity.activityType === 'mini_statement') && activity.amount <= 0;
 
-  const filtered = mockAgentTransactions.filter(tx => {
-    if (filter !== 'all' && tx.type !== filter) return false;
-    if (search && !tx.customerName.toLowerCase().includes(search.toLowerCase()) && !tx.customerPhone.includes(search)) return false;
-    return true;
-  });
+  useEffect(() => {
+    let active = true;
 
-  const txnIcon = (type: string) => {
-    switch (type) {
-      case 'cash_in': return <ArrowDownLeft className="h-4 w-4 text-success" />;
-      case 'cash_out': return <ArrowUpRight className="h-4 w-4 text-destructive" />;
-      case 'registration': return <UserPlus className="h-4 w-4 text-accent" />;
-      default: return <FileText className="h-4 w-4 text-warning" />;
-    }
-  };
+    const load = async () => {
+      try {
+        const response = await getAgentActivities();
+        if (active) {
+          setActivities(response);
+        }
+      } catch (err) {
+        if (active) {
+          setError(getApiErrorMessage(err, 'Unable to load agent history.'));
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
 
-  const statusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return 'text-success bg-success/10';
-      case 'pending': return 'text-warning bg-warning/10';
-      default: return 'text-destructive bg-destructive/10';
-    }
-  };
+    void load();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
-    <div className="min-h-screen px-5 py-6 space-y-5">
+    <div className="space-y-5 px-5 py-6">
       <button onClick={() => navigate('/agent')} className="flex items-center gap-1 text-sm text-muted-foreground">
         <ArrowLeft className="h-4 w-4" /> Back
       </button>
 
-      <h1 className="font-display text-xl font-bold">Transaction History</h1>
-
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Search by name or phone..." value={search} onChange={e => setSearch(e.target.value)} className="h-11 pl-9" />
+      <div>
+        <h1 className="font-display text-2xl font-bold">Agent History</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Registration and assisted transaction history for this agent profile.
+        </p>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {typeFilters.map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={cn(
-              'whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-medium transition-colors',
-              filter === f ? 'bg-accent text-accent-foreground' : 'bg-muted text-muted-foreground'
-            )}
-          >
-            {typeLabels[f]}
-          </button>
-        ))}
-      </div>
+      {loading && <p className="text-sm text-muted-foreground">Loading history...</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
-      {/* List */}
-      <Card className="divide-y divide-border">
-        {filtered.length === 0 ? (
-          <p className="p-6 text-center text-sm text-muted-foreground">No transactions found</p>
-        ) : (
-          filtered.map(tx => (
-            <div key={tx.id} className="flex items-center gap-3 p-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
-                {txnIcon(tx.type)}
+      {!loading && !error && !activities.length && (
+        <Card className="space-y-3 border-dashed p-5 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
+            <Clock3 className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold">No history yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Once you register customers or complete assisted transactions, they will appear here.
+            </p>
+          </div>
+        </Card>
+      )}
+
+      {!!activities.length && (
+        <div className="space-y-3">
+          {activities.map(activity => (
+            <Card key={activity.activityId} className="space-y-3 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">{titleForActivity(activity)}</p>
+                  <p className="text-xs text-muted-foreground">{activity.reference}</p>
+                </div>
+                <BadgeCheck className="h-4 w-4 text-success" />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{tx.customerName}</p>
-                <p className="text-xs text-muted-foreground">{tx.customerPhone}</p>
+
+              <p className="text-sm text-muted-foreground">{activity.description}</p>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">Customer</p>
+                  <p className="font-medium">{activity.customerName ?? 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Time</p>
+                  <p className="font-medium">{new Date(activity.createdAtUtc).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Amount</p>
+                  <p className="font-medium">{isZeroDebitActivity(activity) ? 'No wallet debit' : currency.format(activity.amount)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Commission</p>
+                  <p className="font-medium">{currency.format(activity.commissionAmount)}</p>
+                </div>
               </div>
-              <div className="text-right">
-                {tx.amount > 0 && <p className="text-sm font-semibold">{formatCurrency(tx.amount)}</p>}
-                <span className={cn('inline-block rounded-full px-2 py-0.5 text-[10px] font-medium', statusColor(tx.status))}>
-                  {tx.status}
-                </span>
-              </div>
-            </div>
-          ))
-        )}
-      </Card>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

@@ -12,6 +12,7 @@ import AgentLayout from '@/components/layout/AgentLayout';
 import AdminLayout from '@/components/layout/AdminLayout';
 import AdminRouteGuard from '@/components/layout/AdminRouteGuard';
 import AuthRouteGuard from '@/components/layout/AuthRouteGuard';
+import AgentRouteGuard from '@/components/layout/AgentRouteGuard';
 
 import Welcome from '@/pages/Welcome';
 import Signup from '@/pages/Signup';
@@ -25,6 +26,8 @@ import TransactionHistory from '@/pages/wallet/TransactionHistory';
 import SavingsHome from '@/pages/savings/SavingsHome';
 import CreateSavings from '@/pages/savings/CreateSavings';
 import SavingsDetail from '@/pages/savings/SavingsDetail';
+import SavingsInvite from '@/pages/savings/SavingsInvite';
+import SavingsInvitationDecision from '@/pages/savings/SavingsInvitationDecision';
 import CirclesHome from '@/pages/circles/CirclesHome';
 import CreateCircle from '@/pages/circles/CreateCircle';
 import JoinCircle from '@/pages/circles/JoinCircle';
@@ -38,6 +41,8 @@ import MorePage from '@/pages/more/MorePage';
 import Profile from '@/pages/more/Profile';
 import KycUpgrade from '@/pages/more/KycUpgrade';
 import Settings from '@/pages/more/Settings';
+import HelpSupport from '@/pages/more/HelpSupport';
+import AgentAccess from '@/pages/more/AgentAccess';
 import NotFound from '@/pages/NotFound';
 
 import AgentLogin from '@/pages/agent/AgentLogin';
@@ -51,6 +56,7 @@ import AgentCommissions from '@/pages/agent/AgentCommissions';
 import BecomeAgent from '@/pages/agent/BecomeAgent';
 import AgentLedger from '@/pages/agent/AgentLedger';
 import AgentSettlements from '@/pages/agent/AgentSettlements';
+import AgentHelpSupport from '@/pages/agent/AgentHelpSupport';
 import CreditPassport from '@/pages/CreditPassport';
 import CooperativeHome from '@/pages/cooperative/CooperativeHome';
 import CooperativeMembers from '@/pages/cooperative/CooperativeMembers';
@@ -62,6 +68,7 @@ import CreateGroupGoal from '@/pages/groupgoals/CreateGroupGoal';
 import JoinGroupGoal from '@/pages/groupgoals/JoinGroupGoal';
 import GroupGoalDetail from '@/pages/groupgoals/GroupGoalDetail';
 import GroupGoalContribute from '@/pages/groupgoals/GroupGoalContribute';
+import GroupGoalInvite from '@/pages/groupgoals/GroupGoalInvite';
 import GroupGoalJoinInvite from '@/pages/groupgoals/GroupGoalJoinInvite';
 import FundraisingHome from '@/pages/fundraising/FundraisingHome';
 import CreateFundraiser from '@/pages/fundraising/CreateFundraiser';
@@ -74,6 +81,7 @@ import AdminUsers from '@/pages/admin/AdminUsers';
 import AdminAgents from '@/pages/admin/AdminAgents';
 import AdminTransactions from '@/pages/admin/AdminTransactions';
 import AdminDisputes from '@/pages/admin/AdminDisputes';
+import AdminMessaging from '@/pages/admin/AdminMessaging';
 import AdminSettings from '@/pages/admin/AdminSettings';
 
 const queryClient = new QueryClient();
@@ -102,6 +110,8 @@ const App = () => (
                   <Route path="/wallet" element={<WalletHome />} />
                   <Route path="/savings" element={<SavingsHome />} />
                   <Route path="/savings/create" element={<CreateSavings />} />
+                  <Route path="/savings/invite" element={<SavingsInvite />} />
+                  <Route path="/savings/invitations/:id" element={<SavingsInvitationDecision />} />
                   <Route path="/savings/:id" element={<SavingsDetail />} />
                   <Route path="/circles" element={<CirclesHome />} />
                   <Route path="/circles/create" element={<CreateCircle />} />
@@ -117,9 +127,12 @@ const App = () => (
                   <Route path="/group-goals/join/:code" element={<GroupGoalJoinInvite />} />
                   <Route path="/group-goals/:id" element={<GroupGoalDetail />} />
                   <Route path="/group-goals/:id/contribute" element={<GroupGoalContribute />} />
+                  <Route path="/group-goals/:id/invite" element={<GroupGoalInvite />} />
                   <Route path="/more" element={<MorePage />} />
                   <Route path="/more/profile" element={<Profile />} />
                   <Route path="/more/settings" element={<Settings />} />
+                  <Route path="/more/agent-access" element={<AgentAccess />} />
+                  <Route path="/more/help" element={<HelpSupport />} />
                   <Route path="/wallet/fund" element={<FundWallet />} />
                   <Route path="/wallet/transfer" element={<Transfer />} />
                   <Route path="/wallet/bills" element={<BillPayment />} />
@@ -138,7 +151,8 @@ const App = () => (
                 </Route>
               </Route>
 
-              <Route element={<AgentLayout />}>
+              <Route element={<AgentRouteGuard />}>
+                <Route element={<AgentLayout />}>
                 <Route path="/agent" element={<AgentDashboard />} />
                 <Route path="/agent/transact" element={<AgentTransact />} />
                 <Route path="/agent/register" element={<AgentRegister />} />
@@ -147,7 +161,9 @@ const App = () => (
                 <Route path="/agent/commissions" element={<AgentCommissions />} />
                 <Route path="/agent/ledger" element={<AgentLedger />} />
                 <Route path="/agent/settlements" element={<AgentSettlements />} />
+                <Route path="/agent/help" element={<AgentHelpSupport />} />
                 <Route path="/agent/more" element={<AgentMore />} />
+                </Route>
               </Route>
 
               <Route path="/admin/login" element={<AdminLogin />} />
@@ -158,6 +174,7 @@ const App = () => (
                 <Route path="/admin/agents" element={<AdminAgents />} />
                 <Route path="/admin/transactions" element={<AdminTransactions />} />
                 <Route path="/admin/disputes" element={<AdminDisputes />} />
+                <Route path="/admin/messaging" element={<AdminMessaging />} />
                 <Route path="/admin/settings" element={<AdminSettings />} />
               </Route>
 
