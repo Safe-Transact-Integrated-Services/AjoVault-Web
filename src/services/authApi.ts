@@ -65,6 +65,7 @@ export interface KycVerificationResponse {
 export interface OtpChallengeResponse {
   message: string;
   defaultOtp: string;
+  expiresAtUtc: string;
 }
 
 export interface OtpVerificationResponse {

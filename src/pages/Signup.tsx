@@ -12,6 +12,13 @@ import { getApiErrorMessage, isApiError } from '@/lib/api/http';
 
 type Step = 'contact' | 'otp' | 'details' | 'pin';
 
+const formatCountdown = (seconds: number) => {
+  const safeSeconds = Math.max(seconds, 0);
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds % 60;
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+};
+
 const Signup = () => {
   const navigate = useNavigate();
   const { signup, requestOtp, verifyOtp, isAuthenticated, user } = useAuth();
@@ -23,6 +30,8 @@ const Signup = () => {
   const [lastName, setLastName] = useState('');
   const [otpHint, setOtpHint] = useState('123456');
   const [otpMessage, setOtpMessage] = useState('');
+  const [otpExpiresAt, setOtpExpiresAt] = useState<string | null>(null);
+  const [otpSecondsRemaining, setOtpSecondsRemaining] = useState(0);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [pinPadKey, setPinPadKey] = useState(0);
@@ -42,6 +51,7 @@ const Signup = () => {
   };
   const contactSummary = [trimmedEmail, trimmedPhoneNumber].filter(Boolean).join(' or ');
   const loginIdentifier = trimmedEmail || trimmedPhoneNumber;
+  const isOtpExpired = step === 'otp' && otpExpiresAt !== null && otpSecondsRemaining <= 0;
 
   const getOtpErrorMessage = (err: unknown) => {
     if (!isApiError(err)) {
@@ -52,6 +62,18 @@ const Signup = () => {
     return otpFieldError ?? getApiErrorMessage(err, 'Unable to verify OTP.');
   };
 
+  const syncOtpCountdown = (expiresAtUtc: string) => {
+    const expiresAt = new Date(expiresAtUtc).getTime();
+    setOtpExpiresAt(expiresAtUtc);
+
+    if (!Number.isFinite(expiresAt)) {
+      setOtpSecondsRemaining(0);
+      return;
+    }
+
+    setOtpSecondsRemaining(Math.max(Math.ceil((expiresAt - Date.now()) / 1000), 0));
+  };
+
   useEffect(() => {
     if (!isAuthenticated || !user) {
       return;
@@ -60,7 +82,28 @@ const Signup = () => {
     navigate(getDefaultAuthenticatedPath(user), { replace: true });
   }, [isAuthenticated, navigate, user]);
 
-  const handleIdentifierSubmit = async () => {
+  useEffect(() => {
+    if (step !== 'otp' || !otpExpiresAt) {
+      return;
+    }
+
+    const updateCountdown = () => {
+      const expiresAt = new Date(otpExpiresAt).getTime();
+      if (!Number.isFinite(expiresAt)) {
+        setOtpSecondsRemaining(0);
+        return;
+      }
+
+      setOtpSecondsRemaining(Math.max(Math.ceil((expiresAt - Date.now()) / 1000), 0));
+    };
+
+    updateCountdown();
+    const intervalId = window.setInterval(updateCountdown, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [otpExpiresAt, step]);
+
+  const sendOtpChallenge = async () => {
     if (!hasContact) {
       setError('Enter at least an email address or phone number.');
       return;
@@ -75,6 +118,7 @@ const Signup = () => {
       setOtpHint(response.defaultOtp);
       setOtp('');
       setOtpMessage(response.message);
+      syncOtpCountdown(response.expiresAtUtc);
       setStep('otp');
     } catch (err) {
       setError(getApiErrorMessage(err, 'Unable to request OTP.'));
@@ -83,8 +127,18 @@ const Signup = () => {
     }
   };
 
+  const handleIdentifierSubmit = async () => {
+    await sendOtpChallenge();
+  };
+
   const handleOtpSubmit = async () => {
     const normalizedOtp = otp.replace(/\D/g, '').trim();
+
+    if (isOtpExpired) {
+      setError('OTP expired. Request a new code to continue.');
+      setOtp('');
+      return;
+    }
 
     if (normalizedOtp.length !== 6) {
       setError('OTP must be exactly 6 digits.');
@@ -149,6 +203,8 @@ const Signup = () => {
       setStep('contact');
       setError('');
       setOtpMessage('');
+      setOtpExpiresAt(null);
+      setOtpSecondsRemaining(0);
       return;
     }
 
@@ -263,12 +319,35 @@ const Signup = () => {
                   Use test OTP
                 </button>
                 {otpMessage && <p className="text-xs text-muted-foreground">{otpMessage}</p>}
+                {otpExpiresAt && !isOtpExpired && (
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Code expires in {formatCountdown(otpSecondsRemaining)}
+                  </p>
+                )}
+                {isOtpExpired && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-destructive">OTP expired. Request a new code to continue.</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10 w-full"
+                      onClick={sendOtpChallenge}
+                      disabled={loading}
+                    >
+                      {loading ? 'Sending new OTP...' : 'Retry OTP'}
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {error && <p className="text-sm text-destructive">{error}</p>}
 
-              <Button className="h-12 w-full" onClick={handleOtpSubmit} disabled={otp.replace(/\D/g, '').length < 6 || loading}>
-                {loading ? 'Verifying...' : 'Verify'}
+              <Button
+                className="h-12 w-full"
+                onClick={handleOtpSubmit}
+                disabled={otp.replace(/\D/g, '').length < 6 || loading || isOtpExpired}
+              >
+                {loading ? 'Verifying...' : isOtpExpired ? 'OTP Expired' : 'Verify'}
               </Button>
             </div>
           )}
