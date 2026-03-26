@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Lock, PiggyBank, Target } from 'lucide-react';
+import { Lock, PiggyBank, Target } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -45,17 +45,6 @@ const CreateSavings = () => {
 
   const targetAmount = Number(target || '0');
   const contributionAmount = Number(contribution || '0');
-
-  const goBack = () => {
-    if (isSubmitting) {
-      return;
-    }
-
-    if (step === 'details') setStep('type');
-    else if (step === 'funding') setStep('details');
-    else if (step === 'review') setStep('funding');
-    else navigate(-1);
-  };
 
   const validateDetails = () => {
     if (!name.trim()) {
@@ -123,10 +112,6 @@ const CreateSavings = () => {
 
   return (
     <div className="min-h-screen px-4 py-6 safe-top">
-      <button onClick={goBack} className="mb-6 flex items-center gap-1 text-sm text-muted-foreground">
-        <ArrowLeft className="h-4 w-4" /> Back
-      </button>
-
       <div className="mb-6 flex gap-1">
         {['type', 'details', 'funding', 'review'].map((value, index) => (
           <div

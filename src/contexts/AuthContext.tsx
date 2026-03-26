@@ -23,8 +23,8 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isInitializing: boolean;
-  login: (identifier: string, pin: string) => Promise<User>;
-  loginAgent: (agentCode: string, pin: string) => Promise<User>;
+  login: (identifier: string, password: string) => Promise<User>;
+  loginAgent: (agentCode: string, password: string) => Promise<User>;
   signup: (input: SignupInput) => Promise<void>;
   requestOtp: (input: AuthContactInput) => Promise<OtpChallengeResponse>;
   verifyOtp: (input: AuthContactInput, otp: string) => Promise<OtpVerificationResponse>;
@@ -129,15 +129,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const login = useCallback(async (identifier: string, pin: string) => {
-    const result = await loginUser(identifier, pin);
+  const login = useCallback(async (identifier: string, password: string) => {
+    const result = await loginUser(identifier, password);
     persistAuthSession(result.session);
     setUser(currentUser => mergeUser(result.user, currentUser));
     return result.user;
   }, []);
 
-  const handleAgentLogin = useCallback(async (agentCode: string, pin: string) => {
-    const result = await loginAgent(agentCode, pin);
+  const handleAgentLogin = useCallback(async (agentCode: string, password: string) => {
+    const result = await loginAgent(agentCode, password);
     persistAuthSession(result.session);
     setUser(currentUser => mergeUser(result.user, currentUser));
     return result.user;

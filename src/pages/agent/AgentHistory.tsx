@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, BadgeCheck, Clock3 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { getApiErrorMessage } from '@/lib/api/http';
 import { getAgentActivities, type AgentActivity } from '@/services/agentApi';
 
@@ -93,16 +94,11 @@ const AgentHistory = () => {
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       {!loading && !error && !activities.length && (
-        <Card className="space-y-3 border-dashed p-5 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
-            <Clock3 className="h-6 w-6 text-primary" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold">No history yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Once you register customers or complete assisted transactions, they will appear here.
-            </p>
-          </div>
+        <Card className="border-dashed p-5 text-center">
+          <EmptyTableState
+            title="No history yet"
+            description="Once you register customers or complete assisted transactions, they will appear here."
+          />
         </Card>
       )}
 

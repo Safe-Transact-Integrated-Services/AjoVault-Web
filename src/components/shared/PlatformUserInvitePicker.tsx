@@ -17,7 +17,6 @@ interface PlatformUserInvitePickerProps {
   disabled?: boolean;
   directInviteTitle?: string;
   directInviteDescription?: string;
-  directInvitePlaceholder?: string;
   showDirectContactInvite?: boolean;
   className?: string;
   onInvite: (user: PlatformUserSearchResult) => Promise<void>;
@@ -31,7 +30,6 @@ const PlatformUserInvitePicker = ({
   disabled = false,
   directInviteTitle = 'Invite Non-Members',
   directInviteDescription = 'If the person is not on AjoVault yet, send an email or SMS invite.',
-  directInvitePlaceholder = 'Enter email address or phone number',
   showDirectContactInvite = false,
   className,
   onInvite,
@@ -39,14 +37,26 @@ const PlatformUserInvitePicker = ({
 }: PlatformUserInvitePickerProps) => {
   const [query, setQuery] = useState('');
   const [selectedUser, setSelectedUser] = useState<PlatformUserSearchResult | null>(null);
-  const [contact, setContact] = useState('');
   const deferredQuery = useDeferredValue(query.trim());
+  const trimmedQuery = query.trim();
+  const canSearchPlatformUsers = deferredQuery.length >= 2 && !selectedUser;
 
   const usersQuery = useQuery({
     queryKey: platformUsersKeys.search(deferredQuery),
     queryFn: () => searchPlatformUsers(deferredQuery),
-    enabled: deferredQuery.length >= 2 && !selectedUser,
+    enabled: canSearchPlatformUsers,
   });
+
+  const matchedUsers = usersQuery.data ?? [];
+  const hasMatches = matchedUsers.length > 0;
+  const canInviteDirectly = showDirectContactInvite
+    && !!onInviteContact
+    && !selectedUser
+    && trimmedQuery.length >= 2
+    && !usersQuery.isLoading
+    && !hasMatches;
+  const canInviteByEmail = canInviteDirectly && isValidEmail(trimmedQuery);
+  const canInviteBySms = canInviteDirectly && isValidPhoneNumber(trimmedQuery);
 
   const handleInvite = async () => {
     if (!selectedUser) {
@@ -63,13 +73,13 @@ const PlatformUserInvitePicker = ({
   };
 
   const handleContactInvite = async (channel: DirectInviteChannel) => {
-    if (!onInviteContact || !contact.trim()) {
+    if (!onInviteContact || !trimmedQuery) {
       return;
     }
 
     try {
-      await onInviteContact(contact.trim(), channel);
-      setContact('');
+      await onInviteContact(trimmedQuery, channel);
+      setQuery('');
     } catch {
       // Parent handles the visible error state.
     }
@@ -87,31 +97,29 @@ const PlatformUserInvitePicker = ({
         <Input
           value={query}
           onChange={event => setQuery(event.target.value)}
-          placeholder="Search by email or phone number"
+          placeholder={showDirectContactInvite ? "Search AjoVault users or enter email/phone" : "Search by email or phone number"}
           className="h-12 pl-10"
           disabled={disabled || !!selectedUser}
         />
       </div>
 
-      {!selectedUser && deferredQuery.length < 2 && (
-        <p className="text-xs text-muted-foreground">Enter at least 2 characters to search platform users.</p>
+      {!selectedUser && trimmedQuery.length < 2 && (
+        <p className="text-xs text-muted-foreground">
+          {showDirectContactInvite
+            ? 'Enter at least 2 characters to search AjoVault users or invite a non-member.'
+            : 'Enter at least 2 characters to search platform users.'}
+        </p>
       )}
 
-      {!selectedUser && deferredQuery.length >= 2 && usersQuery.isLoading && (
+      {!selectedUser && canSearchPlatformUsers && usersQuery.isLoading && (
         <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
           Searching platform users...
         </div>
       )}
 
-      {!selectedUser && deferredQuery.length >= 2 && !usersQuery.isLoading && (usersQuery.data?.length ?? 0) === 0 && (
-        <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
-          No platform user matched that search yet.
-        </div>
-      )}
-
-      {!selectedUser && (usersQuery.data?.length ?? 0) > 0 && (
+      {!selectedUser && hasMatches && (
         <div className="space-y-2">
-          {usersQuery.data!.map(user => (
+          {matchedUsers.map(user => (
             <button
               key={user.userId}
               type="button"
@@ -131,6 +139,48 @@ const PlatformUserInvitePicker = ({
               </div>
             </button>
           ))}
+        </div>
+      )}
+
+      {!selectedUser && canInviteDirectly && (canInviteByEmail || canInviteBySms) && (
+        <div className="space-y-3 rounded-xl border border-dashed border-border p-3">
+          <div>
+            <p className="font-medium text-foreground">{directInviteTitle}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{directInviteDescription}</p>
+          </div>
+          <div className="rounded-lg bg-background px-3 py-3 text-sm text-foreground">
+            {trimmedQuery}
+          </div>
+          <div className={`grid gap-3 ${canInviteByEmail && canInviteBySms ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            {canInviteByEmail && (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 gap-2"
+                disabled={disabled}
+                onClick={() => handleContactInvite('email')}
+              >
+                <Mail className="h-4 w-4" /> Invite by Email
+              </Button>
+            )}
+            {canInviteBySms && (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 gap-2"
+                disabled={disabled}
+                onClick={() => handleContactInvite('sms')}
+              >
+                <MessageSquare className="h-4 w-4" /> Invite by SMS
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!selectedUser && canSearchPlatformUsers && !usersQuery.isLoading && !hasMatches && !canInviteByEmail && !canInviteBySms && (
+        <div className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+          No AjoVault user matched that search. Enter a valid email address or phone number to invite a non-member.
         </div>
       )}
 
@@ -169,44 +219,15 @@ const PlatformUserInvitePicker = ({
           </Button>
         </div>
       )}
-
-      {showDirectContactInvite && onInviteContact && (
-        <div className="space-y-3 rounded-xl border border-dashed border-border p-3">
-          <div>
-            <p className="font-medium text-foreground">{directInviteTitle}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{directInviteDescription}</p>
-          </div>
-          <Input
-            value={contact}
-            onChange={event => setContact(event.target.value)}
-            placeholder={directInvitePlaceholder}
-            className="h-12"
-            disabled={disabled}
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 gap-2"
-              disabled={disabled || !contact.trim()}
-              onClick={() => handleContactInvite('email')}
-            >
-              <Mail className="h-4 w-4" /> Invite by Email
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 gap-2"
-              disabled={disabled || !contact.trim()}
-              onClick={() => handleContactInvite('sms')}
-            >
-              <MessageSquare className="h-4 w-4" /> Invite by SMS
-            </Button>
-          </div>
-        </div>
-      )}
     </Card>
   );
+};
+
+const isValidEmail = (value: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+const isValidPhoneNumber = (value: string): boolean => {
+  const digits = value.replace(/\D/g, '');
+  return digits.length >= 10 && digits.length <= 15;
 };
 
 export default PlatformUserInvitePicker;

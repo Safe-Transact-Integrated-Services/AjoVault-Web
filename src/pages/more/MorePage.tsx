@@ -1,9 +1,10 @@
 import { useNavigate } from 'react-router-dom';
-import { Bell, ChevronRight, CreditCard, FileText, HelpCircle, KeyRound, LogOut, Shield, User } from 'lucide-react';
+import { Bell, ChevronRight, CreditCard, FileText, HelpCircle, KeyRound, LogOut, Shield, User, Wallet } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 const menuItems = [
   { icon: User, label: 'Profile', path: '/more/profile' },
+  { icon: Wallet, label: 'Wallet', path: '/wallet' },
   { icon: Shield, label: 'KYC Verification', path: '/more/kyc' },
   { icon: CreditCard, label: 'Credit Passport', path: '/credit-passport' },
   { icon: Bell, label: 'Notifications', path: '/notifications' },

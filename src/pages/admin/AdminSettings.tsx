@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getApiErrorMessage } from '@/lib/api/http';
 import {
   getAdminAgentOperationSettings,
@@ -20,6 +21,8 @@ interface SettingsFormState {
   cashOutCommissionPercent: string;
   billPaymentCommissionPercent: string;
   registrationBonusAmount: string;
+  walletFundingCheckoutProvider: string;
+  walletFundingTransferAccountProvider: string;
 }
 
 const currency = new Intl.NumberFormat('en-NG', {
@@ -48,6 +51,8 @@ const toFormState = (settings: AgentOperationSettings): SettingsFormState => ({
   cashOutCommissionPercent: formatNumber(settings.cashOutCommissionRate * 100),
   billPaymentCommissionPercent: formatNumber(settings.billPaymentCommissionRate * 100),
   registrationBonusAmount: formatNumber(settings.registrationBonusAmount, 2),
+  walletFundingCheckoutProvider: settings.walletFundingCheckoutProvider,
+  walletFundingTransferAccountProvider: settings.walletFundingTransferAccountProvider,
 });
 
 const parseNonNegativeNumber = (value: string, label: string) => {
@@ -140,6 +145,8 @@ const AdminSettings = () => {
         cashOutCommissionRate: cashOutCommissionPercent / 100,
         billPaymentCommissionRate: billPaymentCommissionPercent / 100,
         registrationBonusAmount,
+        walletFundingCheckoutProvider: form.walletFundingCheckoutProvider,
+        walletFundingTransferAccountProvider: form.walletFundingTransferAccountProvider,
       });
 
       setSettings(response);
@@ -275,6 +282,52 @@ const AdminSettings = () => {
               <p>Basic daily assisted transfer limit: {currency.format(settings.basicKycDailyTransferLimit)}</p>
               <p>Verified daily assisted transfer limit: {currency.format(settings.verifiedKycDailyTransferLimit)}</p>
               <p>Premium daily assisted transfer limit: {currency.format(settings.premiumKycDailyTransferLimit)}</p>
+              <p>Wallet checkout provider: {formatProviderLabel(settings.walletFundingCheckoutProvider)}</p>
+              <p>Wallet transfer account provider: {formatTransferProviderLabel(settings.walletFundingTransferAccountProvider)}</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Wallet Funding Providers</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="walletFundingCheckoutProvider">User checkout provider</Label>
+                <Select
+                  value={form.walletFundingCheckoutProvider}
+                  onValueChange={value => handleChange('walletFundingCheckoutProvider', value)}
+                >
+                  <SelectTrigger id="walletFundingCheckoutProvider">
+                    <SelectValue placeholder="Choose checkout provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="paystack">Paystack</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  This is the hosted checkout provider shown on the user Fund Wallet page.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="walletFundingTransferAccountProvider">User transfer-account provider</Label>
+                <Select
+                  value={form.walletFundingTransferAccountProvider}
+                  onValueChange={value => handleChange('walletFundingTransferAccountProvider', value)}
+                >
+                  <SelectTrigger id="walletFundingTransferAccountProvider">
+                    <SelectValue placeholder="Choose transfer-account provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="disabled">Disabled</SelectItem>
+                    <SelectItem value="paystack">Paystack</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  When disabled, users will not see the transfer-account funding option on Fund Wallet.
+                </p>
+              </div>
             </CardContent>
           </Card>
 
@@ -293,3 +346,15 @@ const AdminSettings = () => {
 };
 
 export default AdminSettings;
+
+const formatProviderLabel = (value: string) =>
+  value.trim().toLowerCase() === 'paystack' ? 'Paystack' : value;
+
+const formatTransferProviderLabel = (value: string) => {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'disabled') {
+    return 'Disabled';
+  }
+
+  return formatProviderLabel(value);
+};

@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRightLeft, BadgeCheck, Coins } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { agentKeys, getAgentCommissions } from '@/services/agentApi';
 import { getApiErrorMessage } from '@/lib/api/http';
 
@@ -132,9 +133,10 @@ const AgentCommissions = () => {
             ))}
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-            No commission has been earned yet. Commissions post automatically after assisted registrations and cash transactions.
-          </div>
+          <EmptyTableState
+            title="No commission earned yet"
+            description="Commissions post automatically after assisted registrations and cash transactions."
+          />
         )}
       </Card>
 

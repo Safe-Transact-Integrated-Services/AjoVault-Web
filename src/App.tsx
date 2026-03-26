@@ -73,6 +73,9 @@ import GroupGoalJoinInvite from '@/pages/groupgoals/GroupGoalJoinInvite';
 import FundraisingHome from '@/pages/fundraising/FundraisingHome';
 import CreateFundraiser from '@/pages/fundraising/CreateFundraiser';
 import FundraiserDetail from '@/pages/fundraising/FundraiserDetail';
+import FundraiserInvite from '@/pages/fundraising/FundraiserInvite';
+import FundraiserManage from '@/pages/fundraising/FundraiserManage';
+import FundraiserWithdraw from '@/pages/fundraising/FundraiserWithdraw';
 import DonateFundraiser from '@/pages/fundraising/DonateFundraiser';
 
 import AdminLogin from '@/pages/admin/AdminLogin';
@@ -99,10 +102,10 @@ const App = () => (
                 <Route path="/" element={<Welcome />} />
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/login" element={<Login />} />
+                <Route path="/agent/login" element={<AgentLogin />} />
+                <Route path="/agent/apply" element={<BecomeAgent />} />
                 <Route path="/fundraising/donate/:code" element={<DonateFundraiser />} />
               </Route>
-              <Route path="/agent/login" element={<AgentLogin />} />
-              <Route path="/agent/apply" element={<BecomeAgent />} />
 
               <Route element={<AuthRouteGuard />}>
                 <Route element={<AppLayout />}>
@@ -147,6 +150,9 @@ const App = () => (
                   <Route path="/fundraising" element={<FundraisingHome />} />
                   <Route path="/fundraising/create" element={<CreateFundraiser />} />
                   <Route path="/fundraising/:id" element={<FundraiserDetail />} />
+                  <Route path="/fundraising/:id/invite" element={<FundraiserInvite />} />
+                  <Route path="/fundraising/:id/manage" element={<FundraiserManage />} />
+                  <Route path="/fundraising/:id/withdraw" element={<FundraiserWithdraw />} />
                   <Route path="/fundraising/:id/donate" element={<DonateFundraiser />} />
                 </Route>
               </Route>

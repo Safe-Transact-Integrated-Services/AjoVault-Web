@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { getApiErrorMessage } from '@/lib/api/http';
 import { getFundraisers, fundraisingKeys } from '@/services/fundraisingApi';
 import { formatCurrency } from '@/services/mockData';
@@ -84,9 +85,14 @@ const FundraisingHome = () => {
         )}
 
         {!fundraisingQuery.isLoading && !fundraisingQuery.isError && filtered.length === 0 && (
-          <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
-            {campaigns.length === 0 ? 'No fundraising campaigns yet.' : 'No campaigns matched your search.'}
-          </div>
+          <EmptyTableState
+            title={campaigns.length === 0 ? 'No fundraising campaigns yet' : 'No campaigns matched your search'}
+            description={
+              campaigns.length === 0
+                ? 'Create a campaign and share it to start receiving support.'
+                : 'Try another search term to widen the campaign results.'
+            }
+          />
         )}
 
         {filtered.map((campaign, index) => (
@@ -98,6 +104,16 @@ const FundraisingHome = () => {
             onClick={() => navigate(`/fundraising/${campaign.id}`)}
             className="w-full rounded-xl border border-border bg-card p-4 text-left"
           >
+            {campaign.coverImageUrl ? (
+              <div className="mb-3 overflow-hidden rounded-xl border border-border">
+                <img
+                  src={campaign.coverImageUrl}
+                  alt={campaign.title}
+                  className="aspect-[16/9] w-full object-cover"
+                />
+              </div>
+            ) : null}
+
             <div className="mb-3 flex items-start justify-between gap-3">
               <div className="flex items-center gap-2">
                 <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">

@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Plus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { circlesKeys, getCircles } from '@/services/circlesApi';
 import { formatCurrency, formatDate } from '@/services/mockData';
 
@@ -42,9 +43,10 @@ const CirclesHome = () => {
         )}
 
         {!circlesQuery.isLoading && !circlesQuery.isError && circles.length === 0 && (
-          <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
-            No circles yet. Create one or join with an invite code.
-          </div>
+          <EmptyTableState
+            title="No circles yet"
+            description="Create one or join with an invite code to start contributing together."
+          />
         )}
 
         {circles.map((circle, index) => (

@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatCurrency, formatDate, formatTime } from '@/services/mockData';
 import { Badge } from '@/components/ui/badge';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { getWalletTransactions, walletKeys } from '@/services/walletApi';
 
 const categoryLabels: Record<string, string> = {
@@ -63,9 +64,10 @@ const TransactionHistory = () => {
           </div>
         )}
         {!transactionsQuery.isLoading && !transactionsQuery.isError && filtered.length === 0 && (
-          <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
-            No transactions found.
-          </div>
+          <EmptyTableState
+            title="No transactions found"
+            description="There is no wallet history for the current filter yet."
+          />
         )}
         {filtered.map(transaction => (
           <div key={transaction.id} className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">

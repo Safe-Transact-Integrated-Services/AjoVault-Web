@@ -10,6 +10,8 @@ export interface AgentOperationSettings {
   cashOutCommissionRate: number;
   billPaymentCommissionRate: number;
   registrationBonusAmount: number;
+  walletFundingCheckoutProvider: string;
+  walletFundingTransferAccountProvider: string;
   updatedAtUtc: string;
 }
 
@@ -22,6 +24,8 @@ export interface UpdateAgentOperationSettingsInput {
   cashOutCommissionRate: number;
   billPaymentCommissionRate: number;
   registrationBonusAmount: number;
+  walletFundingCheckoutProvider: string;
+  walletFundingTransferAccountProvider: string;
 }
 
 const AGENT_OPERATION_SETTINGS_PATH = '/api/agents/admin/settings/operations';

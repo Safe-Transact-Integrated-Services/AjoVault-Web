@@ -330,6 +330,16 @@ const DonateFundraiser = () => {
         </div>
       ) : (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+          {fundraiser.coverImageUrl ? (
+            <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+              <img
+                src={fundraiser.coverImageUrl}
+                alt={fundraiser.title}
+                className="aspect-[16/9] w-full object-cover"
+              />
+            </div>
+          ) : null}
+
           <div className="text-center">
             <h1 className="font-display text-xl font-bold text-foreground">{fundraiser.title}</h1>
             <p className="mt-1 text-sm text-muted-foreground">

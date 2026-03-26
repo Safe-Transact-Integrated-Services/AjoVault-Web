@@ -2,13 +2,21 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Copy, Share2 } from 'lucide-react';
+import { Copy, Share2 } from 'lucide-react';
 import PlatformUserInvitePicker from '@/components/shared/PlatformUserInvitePicker';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { circlesKeys, createCircle, sendCircleInvite, type CircleDetail } from '@/services/circlesApi';
+import {
+  CIRCLE_PAYOUT_TYPE_METADATA,
+  circlesKeys,
+  createCircle,
+  getCirclePayoutTypeDescription,
+  getCirclePayoutTypeLabel,
+  sendCircleInvite,
+  type CircleDetail,
+} from '@/services/circlesApi';
 import { dashboardKeys } from '@/services/dashboardApi';
 import { getApiErrorMessage } from '@/lib/api/http';
 import type { PlatformUserSearchResult } from '@/services/platformUsersApi';
@@ -32,16 +40,6 @@ const CreateCircle = () => {
 
   const steps: Step[] = ['name', 'amount', 'rules', 'invite'];
   const stepIndex = steps.indexOf(step);
-
-  const goBack = () => {
-    const index = steps.indexOf(step);
-    if (index > 0) {
-      setStep(steps[index - 1]);
-      return;
-    }
-
-    navigate(-1);
-  };
 
   const handleCreate = async () => {
     const amountValue = Number(amount);
@@ -128,10 +126,6 @@ const CreateCircle = () => {
 
   return (
     <div className="min-h-screen px-4 py-6 safe-top">
-      <button onClick={goBack} className="mb-6 flex items-center gap-1 text-sm text-muted-foreground">
-        <ArrowLeft className="h-4 w-4" /> Back
-      </button>
-
       <div className="mb-6 flex gap-1">
         {[0, 1, 2, 3].map(index => (
           <div key={index} className={`h-1 flex-1 rounded-full ${stepIndex >= index ? 'bg-accent' : 'bg-muted'}`} />
@@ -197,21 +191,21 @@ const CreateCircle = () => {
             <div className="space-y-6">
               <h1 className="font-display text-2xl font-bold">Payout Rules</h1>
               <div className="space-y-3">
-                {[
-                  { id: 'rotation', label: 'Rotation', description: 'Members receive payouts in fixed order.' },
-                  { id: 'random', label: 'Random', description: 'Admins can choose any unpaid member each cycle.' },
-                  { id: 'bidding', label: 'Bidding', description: 'Admins can manage flexible payout ordering.' },
-                ].map(option => (
+                {Object.entries(CIRCLE_PAYOUT_TYPE_METADATA).map(([id, option]) => (
                   <button
-                    key={option.id}
+                    key={id}
                     type="button"
-                    onClick={() => setPayoutType(option.id as typeof payoutType)}
-                    className={`flex w-full flex-col rounded-xl border p-4 text-left transition-colors ${payoutType === option.id ? 'border-accent bg-accent/10' : 'border-border bg-card'}`}
+                    onClick={() => setPayoutType(id as typeof payoutType)}
+                    className={`flex w-full flex-col rounded-xl border p-4 text-left transition-colors ${payoutType === id ? 'border-accent bg-accent/10' : 'border-border bg-card'}`}
                   >
                     <span className="font-semibold text-foreground">{option.label}</span>
                     <span className="mt-0.5 text-xs text-muted-foreground">{option.description}</span>
                   </button>
                 ))}
+              </div>
+
+              <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+                {getCirclePayoutTypeDescription(payoutType)}
               </div>
 
               {error && (
@@ -248,8 +242,8 @@ const CreateCircle = () => {
                 onInviteContact={handleContactInvite}
                 disabled={isSubmitting}
                 showDirectContactInvite
-                title="Invite Platform Users"
-                description="Search existing AjoVault users by email or phone number, then send an in-app invite."
+                title="Invite Members"
+                description="Use one search box to invite AjoVault users or enter an email address or phone number for non-members."
               />
 
               {error && (
@@ -263,7 +257,7 @@ const CreateCircle = () => {
                 <div className="flex justify-between"><span className="text-muted-foreground">Name</span><span className="font-medium text-foreground">{circle.name}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Amount</span><span className="font-medium text-foreground">N{Number(amount || 0).toLocaleString()} / {frequency}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Max Members</span><span className="font-medium text-foreground">{maxMembers}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Payout</span><span className="font-medium capitalize text-foreground">{payoutType}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Payout</span><span className="font-medium text-foreground">{getCirclePayoutTypeLabel(payoutType)}</span></div>
               </div>
 
               <Button className="h-12 w-full" onClick={() => navigate(`/circles/${circle.id}`)}>

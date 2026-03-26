@@ -172,11 +172,13 @@ export interface RegisterAgentCustomerInput {
   lastName: string;
   phoneNumber: string;
   email?: string;
+  password: string;
   pin: string;
 }
 
 export interface RegisterAgentCustomerResponse {
   customer: AgentCustomer;
+  temporaryPassword: string;
   temporaryPin: string;
   agentCommissionBalanceAfter: number;
 }
@@ -309,13 +311,13 @@ const mapPortalState = (response: AgentPortalStateResponse): AgentPortalState =>
   summary: response.summary ?? null,
 });
 
-export const loginAgent = async (agentCode: string, pin: string): Promise<AuthResult> => {
+export const loginAgent = async (agentCode: string, password: string): Promise<AuthResult> => {
   const response = await apiRequest<LoginUserResponse>('/api/agents/login', {
     method: 'POST',
     auth: false,
     json: {
       agentCode: agentCode.trim().toUpperCase(),
-      pin,
+      password,
     },
   });
 
@@ -358,6 +360,7 @@ export const registerAgentCustomer = async (input: RegisterAgentCustomerInput): 
       lastName: input.lastName.trim(),
       phoneNumber: input.phoneNumber.trim(),
       email: input.email?.trim() || null,
+      password: input.password.trim(),
       pin: input.pin.trim(),
     },
   });

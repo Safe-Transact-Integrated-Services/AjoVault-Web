@@ -1,10 +1,12 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Banknote, Calendar, CheckCircle2, UserPlus, Wallet, XCircle } from 'lucide-react';
+import { ArrowLeft, Banknote, Calendar, CheckCircle2, Share2, UserPlus, Wallet, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { circlesKeys, getCircle } from '@/services/circlesApi';
+import { circlesKeys, getCircle, getCirclePayoutTypeDescription, getCirclePayoutTypeLabel } from '@/services/circlesApi';
+import { shareLink } from '@/lib/share';
 import { formatCurrency, formatDate } from '@/services/mockData';
 import { getApiErrorMessage } from '@/lib/api/http';
 
@@ -33,6 +35,23 @@ const CircleDetail = () => {
 
   const progress = Math.round((circle.currentCycle / Math.max(1, circle.totalCycles)) * 100);
   const paidCount = circle.members.filter(member => member.hasPaid).length;
+  const inviteLink = `${window.location.origin}/circles/join/${circle.inviteCode}`;
+
+  const handleShare = async () => {
+    try {
+      const result = await shareLink({
+        title: `${circle.name} circle invite`,
+        text: `Join ${circle.name} on AjoVault`,
+        url: inviteLink,
+      });
+
+      if (result === 'copied') {
+        toast.success('Invite link copied.');
+      }
+    } catch {
+      toast.error('Unable to share this circle right now.');
+    }
+  };
 
   return (
     <div className="min-h-screen px-4 py-6 safe-top pb-24">
@@ -90,6 +109,11 @@ const CircleDetail = () => {
           <span className="text-muted-foreground">Next Contribution</span>
           <span className="font-medium text-foreground">{formatDate(circle.nextContributionDate)}</span>
         </div>
+        <div className="mt-2 flex justify-between">
+          <span className="text-muted-foreground">Payout Type</span>
+          <span className="font-medium text-foreground">{getCirclePayoutTypeLabel(circle.payoutType)}</span>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">{getCirclePayoutTypeDescription(circle.payoutType)}</p>
       </div>
 
       <div className="mb-4">
@@ -120,6 +144,13 @@ const CircleDetail = () => {
               <Button variant="outline" className="h-11 flex-1 gap-2" onClick={() => navigate(`/circles/${circle.id}/invite`)}>
                 <UserPlus className="h-4 w-4" /> Invite
               </Button>
+              <Button variant="outline" className="h-11 flex-1 gap-2" onClick={() => { void handleShare(); }}>
+                <Share2 className="h-4 w-4" /> Share
+              </Button>
+            </div>
+          )}
+          {circle.role === 'admin' && (
+            <div className="flex gap-2">
               <Button variant="outline" className="h-11 flex-1 gap-2" onClick={() => navigate(`/circles/${circle.id}/payout`)}>
                 <Banknote className="h-4 w-4" /> Payout
               </Button>

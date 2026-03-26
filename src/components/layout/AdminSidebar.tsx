@@ -50,6 +50,11 @@ export function AdminSidebar() {
   const isActive = (path: string) =>
     path === '/admin/dashboard' ? currentPath === '/admin/dashboard' : currentPath.startsWith(path);
 
+  const handleLogout = async () => {
+    await adminLogout();
+    navigate('/admin/login', { replace: true });
+  };
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border px-4 py-4">
@@ -123,7 +128,9 @@ export function AdminSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              onClick={() => { adminLogout(); navigate('/'); }}
+              onClick={() => {
+                void handleLogout();
+              }}
               className="text-destructive hover:bg-destructive/10"
             >
               <LogOut className="mr-2 h-4 w-4" />

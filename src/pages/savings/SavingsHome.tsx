@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { getSavingsPlans, savingsKeys } from '@/services/savingsApi';
 import { formatCurrency } from '@/services/mockData';
 
@@ -58,9 +59,10 @@ const SavingsHome = () => {
         )}
 
         {!plansQuery.isLoading && !plansQuery.isError && plans.length === 0 && (
-          <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
-            No savings plans yet. Create one to start saving from your wallet.
-          </div>
+          <EmptyTableState
+            title="No savings plans yet"
+            description="Create one to start saving from your wallet."
+          />
         )}
 
         {plans.map((plan, index) => {

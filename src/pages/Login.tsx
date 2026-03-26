@@ -21,27 +21,27 @@ const Login = () => {
   const locationState = location.state as LoginLocationState | null;
   const { login, isAuthenticated, user } = useAuth();
   const [identifier, setIdentifier] = useState(() => locationState?.identifier ?? '');
-  const [showPin, setShowPin] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState(() =>
-    locationState?.justSignedUp ? 'Account created successfully. Sign in with your new PIN.' : ''
+    locationState?.justSignedUp ? 'Account created successfully. Sign in with your new 6-digit password.' : ''
   );
   const [loading, setLoading] = useState(false);
-  const [pinPadKey, setPinPadKey] = useState(0);
+  const [passwordPadKey, setPasswordPadKey] = useState(0);
 
-  const clearPinError = () => {
+  const clearPasswordError = () => {
     if (error) {
       setError('');
     }
   };
 
-  const getLoginPinError = (err: unknown) => {
+  const getLoginPasswordError = (err: unknown) => {
     if (!isApiError(err)) {
       return 'Unable to sign in with those credentials.';
     }
 
     if (err.status === 401) {
-      return 'Incorrect PIN. Try again, or go back to change your phone number or email.';
+      return 'Incorrect password. Try again, or go back to change your phone number or email.';
     }
 
     return getApiErrorMessage(err, 'Unable to sign in with those credentials.');
@@ -55,17 +55,17 @@ const Login = () => {
     navigate(getDefaultUserLoginPath(user), { replace: true });
   }, [isAuthenticated, navigate, user]);
 
-  const handlePinComplete = async (pin: string) => {
+  const handlePasswordComplete = async (password: string) => {
     setLoading(true);
     setError('');
 
     try {
-      const signedInUser = await login(identifier, pin);
+      const signedInUser = await login(identifier, password);
       const redirectPath = locationState?.from?.pathname;
       navigate(redirectPath ?? getDefaultUserLoginPath(signedInUser), { replace: true });
     } catch (err) {
-      setError(getLoginPinError(err));
-      setPinPadKey(current => current + 1);
+      setError(getLoginPasswordError(err));
+      setPasswordPadKey(current => current + 1);
     } finally {
       setLoading(false);
     }
@@ -75,8 +75,8 @@ const Login = () => {
     <div className="min-h-screen px-6 py-6">
       <button
         onClick={() => {
-          if (showPin) {
-            setShowPin(false);
+          if (showPassword) {
+            setShowPassword(false);
             setError('');
             return;
           }
@@ -88,7 +88,7 @@ const Login = () => {
         <ArrowLeft className="h-4 w-4" /> Back
       </button>
 
-      {!showPin ? (
+      {!showPassword ? (
         <div className="space-y-6">
           <div>
             <h1 className="font-display text-2xl font-bold">Welcome Back</h1>
@@ -108,13 +108,13 @@ const Login = () => {
                 if (notice) {
                   setNotice('');
                 }
-                clearPinError();
+                clearPasswordError();
               }}
               className="h-12"
             />
           </div>
 
-          <Button className="h-12 w-full" onClick={() => setShowPin(true)} disabled={!identifier.trim()}>
+          <Button className="h-12 w-full" onClick={() => setShowPassword(true)} disabled={!identifier.trim()}>
             Continue
           </Button>
 
@@ -128,13 +128,14 @@ const Login = () => {
       ) : (
         <div className="flex flex-col items-center pt-10">
           <PinPad
-            key={pinPadKey}
-            title="Enter your PIN"
+            key={passwordPadKey}
+            length={6}
+            title="Enter your password"
             subtitle={loading ? 'Signing in...' : `Logging in as ${identifier}`}
             error={error}
             disabled={loading}
-            onInput={clearPinError}
-            onComplete={handlePinComplete}
+            onInput={clearPasswordError}
+            onComplete={handlePasswordComplete}
           />
         </div>
       )}

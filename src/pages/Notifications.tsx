@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, AlertTriangle, Bell, Info, LoaderCircle, Trophy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { dashboardKeys } from '@/services/dashboardApi';
 import {
   getMyNotifications,
@@ -87,9 +88,10 @@ const Notifications = () => {
       )}
 
       {!notificationsQuery.isLoading && notifications.length === 0 && (
-        <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
-          No notifications yet. Savings, circles, and group-goal activity will appear here.
-        </div>
+        <EmptyTableState
+          title="No notifications yet"
+          description="Savings, circles, group-goal, and account activity will appear here."
+        />
       )}
 
       <div className="space-y-2">

@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Heart, Share2 } from 'lucide-react';
+import { ArrowLeft, Heart, Share2, ShieldCheck, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { getApiErrorMessage } from '@/lib/api/http';
+import { shareLink } from '@/lib/share';
 import { getFundraiser, fundraisingKeys } from '@/services/fundraisingApi';
 import { formatCurrency, formatDate } from '@/services/mockData';
 
@@ -45,14 +47,13 @@ const FundraiserDetail = () => {
     const link = `${window.location.origin}/fundraising/donate/${fundraiser.shareCode}`;
 
     try {
-      if (navigator.share) {
-        await navigator.share({
-          title: fundraiser.title,
-          text: `Support ${fundraiser.title} on AjoVault`,
-          url: link,
-        });
-      } else {
-        await navigator.clipboard.writeText(link);
+      const result = await shareLink({
+        title: fundraiser.title,
+        text: `Support ${fundraiser.title} on AjoVault`,
+        url: link,
+      });
+
+      if (result === 'copied') {
         toast.success('Share link copied.');
       }
     } catch {
@@ -67,6 +68,16 @@ const FundraiserDetail = () => {
       </button>
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+        {fundraiser.coverImageUrl ? (
+          <div className="mb-6 overflow-hidden rounded-3xl border border-border bg-card shadow-sm">
+            <img
+              src={fundraiser.coverImageUrl}
+              alt={fundraiser.title}
+              className="aspect-[16/9] w-full object-cover"
+            />
+          </div>
+        ) : null}
+
         <div className="mb-6 text-center">
           <span className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-muted text-lg font-semibold text-foreground">
             {categoryMarks[fundraiser.category] ?? 'FR'}
@@ -102,6 +113,16 @@ const FundraiserDetail = () => {
             <span className="text-muted-foreground">Status</span>
             <span className="font-medium capitalize text-foreground">{fundraiser.status}</span>
           </div>
+          <div className="mt-2 flex justify-between gap-3">
+            <span className="text-muted-foreground">Beneficiary</span>
+            <span className="font-medium text-foreground">{fundraiser.beneficiaryVerified ? 'Verified' : 'Pending setup'}</span>
+          </div>
+          {fundraiser.withdrawnAmount > 0 && (
+            <div className="mt-2 flex justify-between gap-3">
+              <span className="text-muted-foreground">Withdrawn</span>
+              <span className="font-medium text-foreground">{formatCurrency(fundraiser.withdrawnAmount)}</span>
+            </div>
+          )}
         </div>
 
         <div className="mb-4 rounded-xl border border-border bg-card p-4">
@@ -109,13 +130,45 @@ const FundraiserDetail = () => {
           <p className="text-sm leading-relaxed text-muted-foreground">{fundraiser.story}</p>
         </div>
 
+        <div className="mb-4 rounded-xl border border-border bg-card p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <ShieldCheck className={`h-4 w-4 ${fundraiser.beneficiaryVerified ? 'text-success' : 'text-muted-foreground'}`} />
+            <h2 className="font-display text-base font-bold text-foreground">Campaign Trust</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {fundraiser.beneficiaryVerified
+              ? 'This campaign has a verified payout beneficiary on file.'
+              : 'The organizer has not finished beneficiary verification yet.'}
+          </p>
+        </div>
+
+        <div className="mb-6">
+          <h2 className="mb-3 font-display text-base font-bold text-foreground">Recent Updates</h2>
+          <div className="space-y-2">
+            {fundraiser.recentUpdates.length === 0 && (
+              <EmptyTableState
+                title="No campaign updates yet"
+                description="Updates from the organizer will appear here as the campaign progresses."
+              />
+            )}
+            {fundraiser.recentUpdates.map(update => (
+              <div key={update.id} className="rounded-xl border border-border bg-card p-3">
+                <p className="text-sm font-medium text-foreground">{update.title}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{update.message}</p>
+                <p className="mt-2 text-xs text-muted-foreground">{formatDate(update.createdAtUtc)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="mb-6">
           <h2 className="mb-3 font-display text-base font-bold text-foreground">Recent Donors</h2>
           <div className="space-y-2">
             {fundraiser.recentDonors.length === 0 && (
-              <div className="rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground">
-                No donations yet. Share the link to get the first supporter.
-              </div>
+              <EmptyTableState
+                title="No donations yet"
+                description="Share the campaign link to get the first supporter."
+              />
             )}
             {fundraiser.recentDonors.map(donor => (
               <div key={donor.id} className="flex items-center justify-between rounded-xl border border-border bg-card p-3">
@@ -132,13 +185,19 @@ const FundraiserDetail = () => {
 
       <div className="fixed bottom-20 left-0 right-0 px-4">
         <div className="mx-auto flex max-w-lg gap-3">
-          <Button
-            className="h-12 flex-1 gap-1"
-            onClick={() => navigate(`/fundraising/${fundraiser.id}/donate`)}
-            disabled={!fundraiser.canDonateWithPaystack && !fundraiser.canDonateWithWallet}
-          >
-            <Heart className="h-4 w-4" /> Donate Now
-          </Button>
+          {fundraiser.canManage ? (
+            <Button className="h-12 flex-1 gap-1" onClick={() => navigate(`/fundraising/${fundraiser.id}/manage`)}>
+              <Settings2 className="h-4 w-4" /> Manage
+            </Button>
+          ) : (
+            <Button
+              className="h-12 flex-1 gap-1"
+              onClick={() => navigate(`/fundraising/${fundraiser.id}/donate`)}
+              disabled={!fundraiser.canDonateWithPaystack && !fundraiser.canDonateWithWallet}
+            >
+              <Heart className="h-4 w-4" /> Donate Now
+            </Button>
+          )}
           <Button variant="outline" className="h-12 gap-1" onClick={handleShare}>
             <Share2 className="h-4 w-4" /> Share
           </Button>

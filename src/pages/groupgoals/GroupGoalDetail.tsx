@@ -1,10 +1,12 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Calendar, UserPlus, Users, Wallet } from 'lucide-react';
+import { ArrowLeft, Calendar, Share2, UserPlus, Users, Wallet } from 'lucide-react';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { getApiErrorMessage } from '@/lib/api/http';
+import { shareLink } from '@/lib/share';
 import { formatCurrency, formatDate } from '@/services/mockData';
 import { getGroupGoal, groupGoalsKeys } from '@/services/groupGoalsApi';
 
@@ -38,6 +40,24 @@ const GroupGoalDetail = () => {
       </div>
     );
   }
+
+  const inviteLink = `${window.location.origin}/group-goals/join/${goal.inviteCode}`;
+
+  const handleShare = async () => {
+    try {
+      const result = await shareLink({
+        title: `${goal.name} group goal invite`,
+        text: `Join the ${goal.name} shared goal on AjoVault`,
+        url: inviteLink,
+      });
+
+      if (result === 'copied') {
+        toast.success('Invite link copied.');
+      }
+    } catch {
+      toast.error('Unable to share this group goal right now.');
+    }
+  };
 
   return (
     <div className="min-h-screen px-4 py-6 safe-top pb-24">
@@ -129,9 +149,14 @@ const GroupGoalDetail = () => {
       <div className="fixed bottom-20 left-0 right-0 px-4">
         <div className="mx-auto max-w-lg space-y-2">
           {goal.canInvite && (
-            <Button variant="outline" className="h-11 w-full gap-2" onClick={() => navigate(`/group-goals/${goal.id}/invite`)}>
-              <UserPlus className="h-4 w-4" /> Invite Members
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" className="h-11 flex-1 gap-2" onClick={() => navigate(`/group-goals/${goal.id}/invite`)}>
+                <UserPlus className="h-4 w-4" /> Invite Members
+              </Button>
+              <Button variant="outline" className="h-11 flex-1 gap-2" onClick={() => { void handleShare(); }}>
+                <Share2 className="h-4 w-4" /> Share
+              </Button>
+            </div>
           )}
           <Button className="h-12 w-full" onClick={() => navigate(`/group-goals/${goal.id}/contribute`)} disabled={!goal.canContribute}>
             {!goal.canContribute ? 'Goal is closed' : `Contribute ${formatCurrency(goal.contributionAmount)}`}

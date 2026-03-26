@@ -4,6 +4,7 @@ import { ArrowLeft, BadgeCheck, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import {
   agentKeys,
   getAgentSettlements,
@@ -148,9 +149,10 @@ const AgentSettlements = () => {
             ))}
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-            No settlement has been posted yet.
-          </div>
+          <EmptyTableState
+            title="No settlement posted yet"
+            description="Settlement receipts will appear here after you move available commission into your wallet."
+          />
         )}
       </Card>
     </div>

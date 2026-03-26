@@ -4,6 +4,7 @@ interface FundraiserSummaryResponse {
   fundraiserId: string;
   title: string;
   description?: string | null;
+  coverImageUrl?: string | null;
   category: string;
   targetAmount: number;
   raisedAmount: number;
@@ -28,11 +29,21 @@ interface FundraiserDonorResponse {
   fundingSource: string;
 }
 
+interface FundraiserUpdateSummaryResponse {
+  updateId: string;
+  title: string;
+  message: string;
+  createdAtUtc: string;
+}
+
 interface FundraiserDetailResponse extends FundraiserSummaryResponse {
   story: string;
   canDonateWithWallet: boolean;
   canDonateWithPaystack: boolean;
+  beneficiaryVerified: boolean;
+  withdrawnAmount: number;
   recentDonors: FundraiserDonorResponse[];
+  recentUpdates: FundraiserUpdateSummaryResponse[];
 }
 
 interface FundraiserCheckoutResponse {
@@ -81,10 +92,65 @@ interface FundraiserDonationResponse {
   createdAtUtc: string;
 }
 
+interface FundraiserInviteResponse {
+  fundraiserId: string;
+  userId?: string | null;
+  channel: 'platform' | 'email' | 'sms';
+  inviteLink: string;
+}
+
+interface FundraiserBeneficiaryResponse {
+  fundraiserId: string;
+  isVerified: boolean;
+  beneficiaryName?: string | null;
+  accountName?: string | null;
+  accountNumberMasked?: string | null;
+  bankCode?: string | null;
+  bankName?: string | null;
+  email?: string | null;
+  phoneNumber?: string | null;
+  verifiedAtUtc?: string | null;
+}
+
+interface FundraiserWithdrawalResponse {
+  withdrawalId: string;
+  fundraiserId: string;
+  amount: number;
+  currency: string;
+  reference: string;
+  provider: string;
+  status: string;
+  beneficiaryName: string;
+  destinationAccountName: string;
+  destinationAccountNumberMasked?: string | null;
+  destinationBankName: string;
+  providerTransferCode?: string | null;
+  requiresOtp: boolean;
+  message?: string | null;
+  availableBalanceAfter: number;
+  withdrawnAmount: number;
+  createdAtUtc: string;
+  completedAtUtc?: string | null;
+}
+
+interface FundraiserManagementResponse {
+  fundraiserId: string;
+  title: string;
+  coverImageUrl?: string | null;
+  raisedAmount: number;
+  availableBalance: number;
+  pendingWithdrawalAmount: number;
+  withdrawnAmount: number;
+  beneficiary: FundraiserBeneficiaryResponse;
+  updates: FundraiserUpdateSummaryResponse[];
+  withdrawals: FundraiserWithdrawalResponse[];
+}
+
 export interface FundraiserSummary {
   id: string;
   title: string;
   description?: string;
+  coverImageUrl?: string;
   category: string;
   targetAmount: number;
   raisedAmount: number;
@@ -109,16 +175,27 @@ export interface FundraiserDonor {
   fundingSource: string;
 }
 
+export interface FundraiserUpdate {
+  id: string;
+  title: string;
+  message: string;
+  createdAtUtc: string;
+}
+
 export interface FundraiserDetail extends FundraiserSummary {
   story: string;
   canDonateWithWallet: boolean;
   canDonateWithPaystack: boolean;
+  beneficiaryVerified: boolean;
+  withdrawnAmount: number;
   recentDonors: FundraiserDonor[];
+  recentUpdates: FundraiserUpdate[];
 }
 
 export interface CreateFundraiserInput {
   title: string;
   description?: string;
+  coverImageUrl?: string;
   story: string;
   category: string;
   targetAmount: number;
@@ -141,6 +218,95 @@ export interface InitializeFundraiserCheckoutInput {
   email?: string;
   isAnonymous: boolean;
   donorName?: string;
+}
+
+export interface SendFundraiserInviteInput {
+  fundraiserId: string;
+  channel: 'platform' | 'email' | 'sms';
+  platformUserId?: string;
+  memberContact?: string;
+}
+
+export interface FundraiserInviteResult {
+  fundraiserId: string;
+  userId?: string;
+  channel: 'platform' | 'email' | 'sms';
+  inviteLink: string;
+}
+
+export interface SaveFundraiserBeneficiaryInput {
+  beneficiaryName: string;
+  accountNumber: string;
+  bankCode: string;
+  bankName?: string;
+  email?: string;
+  phoneNumber?: string;
+  currency?: string;
+}
+
+export interface FundraiserBeneficiary {
+  fundraiserId: string;
+  isVerified: boolean;
+  beneficiaryName?: string;
+  accountName?: string;
+  accountNumberMasked?: string;
+  bankCode?: string;
+  bankName?: string;
+  email?: string;
+  phoneNumber?: string;
+  verifiedAtUtc?: string;
+}
+
+export interface CreateFundraiserUpdateInput {
+  title: string;
+  message: string;
+}
+
+export interface CreateFundraiserWithdrawalInput {
+  amount: number;
+  currency?: string;
+  reason?: string;
+  pin: string;
+}
+
+export interface FinalizeFundraiserWithdrawalInput {
+  fundraiserId: string;
+  reference: string;
+  otp: string;
+}
+
+export interface FundraiserWithdrawal {
+  withdrawalId: string;
+  fundraiserId: string;
+  amount: number;
+  currency: string;
+  reference: string;
+  provider: string;
+  status: string;
+  beneficiaryName: string;
+  destinationAccountName: string;
+  destinationAccountNumberMasked?: string;
+  destinationBankName: string;
+  providerTransferCode?: string;
+  requiresOtp: boolean;
+  message?: string;
+  availableBalanceAfter: number;
+  withdrawnAmount: number;
+  createdAtUtc: string;
+  completedAtUtc?: string;
+}
+
+export interface FundraiserManagement {
+  fundraiserId: string;
+  title: string;
+  coverImageUrl?: string;
+  raisedAmount: number;
+  availableBalance: number;
+  pendingWithdrawalAmount: number;
+  withdrawnAmount: number;
+  beneficiary: FundraiserBeneficiary;
+  updates: FundraiserUpdate[];
+  withdrawals: FundraiserWithdrawal[];
 }
 
 export interface FundraiserDonationResult {
@@ -193,6 +359,7 @@ export const fundraisingKeys = {
   list: ['fundraising', 'list'] as const,
   detail: (id: string) => ['fundraising', 'detail', id] as const,
   share: (code: string) => ['fundraising', 'share', code] as const,
+  manage: (id: string) => ['fundraising', 'manage', id] as const,
 };
 
 export const getFundraisers = async (): Promise<FundraiserSummary[]> => {
@@ -216,6 +383,7 @@ export const createFundraiser = async (input: CreateFundraiserInput): Promise<Fu
     json: {
       title: input.title.trim(),
       description: input.description?.trim() || undefined,
+      coverImageUrl: input.coverImageUrl || undefined,
       story: input.story.trim(),
       category: input.category,
       targetAmount: input.targetAmount,
@@ -298,10 +466,113 @@ export const getFundraiserCheckoutStatus = async (reference: string): Promise<Fu
   };
 };
 
+export const sendFundraiserInvite = async (input: SendFundraiserInviteInput): Promise<FundraiserInviteResult> => {
+  const response = await apiRequest<FundraiserInviteResponse>(`/api/fundraisers/${encodeURIComponent(input.fundraiserId)}/invites`, {
+    method: 'POST',
+    json: {
+      platformUserId: input.platformUserId,
+      memberContact: input.memberContact?.trim() || undefined,
+      channel: input.channel,
+    },
+  });
+
+  return {
+    fundraiserId: response.fundraiserId,
+    userId: response.userId ?? undefined,
+    channel: response.channel,
+    inviteLink: response.inviteLink,
+  };
+};
+
+export const getFundraiserManagement = async (id: string): Promise<FundraiserManagement> => {
+  const response = await apiRequest<FundraiserManagementResponse>(`/api/fundraisers/${encodeURIComponent(id)}/management`);
+  return {
+    fundraiserId: response.fundraiserId,
+    title: response.title,
+    coverImageUrl: response.coverImageUrl ?? undefined,
+    raisedAmount: response.raisedAmount,
+    availableBalance: response.availableBalance,
+    pendingWithdrawalAmount: response.pendingWithdrawalAmount,
+    withdrawnAmount: response.withdrawnAmount,
+    beneficiary: mapBeneficiary(response.beneficiary),
+    updates: response.updates.map(mapUpdate),
+    withdrawals: response.withdrawals.map(mapWithdrawal),
+  };
+};
+
+export const saveFundraiserBeneficiary = async (
+  id: string,
+  input: SaveFundraiserBeneficiaryInput,
+): Promise<FundraiserBeneficiary> => {
+  const response = await apiRequest<FundraiserBeneficiaryResponse>(`/api/fundraisers/${encodeURIComponent(id)}/beneficiary`, {
+    method: 'POST',
+    json: {
+      beneficiaryName: input.beneficiaryName.trim(),
+      accountNumber: input.accountNumber.trim(),
+      bankCode: input.bankCode,
+      bankName: input.bankName?.trim() || undefined,
+      email: input.email?.trim() || undefined,
+      phoneNumber: input.phoneNumber?.trim() || undefined,
+      currency: input.currency ?? 'NGN',
+    },
+  });
+
+  return mapBeneficiary(response);
+};
+
+export const createFundraiserUpdate = async (
+  id: string,
+  input: CreateFundraiserUpdateInput,
+): Promise<FundraiserUpdate> => {
+  const response = await apiRequest<FundraiserUpdateSummaryResponse>(`/api/fundraisers/${encodeURIComponent(id)}/updates`, {
+    method: 'POST',
+    json: {
+      title: input.title.trim(),
+      message: input.message.trim(),
+    },
+  });
+
+  return mapUpdate(response);
+};
+
+export const createFundraiserWithdrawal = async (
+  id: string,
+  input: CreateFundraiserWithdrawalInput,
+): Promise<FundraiserWithdrawal> => {
+  const response = await apiRequest<FundraiserWithdrawalResponse>(`/api/fundraisers/${encodeURIComponent(id)}/withdrawals`, {
+    method: 'POST',
+    json: {
+      amount: input.amount,
+      currency: input.currency ?? 'NGN',
+      reason: input.reason?.trim() || undefined,
+      pin: input.pin,
+    },
+  });
+
+  return mapWithdrawal(response);
+};
+
+export const finalizeFundraiserWithdrawal = async (
+  input: FinalizeFundraiserWithdrawalInput,
+): Promise<FundraiserWithdrawal> => {
+  const response = await apiRequest<FundraiserWithdrawalResponse>(
+    `/api/fundraisers/${encodeURIComponent(input.fundraiserId)}/withdrawals/${encodeURIComponent(input.reference)}/finalize`,
+    {
+      method: 'POST',
+      json: {
+        otp: input.otp.trim(),
+      },
+    },
+  );
+
+  return mapWithdrawal(response);
+};
+
 const mapSummary = (response: FundraiserSummaryResponse): FundraiserSummary => ({
   id: response.fundraiserId,
   title: response.title,
   description: response.description ?? undefined,
+  coverImageUrl: response.coverImageUrl ?? undefined,
   category: response.category,
   targetAmount: response.targetAmount,
   raisedAmount: response.raisedAmount,
@@ -322,6 +593,8 @@ const mapDetail = (response: FundraiserDetailResponse): FundraiserDetail => ({
   story: response.story,
   canDonateWithWallet: response.canDonateWithWallet,
   canDonateWithPaystack: response.canDonateWithPaystack,
+  beneficiaryVerified: response.beneficiaryVerified,
+  withdrawnAmount: response.withdrawnAmount,
   recentDonors: response.recentDonors.map(donor => ({
     id: donor.donationId,
     name: donor.name,
@@ -330,6 +603,7 @@ const mapDetail = (response: FundraiserDetailResponse): FundraiserDetail => ({
     isAnonymous: donor.isAnonymous,
     fundingSource: donor.fundingSource,
   })),
+  recentUpdates: response.recentUpdates.map(mapUpdate),
 });
 
 const mapDonation = (response: FundraiserDonationResponse): FundraiserDonationResult => ({
@@ -363,4 +637,45 @@ const mapCheckout = (response: FundraiserCheckoutResponse): FundraiserCheckoutRe
   status: response.status,
   customerEmail: response.customerEmail,
   purpose: response.purpose,
+});
+
+const mapUpdate = (response: FundraiserUpdateSummaryResponse): FundraiserUpdate => ({
+  id: response.updateId,
+  title: response.title,
+  message: response.message,
+  createdAtUtc: response.createdAtUtc,
+});
+
+const mapBeneficiary = (response: FundraiserBeneficiaryResponse): FundraiserBeneficiary => ({
+  fundraiserId: response.fundraiserId,
+  isVerified: response.isVerified,
+  beneficiaryName: response.beneficiaryName ?? undefined,
+  accountName: response.accountName ?? undefined,
+  accountNumberMasked: response.accountNumberMasked ?? undefined,
+  bankCode: response.bankCode ?? undefined,
+  bankName: response.bankName ?? undefined,
+  email: response.email ?? undefined,
+  phoneNumber: response.phoneNumber ?? undefined,
+  verifiedAtUtc: response.verifiedAtUtc ?? undefined,
+});
+
+const mapWithdrawal = (response: FundraiserWithdrawalResponse): FundraiserWithdrawal => ({
+  withdrawalId: response.withdrawalId,
+  fundraiserId: response.fundraiserId,
+  amount: response.amount,
+  currency: response.currency,
+  reference: response.reference,
+  provider: response.provider,
+  status: response.status,
+  beneficiaryName: response.beneficiaryName,
+  destinationAccountName: response.destinationAccountName,
+  destinationAccountNumberMasked: response.destinationAccountNumberMasked ?? undefined,
+  destinationBankName: response.destinationBankName,
+  providerTransferCode: response.providerTransferCode ?? undefined,
+  requiresOtp: response.requiresOtp,
+  message: response.message ?? undefined,
+  availableBalanceAfter: response.availableBalanceAfter,
+  withdrawnAmount: response.withdrawnAmount,
+  createdAtUtc: response.createdAtUtc,
+  completedAtUtc: response.completedAtUtc ?? undefined,
 });

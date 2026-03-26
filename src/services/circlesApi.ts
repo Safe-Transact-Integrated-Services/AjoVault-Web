@@ -272,6 +272,33 @@ export interface SendCircleInviteInput {
   memberContact?: string;
 }
 
+export const CIRCLE_PAYOUT_TYPE_METADATA = {
+  rotation: {
+    label: 'Rotation',
+    description: 'Payouts move in fixed member order each cycle.',
+    actionLabel: 'Release next payout',
+  },
+  random: {
+    label: 'Random',
+    description: 'A recipient is picked automatically at random from unpaid members each cycle.',
+    actionLabel: 'Run random payout',
+  },
+  bidding: {
+    label: 'Bidding',
+    description: 'Admin selects the winning unpaid member for each cycle payout.',
+    actionLabel: 'Select recipient',
+  },
+} as const;
+
+export const getCirclePayoutTypeLabel = (payoutType: CircleSummary['payoutType']): string =>
+  CIRCLE_PAYOUT_TYPE_METADATA[payoutType].label;
+
+export const getCirclePayoutTypeDescription = (payoutType: CircleSummary['payoutType']): string =>
+  CIRCLE_PAYOUT_TYPE_METADATA[payoutType].description;
+
+export const getCirclePayoutActionLabel = (payoutType: CircleSummary['payoutType']): string =>
+  CIRCLE_PAYOUT_TYPE_METADATA[payoutType].actionLabel;
+
 export const circlesKeys = {
   all: ['circles'] as const,
   list: ['circles', 'list'] as const,
@@ -371,13 +398,13 @@ export const getCircleLedger = async (circleId: string): Promise<CircleLedgerEnt
 
 export const payoutCircle = async (
   circleId: string,
-  recipientMemberId: string,
+  recipientMemberId: string | undefined,
   pin: string,
 ): Promise<CirclePayoutResult> =>
   apiRequest<PayoutDisbursementResponse>(`/api/groups/${encodeURIComponent(circleId)}/payouts/disburse`, {
     method: 'POST',
     json: {
-      recipientMemberId,
+      recipientMemberId: recipientMemberId || undefined,
       pin,
     },
   });

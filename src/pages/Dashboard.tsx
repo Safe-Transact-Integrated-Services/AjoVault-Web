@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -25,6 +25,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [showBalance, setShowBalance] = useState(true);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
   const dashboardQuery = useQuery({
     queryKey: dashboardKeys.summary,
     queryFn: getDashboardSummary,
@@ -40,6 +41,21 @@ const Dashboard = () => {
   const savings = dashboardQuery.data?.savings;
   const circles = dashboardQuery.data?.circles;
   const recentActivities = dashboardQuery.data?.recentActivities ?? [];
+  const currentHour = currentTime.getHours();
+  const greeting =
+    currentHour < 12
+      ? 'Good morning'
+      : currentHour < 17
+        ? 'Good afternoon'
+        : 'Good evening';
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60_000);
+
+    return () => window.clearInterval(timer);
+  }, []);
 
   const quickActions = [
     { icon: ArrowDownLeft, label: 'Fund', path: '/wallet/fund', color: 'bg-accent/10 text-accent' },
@@ -52,7 +68,7 @@ const Dashboard = () => {
     <div className="px-4 py-6 safe-top">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <p className="text-sm text-muted-foreground">Good morning</p>
+          <p className="text-sm text-muted-foreground">{greeting}</p>
           <h1 className="font-display text-xl font-bold text-foreground">{user?.firstName ?? 'there'}</h1>
         </div>
         <button onClick={() => navigate('/notifications')} className="relative p-2">

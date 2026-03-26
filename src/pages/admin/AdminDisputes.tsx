@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { TableEmptyStateRow } from '@/components/shared/EmptyTableState';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -216,71 +217,75 @@ const AdminDisputes = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(request => (
-                    <tr key={request.requestId} className="border-b border-border last:border-0 hover:bg-muted/30">
-                      <td className="p-4">
-                        <p className="max-w-[240px] truncate font-medium text-foreground">{request.subject}</p>
-                        <div className="mt-1 flex flex-wrap gap-2 lg:hidden">
-                          <Badge variant="outline" className={`border-0 text-[10px] ${roleColor[request.requesterRole] ?? roleColor.customer}`}>
-                            {request.requesterRole}
+                  {filtered.length === 0 ? (
+                    <TableEmptyStateRow
+                      colSpan={7}
+                      title="No disputes to review"
+                      description="No disputes matched the current filters yet. Adjust the filters or wait for new support issues."
+                    />
+                  ) : (
+                    filtered.map(request => (
+                      <tr key={request.requestId} className="border-b border-border last:border-0 hover:bg-muted/30">
+                        <td className="p-4">
+                          <p className="max-w-[240px] truncate font-medium text-foreground">{request.subject}</p>
+                          <div className="mt-1 flex flex-wrap gap-2 lg:hidden">
+                            <Badge variant="outline" className={`border-0 text-[10px] ${roleColor[request.requesterRole] ?? roleColor.customer}`}>
+                              {request.requesterRole}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">{request.requesterFullName}</span>
+                          </div>
+                        </td>
+                        <td className="hidden p-4 text-muted-foreground md:table-cell">{request.categoryLabel}</td>
+                        <td className="hidden p-4 lg:table-cell">
+                          <div>
+                            <p className="font-medium text-foreground">{request.requesterFullName}</p>
+                            <p className="text-xs text-muted-foreground">{request.requesterPhoneNumber ?? request.requesterEmail ?? 'No contact'}</p>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <Badge variant="outline" className={`border-0 text-[10px] ${priorityColor[request.priority] ?? priorityColor.medium}`}>
+                            {request.priority}
                           </Badge>
-                          <span className="text-xs text-muted-foreground">{request.requesterFullName}</span>
-                        </div>
-                      </td>
-                      <td className="hidden p-4 text-muted-foreground md:table-cell">{request.categoryLabel}</td>
-                      <td className="hidden p-4 lg:table-cell">
-                        <div>
-                          <p className="font-medium text-foreground">{request.requesterFullName}</p>
-                          <p className="text-xs text-muted-foreground">{request.requesterPhoneNumber ?? request.requesterEmail ?? 'No contact'}</p>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <Badge variant="outline" className={`border-0 text-[10px] ${priorityColor[request.priority] ?? priorityColor.medium}`}>
-                          {request.priority}
-                        </Badge>
-                      </td>
-                      <td className="hidden p-4 text-muted-foreground sm:table-cell">
-                        {new Date(request.updatedAtUtc).toLocaleDateString()}
-                      </td>
-                      <td className="p-4 text-right">
-                        <Badge variant="outline" className={`border-0 text-[10px] ${statusColor[request.status] ?? statusColor.open}`}>
-                          {request.status.replace('_', ' ')}
-                        </Badge>
-                      </td>
-                      <td className="p-4 text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleOpenRequest(request)}>
-                              <Eye className="mr-2 h-4 w-4" />
-                              View & Respond
-                            </DropdownMenuItem>
-                            {request.status !== 'in_review' ? (
-                              <DropdownMenuItem onClick={() => void handleQuickUpdate(request, 'in_review')}>
-                                Mark In Review
-                              </DropdownMenuItem>
-                            ) : null}
-                            {request.status !== 'resolved' ? (
+                        </td>
+                        <td className="hidden p-4 text-muted-foreground sm:table-cell">
+                          {new Date(request.updatedAtUtc).toLocaleDateString()}
+                        </td>
+                        <td className="p-4 text-right">
+                          <Badge variant="outline" className={`border-0 text-[10px] ${statusColor[request.status] ?? statusColor.open}`}>
+                            {request.status.replace('_', ' ')}
+                          </Badge>
+                        </td>
+                        <td className="p-4 text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => handleOpenRequest(request)}>
-                                Resolve
+                                <Eye className="mr-2 h-4 w-4" />
+                                View & Respond
                               </DropdownMenuItem>
-                            ) : null}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </td>
-                    </tr>
-                  ))}
+                              {request.status !== 'in_review' ? (
+                                <DropdownMenuItem onClick={() => void handleQuickUpdate(request, 'in_review')}>
+                                  Mark In Review
+                                </DropdownMenuItem>
+                              ) : null}
+                              {request.status !== 'resolved' ? (
+                                <DropdownMenuItem onClick={() => handleOpenRequest(request)}>
+                                  Resolve
+                                </DropdownMenuItem>
+                              ) : null}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
-
-            {!filtered.length ? (
-              <div className="p-4 text-sm text-muted-foreground">No disputes matched the current filters.</div>
-            ) : null}
           </CardContent>
         </Card>
       ) : null}

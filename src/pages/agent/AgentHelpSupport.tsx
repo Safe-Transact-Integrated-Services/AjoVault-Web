@@ -7,6 +7,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -316,9 +317,10 @@ const AgentHelpSupport = () => {
             </div>
 
             {requests.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-                No agent issues yet. Submit one above when a transaction, float, or settlement flow needs super-admin review.
-              </div>
+              <EmptyTableState
+                title="No agent issues yet"
+                description="Submit one above when a transaction, float, or settlement flow needs super-admin review."
+              />
             ) : null}
 
             <div className="space-y-3">

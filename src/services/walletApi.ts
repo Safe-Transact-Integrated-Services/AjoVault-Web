@@ -7,6 +7,7 @@ interface WalletResponse {
   availableBalance: number;
   pendingBalance: number;
   status: string;
+  fundingOptions: WalletFundingOptionsResponse;
   virtualAccount?: WalletVirtualAccountResponse | null;
 }
 
@@ -34,9 +35,16 @@ interface WalletVirtualAccountResponse {
   status: string;
 }
 
+interface WalletFundingOptionsResponse {
+  checkoutProvider: string;
+  transferAccountEnabled: boolean;
+  transferAccountProvider: string;
+}
+
 export interface WalletSummary extends WalletBalance {
   walletId: string;
   status: string;
+  fundingOptions: WalletFundingOptions;
   virtualAccount?: WalletVirtualAccount | null;
 }
 
@@ -47,6 +55,12 @@ export interface WalletVirtualAccount {
   bankName: string;
   currency: string;
   status: string;
+}
+
+export interface WalletFundingOptions {
+  checkoutProvider: string;
+  transferAccountEnabled: boolean;
+  transferAccountProvider: string;
 }
 
 export const walletKeys = {
@@ -63,6 +77,11 @@ export const getMyWallet = async (): Promise<WalletSummary> => {
     pending: response.pendingBalance,
     currency: response.currency,
     status: response.status,
+    fundingOptions: {
+      checkoutProvider: response.fundingOptions.checkoutProvider,
+      transferAccountEnabled: response.fundingOptions.transferAccountEnabled,
+      transferAccountProvider: response.fundingOptions.transferAccountProvider,
+    },
     virtualAccount: response.virtualAccount ? mapVirtualAccount(response.virtualAccount) : null,
   };
 };

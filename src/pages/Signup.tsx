@@ -10,7 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getDefaultAuthenticatedPath } from '@/lib/auth';
 import { getApiErrorMessage, isApiError } from '@/lib/api/http';
 
-type Step = 'contact' | 'otp' | 'details' | 'pin';
+type Step = 'contact' | 'otp' | 'details' | 'password' | 'pin';
 
 const formatCountdown = (seconds: number) => {
   const safeSeconds = Math.max(seconds, 0);
@@ -28,12 +28,14 @@ const Signup = () => {
   const [otp, setOtp] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [password, setPassword] = useState('');
   const [otpHint, setOtpHint] = useState('123456');
   const [otpMessage, setOtpMessage] = useState('');
   const [otpExpiresAt, setOtpExpiresAt] = useState<string | null>(null);
   const [otpSecondsRemaining, setOtpSecondsRemaining] = useState(0);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [passwordPadKey, setPasswordPadKey] = useState(0);
   const [pinPadKey, setPinPadKey] = useState(0);
 
   const clearError = () => {
@@ -172,8 +174,14 @@ const Signup = () => {
   const handleDetailsSubmit = () => {
     if (firstName.trim() && lastName.trim()) {
       setError('');
-      setStep('pin');
+      setStep('password');
     }
+  };
+
+  const handlePasswordComplete = async (nextPassword: string) => {
+    setPassword(nextPassword);
+    setError('');
+    setStep('pin');
   };
 
   const handlePinComplete = async (pin: string) => {
@@ -186,6 +194,7 @@ const Signup = () => {
         phoneNumber: trimmedPhoneNumber || undefined,
         firstName,
         lastName,
+        password,
         pin,
       });
 
@@ -214,8 +223,14 @@ const Signup = () => {
       return;
     }
 
-    if (step === 'pin') {
+    if (step === 'password') {
       setStep('details');
+      setError('');
+      return;
+    }
+
+    if (step === 'pin') {
+      setStep('password');
       setError('');
       return;
     }
@@ -238,7 +253,13 @@ const Signup = () => {
           transition={{ duration: 0.25 }}
         >
           {step === 'contact' && (
-            <div className="space-y-6">
+            <form
+              className="space-y-6"
+              onSubmit={event => {
+                event.preventDefault();
+                void handleIdentifierSubmit();
+              }}
+            >
               <div>
                 <h1 className="font-display text-2xl font-bold">Create Account</h1>
                 <p className="mt-1 text-muted-foreground">Enter your email, phone number, or both to get started</p>
@@ -248,6 +269,7 @@ const Signup = () => {
                 <div className="space-y-2">
                   <Label>Email Address</Label>
                   <Input
+                    type="email"
                     placeholder="you@example.com"
                     value={email}
                     onChange={event => {
@@ -262,6 +284,7 @@ const Signup = () => {
                 <div className="space-y-2">
                   <Label>Phone Number</Label>
                   <Input
+                    type="tel"
                     placeholder="+234 800 000 0000"
                     value={phoneNumber}
                     onChange={event => {
@@ -278,10 +301,10 @@ const Signup = () => {
 
               {error && <p className="text-sm text-destructive">{error}</p>}
 
-              <Button className="h-12 w-full" onClick={handleIdentifierSubmit} disabled={!hasContact || loading}>
+              <Button type="submit" className="h-12 w-full" disabled={!hasContact || loading}>
                 {loading ? 'Sending OTP...' : 'Continue'}
               </Button>
-            </div>
+            </form>
           )}
 
           {step === 'otp' && (
@@ -396,6 +419,21 @@ const Signup = () => {
               >
                 Continue
               </Button>
+            </div>
+          )}
+
+          {step === 'password' && (
+            <div className="flex flex-col items-center pt-10">
+              <PinPad
+                key={passwordPadKey}
+                length={6}
+                title="Create your password"
+                subtitle="Use a 6-digit number to sign in"
+                error={error}
+                disabled={loading}
+                onInput={clearError}
+                onComplete={handlePasswordComplete}
+              />
             </div>
           )}
 

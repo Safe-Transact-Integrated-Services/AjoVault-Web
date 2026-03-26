@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, type ChangeEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertTriangle, ArrowLeft, Briefcase, GraduationCap, Heart, PartyPopper, Users } from 'lucide-react';
+import { AlertTriangle, Briefcase, GraduationCap, Heart, ImagePlus, PartyPopper, Users, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,26 +36,11 @@ const CreateFundraiser = () => {
   const [deadline, setDeadline] = useState('');
   const [story, setStory] = useState('');
   const [isPublic, setIsPublic] = useState(true);
+  const [coverImageUrl, setCoverImageUrl] = useState('');
+  const [coverImageName, setCoverImageName] = useState('');
+  const [coverImageError, setCoverImageError] = useState('');
+  const [isProcessingCoverImage, setIsProcessingCoverImage] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const goBack = () => {
-    if (step === 'details') {
-      setStep('category');
-      return;
-    }
-
-    if (step === 'story') {
-      setStep('details');
-      return;
-    }
-
-    if (step === 'review') {
-      setStep('story');
-      return;
-    }
-
-    navigate(-1);
-  };
 
   const handleCreate = async () => {
     const targetAmount = Number(target);
@@ -69,6 +54,7 @@ const CreateFundraiser = () => {
       const fundraiser = await createFundraiser({
         title,
         description,
+        coverImageUrl: coverImageUrl || undefined,
         story,
         category,
         targetAmount,
@@ -81,8 +67,8 @@ const CreateFundraiser = () => {
         queryClient.invalidateQueries({ queryKey: fundraisingKeys.detail(fundraiser.id) }),
       ]);
 
-      toast.success('Fundraiser created. Share the link to start receiving donations.');
-      navigate(`/fundraising/${fundraiser.id}`);
+      toast.success('Fundraiser created. Invite supporters to start receiving donations.');
+      navigate(`/fundraising/${fundraiser.id}/invite`);
     } catch (createError) {
       toast.error(getApiErrorMessage(createError, 'Unable to create the fundraiser.'));
     } finally {
@@ -90,12 +76,49 @@ const CreateFundraiser = () => {
     }
   };
 
+  const handleCoverImageChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    setCoverImageError('');
+
+    if (!file.type.startsWith('image/')) {
+      setCoverImageError('Choose a valid image file.');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > 1024 * 1024) {
+      setCoverImageError('Choose an image smaller than 1MB.');
+      event.target.value = '';
+      return;
+    }
+
+    setIsProcessingCoverImage(true);
+
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setCoverImageUrl(dataUrl);
+      setCoverImageName(file.name);
+    } catch {
+      setCoverImageError('Unable to load this image right now.');
+    } finally {
+      setIsProcessingCoverImage(false);
+      event.target.value = '';
+    }
+  };
+
+  const clearCoverImage = () => {
+    setCoverImageUrl('');
+    setCoverImageName('');
+    setCoverImageError('');
+  };
+
   return (
     <div className="min-h-screen px-4 py-6 safe-top">
-      <button onClick={goBack} className="mb-6 flex items-center gap-1 text-sm text-muted-foreground">
-        <ArrowLeft className="h-4 w-4" /> Back
-      </button>
-
       <div className="mb-6 flex gap-1">
         {steps.map((currentStep, index) => (
           <div
@@ -203,6 +226,40 @@ const CreateFundraiser = () => {
                     rows={6}
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="campaign-cover-image">Campaign Picture or Design</Label>
+                  <Input
+                    id="campaign-cover-image"
+                    type="file"
+                    accept="image/*"
+                    onChange={event => {
+                      void handleCoverImageChange(event);
+                    }}
+                    className="h-12"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Upload a campaign flyer, poster, or image. PNG, JPG, and WEBP work best. Max 1MB.
+                  </p>
+                  {coverImageError && <p className="text-xs text-destructive">{coverImageError}</p>}
+                  {coverImageUrl && (
+                    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+                      <img
+                        src={coverImageUrl}
+                        alt="Campaign cover preview"
+                        className="aspect-[16/9] w-full object-cover"
+                      />
+                      <div className="flex items-center justify-between gap-3 p-3 text-sm">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <ImagePlus className="h-4 w-4" />
+                          <span className="truncate">{coverImageName || 'Campaign image selected'}</span>
+                        </div>
+                        <Button type="button" variant="ghost" size="sm" className="gap-1" onClick={clearCoverImage}>
+                          <X className="h-4 w-4" /> Remove
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <div className="flex items-center justify-between rounded-xl border border-border bg-card p-4">
                   <div>
                     <p className="text-sm font-medium text-foreground">Public Campaign</p>
@@ -221,6 +278,15 @@ const CreateFundraiser = () => {
             <div className="space-y-6">
               <h1 className="font-display text-2xl font-bold text-foreground">Review Campaign</h1>
               <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+                {coverImageUrl && (
+                  <div className="overflow-hidden rounded-xl border border-border">
+                    <img
+                      src={coverImageUrl}
+                      alt="Campaign cover preview"
+                      className="aspect-[16/9] w-full object-cover"
+                    />
+                  </div>
+                )}
                 {[
                   ['Title', title],
                   ['Category', category],
@@ -235,8 +301,8 @@ const CreateFundraiser = () => {
                 ))}
               </div>
               {description.trim() && <p className="text-sm text-muted-foreground">{description}</p>}
-              <Button className="h-12 w-full" onClick={handleCreate} disabled={isSubmitting}>
-                {isSubmitting ? 'Launching campaign...' : 'Launch Campaign'}
+              <Button className="h-12 w-full" onClick={handleCreate} disabled={isSubmitting || isProcessingCoverImage}>
+                {isSubmitting ? 'Launching campaign...' : isProcessingCoverImage ? 'Preparing image...' : 'Launch Campaign'}
               </Button>
             </div>
           )}
@@ -247,3 +313,18 @@ const CreateFundraiser = () => {
 };
 
 export default CreateFundraiser;
+
+const readFileAsDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+        return;
+      }
+
+      reject(new Error('Unable to read image.'));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('Unable to read image.'));
+    reader.readAsDataURL(file);
+  });

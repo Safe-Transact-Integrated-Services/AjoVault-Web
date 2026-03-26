@@ -21,6 +21,7 @@ const AgentRegister = () => {
   const [lastName, setLastName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -32,18 +33,19 @@ const AgentRegister = () => {
     setLastName('');
     setPhoneNumber('');
     setEmail('');
+    setPassword('');
     setPin('');
     setError('');
     setResult(null);
     setCopied(false);
   };
 
-  const handleCopyPin = async () => {
-    if (!result?.temporaryPin) {
+  const handleCopyCredentials = async () => {
+    if (!result?.temporaryPassword || !result.temporaryPin) {
       return;
     }
 
-    await navigator.clipboard.writeText(result.temporaryPin);
+    await navigator.clipboard.writeText(`Password: ${result.temporaryPassword}\nPIN: ${result.temporaryPin}`);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1500);
   };
@@ -58,6 +60,7 @@ const AgentRegister = () => {
         lastName,
         phoneNumber,
         email,
+        password,
         pin,
       });
 
@@ -111,16 +114,24 @@ const AgentRegister = () => {
         <Card className="space-y-3 border-warning/20 bg-warning/5 p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
+              <p className="text-xs text-muted-foreground">Temporary password</p>
+              <p className="font-display text-3xl font-bold tracking-[0.25em]">{result.temporaryPassword}</p>
+            </div>
+          </div>
+          <div className="border-t border-warning/20 pt-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
               <p className="text-xs text-muted-foreground">Temporary PIN</p>
               <p className="font-display text-3xl font-bold tracking-[0.25em]">{result.temporaryPin}</p>
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => void handleCopyPin()}>
+            <Button type="button" variant="outline" size="sm" onClick={() => void handleCopyCredentials()}>
               <Copy className="mr-2 h-4 w-4" />
-              {copied ? 'Copied' : 'Copy'}
+              {copied ? 'Copied' : 'Copy both'}
             </Button>
           </div>
+          </div>
           <p className="text-xs text-muted-foreground">
-            Share this PIN securely with the customer so they can sign in and update it later.
+            Share the 6-digit password for login and the 4-digit PIN for financial actions securely with the customer.
           </p>
         </Card>
 
@@ -180,6 +191,11 @@ const AgentRegister = () => {
         </div>
 
         <div className="space-y-2">
+          <Label htmlFor="password">Temporary Password</Label>
+          <Input id="password" type="password" inputMode="numeric" maxLength={6} className="h-12" placeholder="6-digit password" value={password} onChange={event => setPassword(event.target.value.replace(/\D/g, '').slice(0, 6))} />
+        </div>
+
+        <div className="space-y-2">
           <Label htmlFor="pin">Temporary PIN</Label>
           <Input id="pin" type="password" inputMode="numeric" maxLength={4} className="h-12" placeholder="4-digit PIN" value={pin} onChange={event => setPin(event.target.value.replace(/\D/g, '').slice(0, 4))} />
         </div>
@@ -189,7 +205,7 @@ const AgentRegister = () => {
         <Button
           className="h-12 w-full"
           onClick={() => void handleSubmit()}
-          disabled={submitting || !firstName || !lastName || !phoneNumber || pin.length !== 4}
+          disabled={submitting || !firstName || !lastName || !phoneNumber || password.length !== 6 || pin.length !== 4}
         >
           {submitting ? 'Registering...' : 'Register Customer'}
         </Button>

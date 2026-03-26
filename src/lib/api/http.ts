@@ -113,22 +113,6 @@ const isJsonContentType = (contentType: string | null) =>
   contentType?.toLowerCase().includes('json') ?? false;
 
 const shouldExpireAuthSession = (response: Response, error: ApiError) => {
-  if (response.status !== 401) {
-    return false;
-  }
-
-  const authHeader = response.headers.get('www-authenticate')?.toLowerCase() ?? '';
-  if (authHeader.includes('bearer')) {
-    return true;
-  }
-
-  return SESSION_EXPIRED_MESSAGES.has(error.message);
+  void error;
+  return response.status === 401;
 };
-
-const SESSION_EXPIRED_MESSAGES = new Set([
-  'Authentication required.',
-  'Unable to resolve the current user.',
-  'Refresh token is invalid.',
-  'Refresh token has expired.',
-  'Unauthorized',
-]);

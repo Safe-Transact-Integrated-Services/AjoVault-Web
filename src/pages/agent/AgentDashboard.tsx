@@ -3,6 +3,7 @@ import { ArrowRight, BadgeCheck, Clock3, MapPin, Shield, Users, Wallet } from 'l
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { getApiErrorMessage } from '@/lib/api/http';
 import { getMyAgentPortalState, type AgentActivity, type AgentPortalState } from '@/services/agentApi';
 
@@ -203,9 +204,10 @@ const AgentDashboard = () => {
             ))}
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-            No assisted activity yet. Start by registering your first customer.
-          </div>
+          <EmptyTableState
+            title="No assisted activity yet"
+            description="Start by registering your first customer or completing an assisted transaction."
+          />
         )}
 
         <Button variant="ghost" className="w-full justify-between" onClick={() => navigate('/agent/register')}>

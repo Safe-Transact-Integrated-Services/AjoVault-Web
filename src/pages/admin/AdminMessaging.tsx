@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -210,7 +211,10 @@ const AdminMessaging = () => {
             </CardHeader>
             <CardContent>
               {data.items.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No dispatches matched the current filters.</p>
+                <EmptyTableState
+                  title="No dispatches to show"
+                  description="There are no outbound messages for the current filters yet. Broaden the filters or wait for new delivery activity."
+                />
               ) : (
                 <div className="space-y-4">
                   {data.items.map(dispatch => {

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Copy, GraduationCap, Home, Monitor, Package, Share2, Car } from 'lucide-react';
+import { Copy, GraduationCap, Home, Monitor, Package, Share2, Car } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import PlatformUserInvitePicker from '@/components/shared/PlatformUserInvitePicker';
@@ -43,17 +43,6 @@ const CreateGroupGoal = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const stepIndex = steps.indexOf(step);
-
-  const goBack = () => {
-    const index = steps.indexOf(step);
-    if (index > 0) {
-      setError('');
-      setStep(steps[index - 1]);
-      return;
-    }
-
-    navigate(-1);
-  };
 
   const handleCreate = async () => {
     const targetAmount = Number(target);
@@ -139,10 +128,6 @@ const CreateGroupGoal = () => {
 
   return (
     <div className="min-h-screen px-4 py-6 safe-top">
-      <button onClick={goBack} className="mb-6 flex items-center gap-1 text-sm text-muted-foreground">
-        <ArrowLeft className="h-4 w-4" /> Back
-      </button>
-
       <div className="mb-6 flex gap-1">
         {steps.map((_, index) => (
           <div key={index} className={`h-1 flex-1 rounded-full ${stepIndex >= index ? 'bg-accent' : 'bg-muted'}`} />
@@ -284,8 +269,8 @@ const CreateGroupGoal = () => {
                 onInviteContact={handleContactInvite}
                 disabled={isSubmitting}
                 showDirectContactInvite
-                title="Invite Platform Users"
-                description="Search existing AjoVault users by email or phone number, then send an in-app invite."
+                title="Invite Members"
+                description="Use one search box to invite AjoVault users or enter an email address or phone number for non-members."
               />
 
               {error && (

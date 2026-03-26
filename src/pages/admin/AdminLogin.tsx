@@ -12,7 +12,7 @@ const AdminLogin = () => {
   const navigate = useNavigate();
   const { adminLogin, isAdminAuthenticated, isAdminInitializing, failedAttempts, isLocked, lockoutEndTime } = useAdminAuth();
   const [identifier, setIdentifier] = useState('');
-  const [pin, setPin] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [remainingTime, setRemainingTime] = useState('');
 
@@ -52,13 +52,13 @@ const AdminLogin = () => {
       return;
     }
 
-    if (!identifier.trim() || !pin) {
+    if (!identifier.trim() || !password) {
       toast.error('Please enter credentials');
       return;
     }
 
     setLoading(true);
-    const ok = await adminLogin(identifier, pin);
+    const ok = await adminLogin(identifier, password);
     setLoading(false);
 
     if (ok) {
@@ -114,15 +114,15 @@ const AdminLogin = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="pin">PIN</Label>
+                <Label htmlFor="password">Password</Label>
                 <Input
-                  id="pin"
+                  id="password"
                   type="password"
                   inputMode="numeric"
-                  maxLength={4}
-                  placeholder="4-digit PIN"
-                  value={pin}
-                  onChange={event => setPin(event.target.value.replace(/\D/g, '').slice(0, 4))}
+                  maxLength={6}
+                  placeholder="6-digit password"
+                  value={password}
+                  onChange={event => setPassword(event.target.value.replace(/\D/g, '').slice(0, 6))}
                   autoComplete="off"
                 />
               </div>

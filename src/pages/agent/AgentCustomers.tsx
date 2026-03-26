@@ -3,6 +3,7 @@ import { ArrowLeft, BadgeCheck, ChevronRight, UserPlus, Users } from 'lucide-rea
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { getApiErrorMessage } from '@/lib/api/http';
 import { getLinkedAgentCustomers, type AgentCustomer } from '@/services/agentApi';
 
@@ -70,15 +71,10 @@ const AgentCustomers = () => {
 
       {!loading && !error && !customers.length && (
         <Card className="space-y-3 border-dashed p-5 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
-            <Users className="h-6 w-6 text-primary" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold">No linked customers yet</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Your first assisted registration will appear here together with recent field activity.
-            </p>
-          </div>
+          <EmptyTableState
+            title="No linked customers yet"
+            description="Your first assisted registration will appear here together with recent field activity."
+          />
           <Button className="w-full" onClick={() => navigate('/agent/register')}>
             Register First Customer
           </Button>

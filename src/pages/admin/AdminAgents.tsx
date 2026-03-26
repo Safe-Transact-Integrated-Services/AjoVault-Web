@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { TableEmptyStateRow } from '@/components/shared/EmptyTableState';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -259,11 +260,11 @@ const AdminAgents = () => {
                     </td>
                   </tr>
                 ) : filtered.length === 0 ? (
-                  <tr>
-                    <td className="p-4 text-muted-foreground" colSpan={7}>
-                      No agents matched this filter.
-                    </td>
-                  </tr>
+                  <TableEmptyStateRow
+                    colSpan={7}
+                    title="No agents to show"
+                    description="No agents matched this filter yet. Try another status or search term."
+                  />
                 ) : (
                   filtered.map(item => {
                     const status = getItemStatus(item);

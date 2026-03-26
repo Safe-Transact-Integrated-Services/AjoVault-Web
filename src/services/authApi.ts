@@ -45,9 +45,12 @@ interface UpdateMyProfileRequest {
   phoneNumber?: string | null;
 }
 
-export interface SubmitKycVerificationInput {
-  bvn: string;
+export interface SubmitKycNinInput {
   nin: string;
+}
+
+export interface SubmitKycBvnInput {
+  bvn: string;
   accountNumber: string;
   bankCode: string;
 }
@@ -83,6 +86,7 @@ export interface SignupInput {
   phoneNumber?: string;
   firstName: string;
   lastName: string;
+  password: string;
   pin: string;
 }
 
@@ -177,13 +181,13 @@ export const verifyOtp = (input: AuthContactInput, otp: string) =>
     },
   });
 
-export const loginUser = async (identifier: string, pin: string): Promise<AuthResult> => {
+export const loginUser = async (identifier: string, password: string): Promise<AuthResult> => {
   const response = await apiRequest<LoginUserResponse>('/api/identity/login', {
     method: 'POST',
     auth: false,
     json: {
       ...normalizeIdentifierPayload(identifier),
-      pin,
+      password,
     },
   });
 
@@ -201,6 +205,7 @@ export const registerUser = async (input: SignupInput) => {
       ...normalizeContactPayload(input),
       firstName: input.firstName.trim(),
       lastName: input.lastName.trim(),
+      password: input.password,
       pin: input.pin,
     },
   });
@@ -237,12 +242,19 @@ export const updateCurrentUser = async (input: UpdateProfileInput): Promise<User
   return mapIdentityProfileToUser(response);
 };
 
-export const submitKycVerification = (input: SubmitKycVerificationInput) =>
-  apiRequest<KycVerificationResponse>('/api/identity/me/kyc/verify', {
+export const submitKycNinVerification = (input: SubmitKycNinInput) =>
+  apiRequest<KycVerificationResponse>('/api/identity/me/kyc/nin', {
+    method: 'POST',
+    json: {
+      nin: input.nin.trim(),
+    },
+  });
+
+export const submitKycBvnVerification = (input: SubmitKycBvnInput) =>
+  apiRequest<KycVerificationResponse>('/api/identity/me/kyc/bvn', {
     method: 'POST',
     json: {
       bvn: input.bvn.trim(),
-      nin: input.nin.trim(),
       accountNumber: input.accountNumber.trim(),
       bankCode: input.bankCode,
     },

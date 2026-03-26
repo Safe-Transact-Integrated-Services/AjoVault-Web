@@ -3,6 +3,7 @@ import { Eye, EyeOff, ArrowUpRight, ArrowDownLeft, Receipt, Plus } from 'lucide-
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { formatCurrency, formatDate } from '@/services/mockData';
 import { getMyWallet, getWalletTransactions, walletKeys } from '@/services/walletApi';
 
@@ -73,9 +74,10 @@ const WalletHome = () => {
           </div>
         )}
         {!transactionsQuery.isLoading && !transactionsQuery.isError && recentTransactions.length === 0 && (
-          <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
-            No wallet transactions yet.
-          </div>
+          <EmptyTableState
+            title="No wallet transactions yet"
+            description="Your first wallet funding, transfer, or bill payment will appear here."
+          />
         )}
         {recentTransactions.map(transaction => (
           <div key={transaction.id} className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">

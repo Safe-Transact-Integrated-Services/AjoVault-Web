@@ -13,10 +13,10 @@ const AgentLogin = () => {
   const location = useLocation();
   const { loginAgent, isAuthenticated, user } = useAuth();
   const [agentCode, setAgentCode] = useState('');
-  const [showPin, setShowPin] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [pinPadKey, setPinPadKey] = useState(0);
+  const [passwordPadKey, setPasswordPadKey] = useState(0);
 
   useEffect(() => {
     if (!isAuthenticated || !user) {
@@ -34,24 +34,24 @@ const AgentLogin = () => {
   const handleSubmit = () => {
     if (agentCode.length >= 4) {
       setError('');
-      setShowPin(true);
+      setShowPassword(true);
     }
   };
 
-  const handlePinComplete = async (pin: string) => {
+  const handlePasswordComplete = async (password: string) => {
     setLoading(true);
     setError('');
 
     try {
-      await loginAgent(agentCode, pin);
+      await loginAgent(agentCode, password);
       navigate('/agent', { replace: true });
     } catch (err) {
       if (isApiError(err) && err.status === 401) {
-        setError('Incorrect PIN or inactive agent code.');
+        setError('Incorrect password or inactive agent code.');
       } else {
         setError(getApiErrorMessage(err, 'Unable to sign in to the agent portal.'));
       }
-      setPinPadKey(current => current + 1);
+      setPasswordPadKey(current => current + 1);
     } finally {
       setLoading(false);
     }
@@ -59,11 +59,11 @@ const AgentLogin = () => {
 
   return (
     <div className="min-h-screen px-6 py-6">
-      <button onClick={() => showPin ? setShowPin(false) : navigate('/')} className="mb-6 flex items-center gap-1 text-sm text-muted-foreground">
+      <button onClick={() => showPassword ? setShowPassword(false) : navigate('/')} className="mb-6 flex items-center gap-1 text-sm text-muted-foreground">
         <ArrowLeft className="h-4 w-4" /> Back
       </button>
 
-      {!showPin ? (
+      {!showPassword ? (
         <div className="space-y-6">
           <div className="flex flex-col items-center text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 mb-4">
@@ -87,13 +87,14 @@ const AgentLogin = () => {
       ) : (
         <div className="flex flex-col items-center pt-10">
           <PinPad
-            key={pinPadKey}
-            title="Enter Agent PIN"
+            key={passwordPadKey}
+            length={6}
+            title="Enter Agent Password"
             subtitle={loading ? 'Signing in...' : `Logging in as ${agentCode}`}
             error={error}
             disabled={loading}
             onInput={() => error && setError('')}
-            onComplete={handlePinComplete}
+            onComplete={handlePasswordComplete}
           />
         </div>
       )}

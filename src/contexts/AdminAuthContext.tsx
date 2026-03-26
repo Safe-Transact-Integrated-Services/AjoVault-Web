@@ -8,7 +8,7 @@ interface AdminAuthContextType {
   isAdminAuthenticated: boolean;
   isAdminInitializing: boolean;
   adminUser: User | null;
-  adminLogin: (identifier: string, pin: string) => Promise<boolean>;
+  adminLogin: (identifier: string, password: string) => Promise<boolean>;
   adminLogout: () => Promise<void>;
   failedAttempts: number;
   isLocked: boolean;
@@ -147,13 +147,13 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   }, []);
 
-  const adminLogin = useCallback(async (identifier: string, pin: string): Promise<boolean> => {
+  const adminLogin = useCallback(async (identifier: string, password: string): Promise<boolean> => {
     if (isLocked) {
       return false;
     }
 
     try {
-      const result = await loginUser(identifier, pin);
+      const result = await loginUser(identifier, password);
       if (result.user.role !== 'super-admin') {
         const nextAttempts = failedAttempts + 1;
         setFailedAttempts(nextAttempts);

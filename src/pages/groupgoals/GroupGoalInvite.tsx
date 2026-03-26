@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import PlatformUserInvitePicker from '@/components/shared/PlatformUserInvitePicker';
 import { getApiErrorMessage } from '@/lib/api/http';
+import { shareLink } from '@/lib/share';
 import { formatCurrency } from '@/services/mockData';
 import { getGroupGoal, groupGoalsKeys, sendGroupGoalInvite } from '@/services/groupGoalsApi';
 import type { PlatformUserSearchResult } from '@/services/platformUsersApi';
@@ -32,6 +33,24 @@ const GroupGoalInvite = () => {
       </div>
     );
   }
+
+  const inviteLink = `${window.location.origin}/group-goals/join/${goal.inviteCode}`;
+
+  const handleShare = async () => {
+    try {
+      const result = await shareLink({
+        title: `${goal.name} group goal invite`,
+        text: `Join the ${goal.name} shared goal on AjoVault`,
+        url: inviteLink,
+      });
+
+      if (result === 'copied') {
+        toast.success('Invite link copied.');
+      }
+    } catch {
+      toast.error('Unable to share this group goal right now.');
+    }
+  };
 
   const handleInvite = async (user: PlatformUserSearchResult) => {
     if (!id) {
@@ -81,8 +100,8 @@ const GroupGoalInvite = () => {
           <Button variant="outline" className="flex-1 gap-2" onClick={() => { navigator.clipboard?.writeText(goal.inviteCode); toast.success('Invite code copied.'); }}>
             <Copy className="h-4 w-4" /> Copy Code
           </Button>
-          <Button variant="outline" className="flex-1 gap-2" onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}/group-goals/join/${goal.inviteCode}`); toast.success('Invite link copied.'); }}>
-            <Share2 className="h-4 w-4" /> Copy Link
+          <Button variant="outline" className="flex-1 gap-2" onClick={() => { void handleShare(); }}>
+            <Share2 className="h-4 w-4" /> Share Link
           </Button>
         </div>
       </Card>
@@ -91,8 +110,8 @@ const GroupGoalInvite = () => {
         onInvite={handleInvite}
         onInviteContact={handleContactInvite}
         showDirectContactInvite
-        title="Invite Platform Users"
-        description="Search existing AjoVault users by email or phone number, then send an in-app invite."
+        title="Invite Members"
+        description="Use one search box to invite AjoVault users or enter an email address or phone number for non-members."
       />
 
       <Card className="mt-5 space-y-2 p-4 text-sm">

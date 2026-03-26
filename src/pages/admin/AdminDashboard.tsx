@@ -17,6 +17,7 @@ import {
   adminDashboardKeys,
   getAdminDashboardSummary,
 } from '@/services/adminDashboardApi';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
 
 const statusColor: Record<string, string> = {
   completed: 'bg-success/10 text-success',
@@ -233,7 +234,10 @@ const AdminDashboard = () => {
             </CardHeader>
             <CardContent>
               {dashboard.recentTransactions.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No recent platform transactions.</p>
+                <EmptyTableState
+                  title="No recent platform transactions"
+                  description="Platform activity will appear here once users, agents, or admin-managed flows start posting transactions."
+                />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">

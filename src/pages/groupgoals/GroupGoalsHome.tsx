@@ -5,6 +5,7 @@ import { Plus, Target, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { formatCurrency, formatDate } from '@/services/mockData';
 import { getGroupGoals, groupGoalsKeys } from '@/services/groupGoalsApi';
 
@@ -59,9 +60,10 @@ const GroupGoalsHome = () => {
         )}
 
         {!goalsQuery.isLoading && !goalsQuery.isError && goals.length === 0 && (
-          <div className="rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground">
-            No group goals yet. Create one or join with an invite code.
-          </div>
+          <EmptyTableState
+            title="No group goals yet"
+            description="Create one or join with an invite code to start raising funds together."
+          />
         )}
 
         {goals.map((goal, index) => (

@@ -108,6 +108,14 @@ const AgentAccess = () => {
     enabled: transactionType === 'transfer',
   });
 
+  const normalizedAccountNumber = accountNumber.replace(/[^\d]/g, '');
+  const parsedAmount = Number.parseFloat(amount);
+  const cashService = isCashService(transactionType);
+  const transferService = isTransferService(transactionType);
+  const billPaymentService = isBillPaymentService(transactionType);
+  const enquiryService = isEnquiryService(transactionType);
+  const selectedBank = banksQuery.data?.find(bank => bank.code === bankCode) ?? null;
+
   useEffect(() => {
     setSelectedTargetId('');
     setAmount('');
@@ -121,14 +129,6 @@ const AgentAccess = () => {
   useEffect(() => {
     setResolvedTransferAccount(null);
   }, [bankCode, normalizedAccountNumber]);
-
-  const parsedAmount = Number.parseFloat(amount);
-  const cashService = isCashService(transactionType);
-  const transferService = isTransferService(transactionType);
-  const billPaymentService = isBillPaymentService(transactionType);
-  const enquiryService = isEnquiryService(transactionType);
-  const normalizedAccountNumber = accountNumber.replace(/[^\d]/g, '');
-  const selectedBank = banksQuery.data?.find(bank => bank.code === bankCode) ?? null;
 
   let targetOptions: TargetOption[] = [];
   let targetLoading = false;

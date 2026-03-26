@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowDownLeft, ArrowLeft, ArrowUpRight, ScrollText, Wallet } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { agentKeys, getAgentFloatLedger } from '@/services/agentApi';
 import { getApiErrorMessage } from '@/lib/api/http';
 
@@ -145,9 +146,10 @@ const AgentLedger = () => {
             })}
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-            No float movement yet. Float ledger entries will appear after admin float loads and live agent transactions.
-          </div>
+          <EmptyTableState
+            title="No float movement yet"
+            description="Float ledger entries will appear after admin float loads and live agent transactions."
+          />
         )}
       </Card>
     </div>

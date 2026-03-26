@@ -40,8 +40,8 @@ const SavingsInvite = () => {
         onInviteContact={handleContactInvite}
         showDirectContactInvite
         actionLabel="Invite on AjoVault"
-        title="Invite Platform Users"
-        description="Search existing AjoVault users by email or phone number, then send an in-app savings invite."
+        title="Invite To Savings"
+        description="Use one search box to invite AjoVault users or enter an email address or phone number for non-members."
       />
     </div>
   );
