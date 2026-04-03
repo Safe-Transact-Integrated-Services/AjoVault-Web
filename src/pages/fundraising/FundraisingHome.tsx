@@ -11,6 +11,7 @@ import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { getApiErrorMessage } from '@/lib/api/http';
 import { getFundraisers, fundraisingKeys } from '@/services/fundraisingApi';
 import { formatCurrency } from '@/services/mockData';
+import { formatCampaignCategoryLabel } from './campaignTypes';
 
 const categoryColors: Record<string, string> = {
   event: 'bg-warning/10 text-warning',
@@ -130,7 +131,7 @@ const FundraisingHome = () => {
                 variant="secondary"
                 className={categoryColors[campaign.category] || 'bg-muted text-muted-foreground'}
               >
-                {campaign.category}
+                {formatCampaignCategoryLabel(campaign.category)}
               </Badge>
             </div>
 

@@ -10,6 +10,7 @@ import { getApiErrorMessage } from '@/lib/api/http';
 import { shareLink } from '@/lib/share';
 import { getFundraiser, fundraisingKeys } from '@/services/fundraisingApi';
 import { formatCurrency, formatDate } from '@/services/mockData';
+import { formatCampaignCategoryLabel, getCampaignTypeDetailItems } from './campaignTypes';
 
 const categoryMarks: Record<string, string> = {
   event: 'EV',
@@ -30,6 +31,7 @@ const FundraiserDetail = () => {
   });
 
   const fundraiser = fundraiserQuery.data;
+  const typeDetailItems = fundraiser ? getCampaignTypeDetailItems(fundraiser.category, fundraiser.typeDetails) : [];
 
   if (fundraiserQuery.isLoading) {
     return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading campaign...</div>;
@@ -84,6 +86,9 @@ const FundraiserDetail = () => {
           </span>
           <h1 className="mt-3 font-display text-2xl font-bold text-foreground">{fundraiser.title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">by {fundraiser.creatorName}</p>
+          <p className="mt-2 text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+            {formatCampaignCategoryLabel(fundraiser.category)}
+          </p>
         </div>
 
         <div className="mb-4 rounded-2xl border border-border bg-card p-5">
@@ -129,6 +134,20 @@ const FundraiserDetail = () => {
           <h2 className="mb-2 font-display text-base font-bold text-foreground">Story</h2>
           <p className="text-sm leading-relaxed text-muted-foreground">{fundraiser.story}</p>
         </div>
+
+        {typeDetailItems.length > 0 && (
+          <div className="mb-4 rounded-xl border border-border bg-card p-4">
+            <h2 className="mb-2 font-display text-base font-bold text-foreground">Campaign details</h2>
+            <div className="space-y-2 text-sm">
+              {typeDetailItems.map(item => (
+                <div key={item.key} className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">{item.label}</span>
+                  <span className="text-right font-medium text-foreground">{item.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="mb-4 rounded-xl border border-border bg-card p-4">
           <div className="mb-3 flex items-center gap-2">

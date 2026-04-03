@@ -38,6 +38,7 @@ interface FundraiserUpdateSummaryResponse {
 
 interface FundraiserDetailResponse extends FundraiserSummaryResponse {
   story: string;
+  typeDetails: Record<string, string>;
   canDonateWithWallet: boolean;
   canDonateWithPaystack: boolean;
   beneficiaryVerified: boolean;
@@ -184,6 +185,7 @@ export interface FundraiserUpdate {
 
 export interface FundraiserDetail extends FundraiserSummary {
   story: string;
+  typeDetails: Record<string, string>;
   canDonateWithWallet: boolean;
   canDonateWithPaystack: boolean;
   beneficiaryVerified: boolean;
@@ -198,6 +200,7 @@ export interface CreateFundraiserInput {
   coverImageUrl?: string;
   story: string;
   category: string;
+  typeDetails?: Record<string, string>;
   targetAmount: number;
   deadline: string;
   isPublic: boolean;
@@ -386,6 +389,7 @@ export const createFundraiser = async (input: CreateFundraiserInput): Promise<Fu
       coverImageUrl: input.coverImageUrl || undefined,
       story: input.story.trim(),
       category: input.category,
+      typeDetails: input.typeDetails ?? {},
       targetAmount: input.targetAmount,
       deadline: input.deadline,
       isPublic: input.isPublic,
@@ -591,6 +595,7 @@ const mapSummary = (response: FundraiserSummaryResponse): FundraiserSummary => (
 const mapDetail = (response: FundraiserDetailResponse): FundraiserDetail => ({
   ...mapSummary(response),
   story: response.story,
+  typeDetails: response.typeDetails ?? {},
   canDonateWithWallet: response.canDonateWithWallet,
   canDonateWithPaystack: response.canDonateWithPaystack,
   beneficiaryVerified: response.beneficiaryVerified,
