@@ -1,6 +1,10 @@
-import { getAccessToken } from './session';
+import { notifyAuthSessionExpired } from './authEvents';
+import { clearAuthSession, getAccessToken } from './session';
 
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:51708').replace(/\/+$/, '');
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, '');
+const localApiBaseCandidates = ['https://localhost:51707', 'http://localhost:51707'] as const;
+
+export const API_BASE_URL = configuredApiBaseUrl ?? localApiBaseCandidates[0];
 
 interface ApiProblemDetails {
   title?: string;
@@ -58,14 +62,23 @@ export const apiRequest = async <T>(path: string, options: ApiRequestOptions = {
     }
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const request = {
     ...init,
     headers: requestHeaders,
     body: json !== undefined ? JSON.stringify(json) : init.body,
-  });
+  };
+
+  const response = await fetchWithLocalFallback(`${path}`, request);
 
   if (!response.ok) {
-    throw await toApiError(response);
+    const apiError = await toApiError(response);
+
+    if (auth && shouldExpireAuthSession(response, apiError)) {
+      clearAuthSession();
+      notifyAuthSessionExpired();
+    }
+
+    throw apiError;
   }
 
   if (response.status === 204) {
@@ -73,11 +86,28 @@ export const apiRequest = async <T>(path: string, options: ApiRequestOptions = {
   }
 
   const contentType = response.headers.get('content-type');
-  if (contentType?.includes('application/json')) {
+  if (isJsonContentType(contentType)) {
     return response.json() as Promise<T>;
   }
 
   return undefined as T;
+};
+
+const fetchWithLocalFallback = async (path: string, init: RequestInit) => {
+  try {
+    return await fetch(`${API_BASE_URL}${path}`, init);
+  } catch (error) {
+    if (configuredApiBaseUrl) {
+      throw error;
+    }
+
+    const alternateBaseUrl = localApiBaseCandidates.find(baseUrl => baseUrl !== API_BASE_URL);
+    if (!alternateBaseUrl) {
+      throw error;
+    }
+
+    return fetch(`${alternateBaseUrl}${path}`, init);
+  }
 };
 
 const toApiError = async (response: Response) => {
@@ -86,7 +116,7 @@ const toApiError = async (response: Response) => {
   let fieldErrors: Record<string, string[]> | undefined;
 
   const contentType = response.headers.get('content-type');
-  if (contentType?.includes('application/json')) {
+  if (isJsonContentType(contentType)) {
     const data = await response.json() as ApiProblemDetails;
     message = data.title ?? message;
     detail = data.detail;
@@ -99,4 +129,12 @@ const toApiError = async (response: Response) => {
   }
 
   return new ApiError(message, response.status, detail, fieldErrors);
+};
+
+const isJsonContentType = (contentType: string | null) =>
+  contentType?.toLowerCase().includes('json') ?? false;
+
+const shouldExpireAuthSession = (response: Response, error: ApiError) => {
+  void error;
+  return response.status === 401;
 };

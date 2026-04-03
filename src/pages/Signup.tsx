@@ -5,24 +5,76 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import PinPad from '@/components/shared/PinPad';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDefaultAuthenticatedPath } from '@/lib/auth';
-import { getApiErrorMessage } from '@/lib/api/http';
+import { getApiErrorMessage, isApiError } from '@/lib/api/http';
 
-type Step = 'account' | 'details' | 'security';
+type Step = 'contact' | 'otp' | 'details' | 'password' | 'pin';
+
+const formatCountdown = (seconds: number) => {
+  const safeSeconds = Math.max(seconds, 0);
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds % 60;
+  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+};
 
 const Signup = () => {
   const navigate = useNavigate();
-  const { signup, isAuthenticated, user } = useAuth();
-  const [step, setStep] = useState<Step>('account');
-  const [phone, setPhone] = useState('');
+  const { signup, requestOtp, verifyOtp, isAuthenticated, user } = useAuth();
+  const [step, setStep] = useState<Step>('contact');
   const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otp, setOtp] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [otpHint, setOtpHint] = useState('123456');
+  const [otpMessage, setOtpMessage] = useState('');
+  const [otpExpiresAt, setOtpExpiresAt] = useState<string | null>(null);
+  const [otpSecondsRemaining, setOtpSecondsRemaining] = useState(0);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [passwordPadKey, setPasswordPadKey] = useState(0);
+  const [pinPadKey, setPinPadKey] = useState(0);
+
+  const clearError = () => {
+    if (error) {
+      setError('');
+    }
+  };
+
+  const trimmedEmail = email.trim();
+  const trimmedPhoneNumber = phoneNumber.trim();
+  const hasContact = !!trimmedEmail || !!trimmedPhoneNumber;
+  const contactPayload = {
+    email: trimmedEmail || undefined,
+    phoneNumber: trimmedPhoneNumber || undefined,
+  };
+  const contactSummary = [trimmedEmail, trimmedPhoneNumber].filter(Boolean).join(' or ');
+  const loginIdentifier = trimmedEmail || trimmedPhoneNumber;
+  const isOtpExpired = step === 'otp' && otpExpiresAt !== null && otpSecondsRemaining <= 0;
+
+  const getOtpErrorMessage = (err: unknown) => {
+    if (!isApiError(err)) {
+      return 'Unable to verify OTP.';
+    }
+
+    const otpFieldError = err.fieldErrors?.Otp?.[0] ?? err.fieldErrors?.otp?.[0];
+    return otpFieldError ?? getApiErrorMessage(err, 'Unable to verify OTP.');
+  };
+
+  const syncOtpCountdown = (expiresAtUtc: string) => {
+    const expiresAt = new Date(expiresAtUtc).getTime();
+    setOtpExpiresAt(expiresAtUtc);
+
+    if (!Number.isFinite(expiresAt)) {
+      setOtpSecondsRemaining(0);
+      return;
+    }
+
+    setOtpSecondsRemaining(Math.max(Math.ceil((expiresAt - Date.now()) / 1000), 0));
+  };
 
   useEffect(() => {
     if (!isAuthenticated || !user) {
@@ -32,23 +84,67 @@ const Signup = () => {
     navigate(getDefaultAuthenticatedPath(user), { replace: true });
   }, [isAuthenticated, navigate, user]);
 
-  const handleAccountSubmit = () => {
-    if (phone.trim().length >= 8) {
-      setError('');
-      setStep('details');
+  useEffect(() => {
+    if (step !== 'otp' || !otpExpiresAt) {
+      return;
+    }
+
+    const updateCountdown = () => {
+      const expiresAt = new Date(otpExpiresAt).getTime();
+      if (!Number.isFinite(expiresAt)) {
+        setOtpSecondsRemaining(0);
+        return;
+      }
+
+      setOtpSecondsRemaining(Math.max(Math.ceil((expiresAt - Date.now()) / 1000), 0));
+    };
+
+    updateCountdown();
+    const intervalId = window.setInterval(updateCountdown, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [otpExpiresAt, step]);
+
+  const sendOtpChallenge = async () => {
+    if (!hasContact) {
+      setError('Enter at least an email address or phone number.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setOtpMessage('');
+
+    try {
+      const response = await requestOtp(contactPayload);
+      setOtpHint(response.defaultOtp);
+      setOtp('');
+      setOtpMessage(response.message);
+      syncOtpCountdown(response.expiresAtUtc);
+      setStep('otp');
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Unable to request OTP.'));
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDetailsSubmit = () => {
-    if (firstName.trim() && lastName.trim()) {
-      setError('');
-      setStep('security');
-    }
+  const handleIdentifierSubmit = async () => {
+    await sendOtpChallenge();
   };
 
-  const handleSecuritySubmit = async () => {
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+  const handleOtpSubmit = async () => {
+    const normalizedOtp = otp.replace(/\D/g, '').trim();
+
+    if (isOtpExpired) {
+      setError('OTP expired. Request a new code to continue.');
+      setOtp('');
+      return;
+    }
+
+    if (normalizedOtp.length !== 6) {
+      setError('OTP must be exactly 6 digits.');
+      setOtp('');
       return;
     }
 
@@ -56,30 +152,86 @@ const Signup = () => {
     setError('');
 
     try {
-      const signedUpUser = await signup({
+      const response = await verifyOtp(contactPayload, normalizedOtp);
+
+      if (!response.verified) {
+        setOtp('');
+        setError(response.message || 'OTP verification failed.');
+        return;
+      }
+
+      setOtp(normalizedOtp);
+      setOtpMessage(response.message);
+      setStep('details');
+    } catch (err) {
+      setOtp('');
+      setError(getOtpErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDetailsSubmit = () => {
+    if (firstName.trim() && lastName.trim()) {
+      setError('');
+      setStep('password');
+    }
+  };
+
+  const handlePasswordComplete = async (nextPassword: string) => {
+    setPassword(nextPassword);
+    setError('');
+    setStep('pin');
+  };
+
+  const handlePinComplete = async (pin: string) => {
+    setLoading(true);
+    setError('');
+
+    try {
+      await signup({
+        email: trimmedEmail || undefined,
+        phoneNumber: trimmedPhoneNumber || undefined,
         firstName,
         lastName,
-        phoneNumber: phone,
-        email: email || undefined,
         password,
+        pin,
       });
 
-      navigate(getDefaultAuthenticatedPath(signedUpUser), { replace: true });
+      navigate('/login', { replace: true, state: { identifier: loginIdentifier, justSignedUp: true } });
     } catch (err) {
       setError(getApiErrorMessage(err, 'Unable to create your account.'));
+      setPinPadKey(current => current + 1);
     } finally {
       setLoading(false);
     }
   };
 
   const goBack = () => {
-    if (step === 'details') {
-      setStep('account');
+    if (step === 'otp') {
+      setStep('contact');
+      setError('');
+      setOtpMessage('');
+      setOtpExpiresAt(null);
+      setOtpSecondsRemaining(0);
       return;
     }
 
-    if (step === 'security') {
+    if (step === 'details') {
+      setStep('otp');
+      setError('');
+      return;
+    }
+
+    if (step === 'password') {
       setStep('details');
+      setError('');
+      return;
+    }
+
+    if (step === 'pin') {
+      setStep('password');
+      setError('');
       return;
     }
 
@@ -100,39 +252,125 @@ const Signup = () => {
           exit={{ opacity: 0, x: -30 }}
           transition={{ duration: 0.25 }}
         >
-          {step === 'account' && (
-            <div className="space-y-6">
+          {step === 'contact' && (
+            <form
+              className="space-y-6"
+              onSubmit={event => {
+                event.preventDefault();
+                void handleIdentifierSubmit();
+              }}
+            >
               <div>
                 <h1 className="font-display text-2xl font-bold">Create Account</h1>
-                <p className="mt-1 text-muted-foreground">Use the backend identity API credentials format</p>
+                <p className="mt-1 text-muted-foreground">Enter your email, phone number, or both to get started</p>
               </div>
 
-              <div className="space-y-2">
-                <Label>Phone Number</Label>
-                <Input
-                  placeholder="+234 800 000 0000"
-                  value={phone}
-                  onChange={event => setPhone(event.target.value)}
-                  type="tel"
-                  className="h-12"
-                />
-              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Email Address</Label>
+                  <Input
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={event => {
+                      setEmail(event.target.value);
+                      clearError();
+                    }}
+                    className="h-12"
+                    inputMode="email"
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label>Email Address (Optional)</Label>
-                <Input
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={event => setEmail(event.target.value)}
-                  type="email"
-                  className="h-12"
-                />
+                <div className="space-y-2">
+                  <Label>Phone Number</Label>
+                  <Input
+                    type="tel"
+                    placeholder="+234 800 000 0000"
+                    value={phoneNumber}
+                    onChange={event => {
+                      setPhoneNumber(event.target.value);
+                      clearError();
+                    }}
+                    className="h-12"
+                    inputMode="tel"
+                  />
+                </div>
+
+                <p className="text-xs text-muted-foreground">At least one of email or phone number is required.</p>
               </div>
 
               {error && <p className="text-sm text-destructive">{error}</p>}
 
-              <Button className="h-12 w-full" onClick={handleAccountSubmit} disabled={phone.trim().length < 8}>
-                Continue
+              <Button type="submit" className="h-12 w-full" disabled={!hasContact || loading}>
+                {loading ? 'Sending OTP...' : 'Continue'}
+              </Button>
+            </form>
+          )}
+
+          {step === 'otp' && (
+            <div className="space-y-6">
+              <div>
+                <h1 className="font-display text-2xl font-bold">Verify OTP</h1>
+                <p className="mt-1 text-muted-foreground">Enter the 6-digit code sent to {contactSummary}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>OTP Code</Label>
+                <Input
+                  placeholder="123456"
+                  value={otp}
+                  onChange={event => {
+                    setOtp(event.target.value.replace(/\D/g, ''));
+                    clearError();
+                  }}
+                  maxLength={6}
+                  inputMode="numeric"
+                  className="h-12 text-center text-xl tracking-[0.5em]"
+                />
+              </div>
+
+              <div className="space-y-2 text-center">
+                <p className="text-sm text-muted-foreground">For local testing, use OTP {otpHint}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOtp(otpHint);
+                    clearError();
+                  }}
+                  className="text-sm font-medium text-accent"
+                >
+                  Use test OTP
+                </button>
+                {otpMessage && <p className="text-xs text-muted-foreground">{otpMessage}</p>}
+                {otpExpiresAt && !isOtpExpired && (
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Code expires in {formatCountdown(otpSecondsRemaining)}
+                  </p>
+                )}
+                {isOtpExpired && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-destructive">OTP expired. Request a new code to continue.</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10 w-full"
+                      onClick={sendOtpChallenge}
+                      disabled={loading}
+                    >
+                      {loading ? 'Sending new OTP...' : 'Retry OTP'}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {error && <p className="text-sm text-destructive">{error}</p>}
+
+              <Button
+                className="h-12 w-full"
+                onClick={handleOtpSubmit}
+                disabled={otp.replace(/\D/g, '').length < 6 || loading || isOtpExpired}
+              >
+                {loading ? 'Verifying...' : isOtpExpired ? 'OTP Expired' : 'Verify'}
               </Button>
             </div>
           )}
@@ -150,7 +388,10 @@ const Signup = () => {
                   <Input
                     placeholder="Adaeze"
                     value={firstName}
-                    onChange={event => setFirstName(event.target.value)}
+                    onChange={event => {
+                      setFirstName(event.target.value);
+                      clearError();
+                    }}
                     className="h-12"
                   />
                 </div>
@@ -160,7 +401,10 @@ const Signup = () => {
                   <Input
                     placeholder="Okafor"
                     value={lastName}
-                    onChange={event => setLastName(event.target.value)}
+                    onChange={event => {
+                      setLastName(event.target.value);
+                      clearError();
+                    }}
                     className="h-12"
                   />
                 </div>
@@ -178,48 +422,32 @@ const Signup = () => {
             </div>
           )}
 
-          {step === 'security' && (
-            <div className="space-y-6">
-              <div>
-                <h1 className="font-display text-2xl font-bold">Set Password</h1>
-                <p className="mt-1 text-muted-foreground">
-                  Password must be 8+ characters and include uppercase, lowercase, number, and symbol
-                </p>
-              </div>
+          {step === 'password' && (
+            <div className="flex flex-col items-center pt-10">
+              <PinPad
+                key={passwordPadKey}
+                length={6}
+                title="Create your password"
+                subtitle="Use a 6-digit number to sign in"
+                error={error}
+                disabled={loading}
+                onInput={clearError}
+                onComplete={handlePasswordComplete}
+              />
+            </div>
+          )}
 
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Password</Label>
-                  <Input
-                    type="password"
-                    value={password}
-                    onChange={event => setPassword(event.target.value)}
-                    placeholder="Create a password"
-                    className="h-12"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Confirm Password</Label>
-                  <Input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={event => setConfirmPassword(event.target.value)}
-                    placeholder="Repeat your password"
-                    className="h-12"
-                  />
-                </div>
-              </div>
-
-              {error && <p className="text-sm text-destructive">{error}</p>}
-
-              <Button
-                className="h-12 w-full"
-                onClick={handleSecuritySubmit}
-                disabled={!password || !confirmPassword || loading}
-              >
-                {loading ? 'Creating Account...' : 'Create Account'}
-              </Button>
+          {step === 'pin' && (
+            <div className="flex flex-col items-center pt-10">
+              <PinPad
+                key={pinPadKey}
+                title="Create your PIN"
+                subtitle={loading ? 'Creating account...' : 'Use a 4-digit PIN to secure your account'}
+                error={error}
+                disabled={loading}
+                onInput={clearError}
+                onComplete={handlePinComplete}
+              />
             </div>
           )}
         </motion.div>

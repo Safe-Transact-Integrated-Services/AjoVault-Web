@@ -1,6 +1,15 @@
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, AlertTriangle, Bell, Info, LoaderCircle, Trophy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bell, AlertTriangle, Trophy, Info } from 'lucide-react';
-import { mockNotifications, formatDate, formatTime } from '@/services/mockData';
+import { Button } from '@/components/ui/button';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
+import { dashboardKeys } from '@/services/dashboardApi';
+import {
+  getMyNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  notificationKeys,
+} from '@/services/notificationsApi';
 
 const iconMap = {
   reminder: Bell,
@@ -16,8 +25,44 @@ const colorMap = {
   info: 'bg-primary/10 text-primary',
 };
 
+const formatNotificationDate = (value: string) => {
+  const date = new Date(value);
+  return `${date.toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })} | ${date.toLocaleTimeString('en-NG', {
+    hour: 'numeric',
+    minute: '2-digit',
+  })}`;
+};
+
 const Notifications = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const notificationsQuery = useQuery({
+    queryKey: notificationKeys.feed,
+    queryFn: getMyNotifications,
+  });
+
+  const notifications = notificationsQuery.data?.items ?? [];
+  const unreadCount = notificationsQuery.data?.unreadCount ?? 0;
+
+  const handleNotificationClick = async (notificationId: string, link?: string) => {
+    await markNotificationRead(notificationId);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: notificationKeys.feed }),
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.summary }),
+    ]);
+
+    if (link) {
+      navigate(link);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    await markAllNotificationsRead();
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: notificationKeys.feed }),
+      queryClient.invalidateQueries({ queryKey: dashboardKeys.summary }),
+    ]);
+  };
 
   return (
     <div className="min-h-screen px-4 py-6 safe-top">
@@ -25,26 +70,52 @@ const Notifications = () => {
         <ArrowLeft className="h-4 w-4" /> Back
       </button>
 
-      <h1 className="font-display text-2xl font-bold mb-4">Notifications</h1>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-bold">Notifications</h1>
+          <p className="text-sm text-muted-foreground">{unreadCount} unread</p>
+        </div>
+        <Button variant="outline" onClick={handleMarkAllRead} disabled={unreadCount === 0 || notificationsQuery.isLoading}>
+          Mark all read
+        </Button>
+      </div>
+
+      {notificationsQuery.isLoading && (
+        <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+          <LoaderCircle className="h-4 w-4 animate-spin" />
+          Loading notifications...
+        </div>
+      )}
+
+      {!notificationsQuery.isLoading && notifications.length === 0 && (
+        <EmptyTableState
+          title="No notifications yet"
+          description="Savings, circles, group-goal, and account activity will appear here."
+        />
+      )}
 
       <div className="space-y-2">
-        {mockNotifications.map(n => {
-          const Icon = iconMap[n.type];
+        {notifications.map(notification => {
+          const Icon = iconMap[notification.type];
           return (
             <button
-              key={n.id}
-              onClick={() => n.link && navigate(n.link)}
-              className={`flex w-full items-start gap-3 rounded-xl border bg-card p-4 text-left transition-colors ${n.read ? 'border-border' : 'border-accent/30 bg-accent/5'}`}
+              key={notification.id}
+              onClick={() => void handleNotificationClick(notification.id, notification.link)}
+              className={`flex w-full items-start gap-3 rounded-xl border bg-card p-4 text-left transition-colors ${
+                notification.read ? 'border-border' : 'border-accent/30 bg-accent/5'
+              }`}
             >
-              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${colorMap[n.type]}`}>
+              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${colorMap[notification.type]}`}>
                 <Icon className="h-4 w-4" />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium ${n.read ? 'text-foreground' : 'text-foreground font-semibold'}`}>{n.title}</p>
-                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
-                <p className="text-[10px] text-muted-foreground mt-1">{formatDate(n.date)} · {formatTime(n.date)}</p>
+              <div className="min-w-0 flex-1">
+                <p className={`text-sm ${notification.read ? 'font-medium' : 'font-semibold'} text-foreground`}>
+                  {notification.title}
+                </p>
+                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{notification.message}</p>
+                <p className="mt-1 text-[10px] text-muted-foreground">{formatNotificationDate(notification.date)}</p>
               </div>
-              {!n.read && <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-accent" />}
+              {!notification.read && <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-accent" />}
             </button>
           );
         })}

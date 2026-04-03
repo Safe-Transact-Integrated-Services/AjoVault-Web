@@ -18,7 +18,7 @@ export interface Agent {
 
 export interface AgentTransaction {
   id: string;
-  type: 'cash_in' | 'cash_out' | 'registration' | 'bill_payment';
+  type: 'cash_in' | 'cash_out' | 'transfer' | 'registration' | 'bill_payment' | 'balance_enquiry' | 'mini_statement' | 'savings' | 'circle' | 'group_goal';
   customerName: string;
   customerPhone: string;
   amount: number;

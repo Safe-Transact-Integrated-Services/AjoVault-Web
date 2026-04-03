@@ -1,148 +1,362 @@
 import { useState } from 'react';
-import { ArrowLeft, ArrowDownLeft, ArrowUpRight, FileText } from 'lucide-react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, BadgeCheck, RefreshCcw, ShieldCheck } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card } from '@/components/ui/card';
 import PinPad from '@/components/shared/PinPad';
-import Receipt from '@/components/shared/Receipt';
-import { formatCurrency } from '@/services/agentMockData';
-import { cn } from '@/lib/utils';
-import { motion, AnimatePresence } from 'framer-motion';
+import { executeAgentTransaction, finalizeAgentTransfer, previewAgentTransaction, type AgentTransactionPreview, type AgentTransactionReceipt } from '@/services/agentApi';
+import { getApiErrorMessage } from '@/lib/api/http';
 
-type TxnType = 'cash_in' | 'cash_out' | 'bill';
-type Step = 'form' | 'confirm' | 'pin' | 'receipt';
+const currency = new Intl.NumberFormat('en-NG', {
+  style: 'currency',
+  currency: 'NGN',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
 
-const txnConfig = {
-  cash_in: { label: 'Cash In (Deposit)', icon: ArrowDownLeft, color: 'text-success', desc: 'Receive cash from customer and credit their wallet' },
-  cash_out: { label: 'Cash Out (Withdrawal)', icon: ArrowUpRight, color: 'text-destructive', desc: 'Debit customer wallet and give cash' },
-  bill: { label: 'Bill Payment', icon: FileText, color: 'text-warning', desc: 'Pay bills on behalf of customer' },
+const getTransactionLabel = (transactionType: string) => {
+  switch (transactionType) {
+    case 'cash_in':
+      return 'Cash-in';
+    case 'cash_out':
+      return 'Cash-out';
+    case 'transfer':
+      return 'Local transfer';
+    case 'bill_payment':
+      return 'Bill payment';
+    case 'balance_enquiry':
+      return 'Balance enquiry';
+    case 'mini_statement':
+      return 'Mini statement';
+    case 'savings':
+      return 'Savings contribution';
+    case 'circle':
+      return 'Circle contribution';
+    case 'group_goal':
+      return 'Group goal contribution';
+    default:
+      return 'Agent service';
+  }
 };
 
 const AgentTransact = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const initialType = (searchParams.get('type') as TxnType) || 'cash_in';
+  const [customerIdentifier, setCustomerIdentifier] = useState('');
+  const [authorizationCode, setAuthorizationCode] = useState('');
+  const [preview, setPreview] = useState<AgentTransactionPreview | null>(null);
+  const [receipt, setReceipt] = useState<AgentTransactionReceipt | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [finalizingOtp, setFinalizingOtp] = useState(false);
+  const [otpPadKey, setOtpPadKey] = useState(0);
+  const [error, setError] = useState('');
+  const isZeroDebitService = (transactionType: string, amount: number) =>
+    (transactionType === 'balance_enquiry' || transactionType === 'mini_statement') && amount <= 0;
 
-  const [type, setType] = useState<TxnType>(initialType);
-  const [step, setStep] = useState<Step>('form');
-  const [phone, setPhone] = useState('');
-  const [amount, setAmount] = useState('');
-  const [customerName, setCustomerName] = useState('');
-
-  const config = txnConfig[type];
-  const commission = type === 'bill' ? Math.floor(Number(amount) * 0.02) : Math.floor(Number(amount) * 0.01);
-
-  const handleSubmit = () => {
-    if (phone && amount && customerName) setStep('confirm');
+  const reset = () => {
+    setPreview(null);
+    setReceipt(null);
+    setError('');
+    setCustomerIdentifier('');
+    setAuthorizationCode('');
   };
 
-  const handleConfirm = () => setStep('pin');
+  const handlePreview = async () => {
+    setLoadingPreview(true);
+    setError('');
+    setReceipt(null);
 
-  const handlePinComplete = async () => {
-    await new Promise(r => setTimeout(r, 800));
-    setStep('receipt');
+    try {
+      const response = await previewAgentTransaction({
+        customerIdentifier,
+        authorizationCode,
+      });
+      setPreview(response);
+    } catch (err) {
+      setPreview(null);
+      setError(getApiErrorMessage(err, 'Unable to preview this authorized transaction.'));
+    } finally {
+      setLoadingPreview(false);
+    }
   };
 
-  if (step === 'receipt') {
-    return (
-      <Receipt
-        status="completed"
-        amount={Number(amount)}
-        description={`${config.label} for ${customerName}`}
-        reference={`AJO-${type.toUpperCase().slice(0, 2)}-${Date.now().toString().slice(-6)}`}
-        date={new Date().toISOString()}
-        details={[
-          { label: 'Customer', value: customerName },
-          { label: 'Phone', value: phone },
-          { label: 'Commission', value: formatCurrency(commission) },
-        ]}
-      />
-    );
-  }
+  const handleExecute = async () => {
+    setSubmitting(true);
+    setError('');
 
-  if (step === 'pin') {
-    return (
-      <div className="min-h-screen px-6 py-6">
-        <button onClick={() => setStep('confirm')} className="mb-6 flex items-center gap-1 text-sm text-muted-foreground">
-          <ArrowLeft className="h-4 w-4" /> Back
-        </button>
-        <div className="flex flex-col items-center pt-10">
-          <PinPad title="Enter Agent PIN" subtitle="Confirm this transaction" onComplete={handlePinComplete} />
-        </div>
-      </div>
-    );
-  }
+    try {
+      const response = await executeAgentTransaction({
+        customerIdentifier,
+        authorizationCode,
+      });
+      setReceipt(response);
+      if (response.requiresOtp) {
+        setOtpPadKey(current => current + 1);
+      }
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Unable to complete this agent transaction.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleFinalizeTransferOtp = async (otp: string) => {
+    if (!receipt) {
+      return;
+    }
+
+    setFinalizingOtp(true);
+    setError('');
+
+    try {
+      const response = await finalizeAgentTransfer({
+        customerIdentifier,
+        reference: receipt.reference,
+        otp,
+      });
+      setReceipt(response);
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Unable to finalize this assisted transfer.'));
+      setOtpPadKey(current => current + 1);
+    } finally {
+      setFinalizingOtp(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen px-5 py-6 space-y-6">
-      <button onClick={() => step === 'confirm' ? setStep('form') : navigate('/agent')} className="flex items-center gap-1 text-sm text-muted-foreground">
+    <div className="space-y-5 px-5 py-6">
+      <button onClick={() => navigate('/agent')} className="flex items-center gap-1 text-sm text-muted-foreground">
         <ArrowLeft className="h-4 w-4" /> Back
       </button>
 
-      <AnimatePresence mode="wait">
-        {step === 'form' && (
-          <motion.div key="form" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
+      <div>
+        <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+          <ShieldCheck className="h-7 w-7 text-primary" />
+        </div>
+        <h1 className="font-display text-2xl font-bold">Agent Transactions</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Complete customer-authorized cash services, balance enquiries, mini statements, bill payments, and assisted contributions. Amount, type, and target are locked by the backend.
+        </p>
+      </div>
+
+      <Card className="space-y-4 p-5">
+        <div className="space-y-2">
+          <Label htmlFor="customerIdentifier">Customer Phone or Email</Label>
+          <Input
+            id="customerIdentifier"
+            className="h-12"
+            placeholder="+2348012345678 or customer@email.com"
+            value={customerIdentifier}
+            onChange={event => setCustomerIdentifier(event.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="authorizationCode">Authorization Code</Label>
+          <Input
+            id="authorizationCode"
+            inputMode="numeric"
+            maxLength={6}
+            className="h-12 text-center font-mono tracking-[0.35em]"
+            placeholder="123456"
+            value={authorizationCode}
+            onChange={event => setAuthorizationCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+          />
+        </div>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        <div className="grid grid-cols-2 gap-3">
+          <Button
+            variant="outline"
+            className="h-12"
+            disabled={loadingPreview || !customerIdentifier.trim() || authorizationCode.trim().length !== 6}
+            onClick={() => void handlePreview()}
+          >
+            {loadingPreview ? 'Checking...' : 'Preview'}
+          </Button>
+          <Button className="h-12" variant="ghost" onClick={reset}>
+            Reset
+          </Button>
+        </div>
+      </Card>
+
+      {preview && (
+        <Card className="space-y-4 p-5">
+          <div className="flex items-center justify-between">
             <div>
-              <h1 className="font-display text-xl font-bold">Agent Transaction</h1>
-              <p className="text-sm text-muted-foreground mt-1">Process customer transactions</p>
+              <p className="text-xs text-muted-foreground">Customer</p>
+              <p className="text-sm font-semibold">{preview.customerName}</p>
+              <p className="text-xs text-muted-foreground">{preview.customerPhoneNumber ?? preview.customerEmail ?? 'No contact'}</p>
             </div>
+            <span className="rounded-full bg-accent/10 px-2.5 py-1 text-[11px] font-semibold capitalize text-accent">
+              {getTransactionLabel(preview.transactionType)}
+            </span>
+          </div>
 
-            {/* Type Selector */}
-            <div className="grid grid-cols-3 gap-2">
-              {(Object.entries(txnConfig) as [TxnType, typeof config][]).map(([key, cfg]) => (
-                <button
-                  key={key}
-                  onClick={() => setType(key)}
-                  className={cn(
-                    'flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 transition-all',
-                    type === key ? 'border-accent bg-accent/5' : 'border-border'
-                  )}
-                >
-                  <cfg.icon className={cn('h-5 w-5', cfg.color)} />
-                  <span className="text-xs font-medium">{cfg.label.split(' (')[0]}</span>
-                </button>
-              ))}
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground">Amount</p>
+              <p className="font-medium">{isZeroDebitService(preview.transactionType, preview.amount) ? 'No wallet debit' : currency.format(preview.amount)}</p>
             </div>
-
-            <p className="text-xs text-muted-foreground bg-muted rounded-lg p-3">{config.desc}</p>
-
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Customer Name</Label>
-                <Input placeholder="Full name" value={customerName} onChange={e => setCustomerName(e.target.value)} className="h-12" />
-              </div>
-              <div className="space-y-2">
-                <Label>Customer Phone</Label>
-                <Input placeholder="+234 800 000 0000" value={phone} onChange={e => setPhone(e.target.value)} type="tel" className="h-12" />
-              </div>
-              <div className="space-y-2">
-                <Label>Amount (₦)</Label>
-                <Input placeholder="0" value={amount} onChange={e => setAmount(e.target.value.replace(/\D/g, ''))} type="text" inputMode="numeric" className="h-12 text-lg font-semibold" />
-              </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Expires</p>
+              <p className="font-medium">{new Date(preview.expiresAtUtc).toLocaleTimeString()}</p>
             </div>
+          </div>
 
-            <Button className="w-full h-12" onClick={handleSubmit} disabled={!phone || !amount || !customerName}>
-              Continue
+          {preview.targetName ? (
+            <div className="rounded-xl bg-muted/60 p-3 text-sm">
+              <p className="text-xs text-muted-foreground">Locked Target</p>
+              <p className="font-medium">{preview.targetName}</p>
+              {preview.targetDescription ? (
+                <p className="mt-1 text-xs text-muted-foreground">{preview.targetDescription}</p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="rounded-xl bg-muted/60 p-3 text-xs text-muted-foreground">
+            Use the execute button only after you have confirmed the customer is present and ready for this authorized service.
+          </div>
+
+          {!receipt ? (
+            <Button className="h-12 w-full" disabled={submitting} onClick={() => void handleExecute()}>
+              {submitting ? 'Processing...' : 'Execute Service'}
             </Button>
-          </motion.div>
-        )}
+          ) : null}
+        </Card>
+      )}
 
-        {step === 'confirm' && (
-          <motion.div key="confirm" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
-            <h1 className="font-display text-xl font-bold">Confirm Transaction</h1>
-            <Card className="p-4 space-y-3">
-              <div className="flex justify-between"><span className="text-sm text-muted-foreground">Type</span><span className="text-sm font-medium">{config.label}</span></div>
-              <div className="flex justify-between"><span className="text-sm text-muted-foreground">Customer</span><span className="text-sm font-medium">{customerName}</span></div>
-              <div className="flex justify-between"><span className="text-sm text-muted-foreground">Phone</span><span className="text-sm font-medium">{phone}</span></div>
-              <div className="flex justify-between border-t border-border pt-3"><span className="text-sm text-muted-foreground">Amount</span><span className="text-lg font-bold">{formatCurrency(Number(amount))}</span></div>
-              <div className="flex justify-between"><span className="text-sm text-muted-foreground">Your Commission</span><span className="text-sm font-semibold text-success">+{formatCurrency(commission)}</span></div>
-            </Card>
-            <Button className="w-full h-12" onClick={handleConfirm}>Confirm & Enter PIN</Button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {receipt?.requiresOtp ? (
+        <Card className="space-y-4 border-warning/20 bg-warning/5 p-5">
+          <div>
+            <p className="text-sm font-semibold">Provider OTP Required</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Complete the transfer to {receipt.destinationAccountName ?? receipt.targetName ?? 'the destination account'} with the 6-digit Paystack OTP.
+            </p>
+          </div>
+
+          {receipt.destinationBankName || receipt.destinationAccountNumber ? (
+            <div className="rounded-xl bg-background/70 p-3 text-sm">
+              {receipt.destinationBankName ? <p className="font-medium">{receipt.destinationBankName}</p> : null}
+              {receipt.destinationAccountNumber ? <p className="text-xs text-muted-foreground">{receipt.destinationAccountNumber}</p> : null}
+            </div>
+          ) : null}
+
+          <div className="py-2">
+            <PinPad
+              key={otpPadKey}
+              length={6}
+              title="Provider OTP"
+              subtitle="Enter the Paystack transfer OTP"
+              error={error}
+              disabled={finalizingOtp}
+              onInput={() => error && setError('')}
+              onComplete={handleFinalizeTransferOtp}
+            />
+          </div>
+        </Card>
+      ) : null}
+
+      {receipt && !receipt.requiresOtp && (
+        <Card className="space-y-4 border-success/20 bg-success/5 p-5">
+          <div className="flex items-center gap-2">
+            <BadgeCheck className="h-5 w-5 text-success" />
+            <h2 className="font-display text-xl font-bold">Service Completed</h2>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground">Customer</p>
+              <p className="font-medium">{receipt.customerName}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Reference</p>
+              <p className="font-medium">{receipt.reference}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Service</p>
+              <p className="font-medium">{getTransactionLabel(receipt.transactionType)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Amount</p>
+              <p className="font-medium">{isZeroDebitService(receipt.transactionType, receipt.amount) ? 'No wallet debit' : currency.format(receipt.amount)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Commission</p>
+              <p className="font-medium">{currency.format(receipt.commissionEarned)}</p>
+            </div>
+            {receipt.targetName ? (
+              <div>
+                <p className="text-xs text-muted-foreground">Target</p>
+                <p className="font-medium">{receipt.targetName}</p>
+                {receipt.targetDescription ? (
+                  <p className="text-xs text-muted-foreground">{receipt.targetDescription}</p>
+                ) : null}
+              </div>
+            ) : null}
+            {receipt.destinationBankName ? (
+              <div>
+                <p className="text-xs text-muted-foreground">Bank</p>
+                <p className="font-medium">{receipt.destinationBankName}</p>
+              </div>
+            ) : null}
+            {receipt.destinationAccountNumber ? (
+              <div>
+                <p className="text-xs text-muted-foreground">Account Number</p>
+                <p className="font-medium">{receipt.destinationAccountNumber}</p>
+              </div>
+            ) : null}
+            <div>
+              <p className="text-xs text-muted-foreground">Customer Balance After</p>
+              <p className="font-medium">{currency.format(receipt.customerBalanceAfter)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Agent Float After</p>
+              <p className="font-medium">{currency.format(receipt.agentFloatBalanceAfter)}</p>
+            </div>
+          </div>
+
+          {receipt.message ? (
+            <div className="rounded-xl bg-background/70 p-3 text-xs text-muted-foreground">
+              {receipt.message}
+            </div>
+          ) : null}
+
+          {receipt.statementItems?.length ? (
+            <div className="space-y-3 rounded-xl bg-background/70 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recent Wallet Entries</p>
+              <div className="space-y-2">
+                {receipt.statementItems.map(item => (
+                  <div key={item.entryId} className="rounded-lg border border-border/70 p-3 text-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium">{item.description}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(item.createdAtUtc).toLocaleString()} | {item.direction.toLowerCase()} | {item.status.toLowerCase()}
+                        </p>
+                      </div>
+                      <p className="font-medium">{currency.format(item.amount)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-2 gap-3">
+            <Button variant="outline" className="h-12" onClick={() => navigate('/agent/history')}>
+              View History
+            </Button>
+            <Button className="h-12" onClick={reset}>
+              <RefreshCcw className="mr-2 h-4 w-4" />
+              New Transaction
+            </Button>
+          </div>
+        </Card>
+      )}
     </div>
   );
 };

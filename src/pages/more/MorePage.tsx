@@ -1,14 +1,16 @@
 import { useNavigate } from 'react-router-dom';
-import { Bell, ChevronRight, CreditCard, FileText, HelpCircle, LogOut, Shield, User } from 'lucide-react';
+import { Bell, ChevronRight, CreditCard, FileText, HelpCircle, KeyRound, LogOut, Shield, User, Wallet } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 const menuItems = [
   { icon: User, label: 'Profile', path: '/more/profile' },
+  { icon: Wallet, label: 'Wallet', path: '/wallet' },
   { icon: Shield, label: 'KYC Verification', path: '/more/kyc' },
   { icon: CreditCard, label: 'Credit Passport', path: '/credit-passport' },
   { icon: Bell, label: 'Notifications', path: '/notifications' },
+  { icon: KeyRound, label: 'Agent Access Code', path: '/more/agent-access' },
   { icon: FileText, label: 'Settings', path: '/more/settings' },
-  { icon: HelpCircle, label: 'Help & Support', path: '/more/settings' },
+  { icon: HelpCircle, label: 'Help & Support', path: '/more/help' },
 ];
 
 const MorePage = () => {
@@ -25,7 +27,7 @@ const MorePage = () => {
         </div>
         <div className="flex-1">
           <p className="font-semibold text-foreground">{user?.firstName} {user?.lastName}</p>
-          <p className="text-sm text-muted-foreground">{user?.phone}</p>
+          <p className="text-sm text-muted-foreground">{user?.phone || user?.email || 'No primary contact yet'}</p>
         </div>
         <ChevronRight className="h-5 w-5 text-muted-foreground" />
       </button>

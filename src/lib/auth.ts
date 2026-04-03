@@ -10,3 +10,10 @@ export const getDefaultAuthenticatedPath = (user: Pick<User, 'role'>) => {
       return '/dashboard';
   }
 };
+
+export const getDefaultUserLoginPath = (user: Pick<User, 'role'>) => {
+  switch (user.role) {
+    default:
+      return '/dashboard';
+  }
+};

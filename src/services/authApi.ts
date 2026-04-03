@@ -8,6 +8,7 @@ interface IdentityUserProfileResponse {
   email: string;
   phoneNumber?: string | null;
   role: string;
+  kycTier: User['kycTier'];
   isActive: boolean;
   createdAtUtc: string;
   lastLoginAtUtc?: string | null;
@@ -39,18 +40,75 @@ interface RefreshTokenResponse {
   refreshTokenExpiresAtUtc: string;
 }
 
+interface UpdateMyProfileRequest {
+  fullName: string;
+  phoneNumber?: string | null;
+}
+
+export interface SubmitKycNinInput {
+  nin: string;
+}
+
+export interface SubmitKycBvnInput {
+  bvn: string;
+  accountNumber: string;
+  bankCode: string;
+}
+
+export interface KycVerificationResponse {
+  status: 'pending' | 'verified';
+  kycTier: User['kycTier'];
+  provider: string;
+  message: string;
+  bvnLast4?: string | null;
+  ninLast4?: string | null;
+  submittedAtUtc: string;
+}
+
+export interface OtpChallengeResponse {
+  message: string;
+  defaultOtp: string;
+  expiresAtUtc: string;
+}
+
+export interface OtpVerificationResponse {
+  verified: boolean;
+  message: string;
+}
+
+export interface AuthContactInput {
+  email?: string;
+  phoneNumber?: string;
+}
+
 export interface SignupInput {
+  email?: string;
+  phoneNumber?: string;
   firstName: string;
   lastName: string;
-  phoneNumber: string;
-  email?: string;
   password: string;
+  pin: string;
+}
+
+export interface UpdateProfileInput {
+  firstName: string;
+  lastName: string;
+  phone: string;
 }
 
 export interface AuthResult {
   user: User;
   session: AuthSession;
 }
+
+const normalizeIdentityEmail = (email?: string | null) => {
+  const value = email?.trim();
+  if (!value || value.endsWith('@phone.ajovault.local')) {
+    return undefined;
+  }
+
+  return value;
+};
 
 const normalizeIdentifierPayload = (identifier: string) => {
   const value = identifier.trim();
@@ -60,6 +118,16 @@ const normalizeIdentifierPayload = (identifier: string) => {
   }
 
   return { phoneNumber: value };
+};
+
+const normalizeContactPayload = (input: AuthContactInput) => {
+  const email = input.email?.trim() || undefined;
+  const phoneNumber = input.phoneNumber?.trim() || undefined;
+
+  return {
+    email,
+    phoneNumber,
+  };
 };
 
 const splitFullName = (fullName: string) => {
@@ -79,8 +147,8 @@ export const mapIdentityProfileToUser = (profile: IdentityUserProfileResponse): 
     firstName,
     lastName,
     phone: profile.phoneNumber ?? '',
-    email: profile.email || undefined,
-    kycTier: 'none',
+    email: normalizeIdentityEmail(profile.email),
+    kycTier: profile.kycTier,
     creditScore: 0,
     role: profile.role,
     isActive: profile.isActive,
@@ -95,6 +163,23 @@ const mapSession = (response: LoginUserResponse | RefreshTokenResponse): AuthSes
   refreshToken: response.refreshToken,
   refreshTokenExpiresAt: response.refreshTokenExpiresAtUtc,
 });
+
+export const requestOtp = (input: AuthContactInput) =>
+  apiRequest<OtpChallengeResponse>('/api/identity/request-otp', {
+    method: 'POST',
+    auth: false,
+    json: normalizeContactPayload(input),
+  });
+
+export const verifyOtp = (input: AuthContactInput, otp: string) =>
+  apiRequest<OtpVerificationResponse>('/api/identity/verify-otp', {
+    method: 'POST',
+    auth: false,
+    json: {
+      ...normalizeContactPayload(input),
+      otp,
+    },
+  });
 
 export const loginUser = async (identifier: string, password: string): Promise<AuthResult> => {
   const response = await apiRequest<LoginUserResponse>('/api/identity/login', {
@@ -117,11 +202,11 @@ export const registerUser = async (input: SignupInput) => {
     method: 'POST',
     auth: false,
     json: {
+      ...normalizeContactPayload(input),
       firstName: input.firstName.trim(),
       lastName: input.lastName.trim(),
-      email: input.email?.trim() || undefined,
-      phoneNumber: input.phoneNumber.trim(),
       password: input.password,
+      pin: input.pin,
     },
   });
 
@@ -142,6 +227,38 @@ export const getCurrentUser = async (): Promise<User> => {
   const response = await apiRequest<IdentityUserProfileResponse>('/api/identity/me');
   return mapIdentityProfileToUser(response);
 };
+
+export const updateCurrentUser = async (input: UpdateProfileInput): Promise<User> => {
+  const payload: UpdateMyProfileRequest = {
+    fullName: `${input.firstName.trim()} ${input.lastName.trim()}`.trim(),
+    phoneNumber: input.phone.trim() || null,
+  };
+
+  const response = await apiRequest<IdentityUserProfileResponse>('/api/identity/me', {
+    method: 'PUT',
+    json: payload,
+  });
+
+  return mapIdentityProfileToUser(response);
+};
+
+export const submitKycNinVerification = (input: SubmitKycNinInput) =>
+  apiRequest<KycVerificationResponse>('/api/identity/me/kyc/nin', {
+    method: 'POST',
+    json: {
+      nin: input.nin.trim(),
+    },
+  });
+
+export const submitKycBvnVerification = (input: SubmitKycBvnInput) =>
+  apiRequest<KycVerificationResponse>('/api/identity/me/kyc/bvn', {
+    method: 'POST',
+    json: {
+      bvn: input.bvn.trim(),
+      accountNumber: input.accountNumber.trim(),
+      bankCode: input.bankCode,
+    },
+  });
 
 export const logoutUser = async (refreshToken: string) => {
   await apiRequest('/api/identity/logout', {

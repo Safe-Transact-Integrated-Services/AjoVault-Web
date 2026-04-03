@@ -8,14 +8,8 @@ import { Label } from '@/components/ui/label';
 const JoinCircle = () => {
   const navigate = useNavigate();
   const [code, setCode] = useState('');
-  const [loading, setLoading] = useState(false);
 
-  const handleJoin = async () => {
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 1000));
-    setLoading(false);
-    navigate('/circles');
-  };
+  const normalizedCode = code.trim().toUpperCase();
 
   return (
     <div className="min-h-screen px-4 py-6 safe-top">
@@ -26,20 +20,27 @@ const JoinCircle = () => {
       <div className="space-y-6">
         <div>
           <h1 className="font-display text-2xl font-bold">Join a Circle</h1>
-          <p className="mt-1 text-muted-foreground">Enter the invite code shared with you</p>
+          <p className="mt-1 text-muted-foreground">Enter the invite code shared with you.</p>
         </div>
+
         <div className="space-y-2">
-          <Label>Invite Code</Label>
+          <Label htmlFor="circle-invite-code">Invite Code</Label>
           <Input
-            value={code}
-            onChange={e => setCode(e.target.value.toUpperCase())}
+            id="circle-invite-code"
+            value={normalizedCode}
+            onChange={event => setCode(event.target.value)}
             placeholder="AJO-XXXXXX"
-            className="h-14 text-center text-xl font-mono tracking-wider"
-            maxLength={10}
+            className="h-14 text-center font-mono text-xl tracking-wider"
+            maxLength={12}
           />
         </div>
-        <Button className="w-full h-12" onClick={handleJoin} disabled={code.length < 6 || loading}>
-          {loading ? 'Joining...' : 'Join Circle'}
+
+        <Button
+          className="h-12 w-full"
+          onClick={() => navigate(`/circles/join/${encodeURIComponent(normalizedCode)}`)}
+          disabled={normalizedCode.length < 8}
+        >
+          Continue
         </Button>
       </div>
     </div>
