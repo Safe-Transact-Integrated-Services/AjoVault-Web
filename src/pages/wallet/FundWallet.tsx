@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, ArrowLeft, Building2, LoaderCircle, ShieldCheck, Wallet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import {
   getPaymentCheckoutStatus,
   initializePaymentCheckout,
+  quoteWalletFunding,
   type PaymentCheckoutStatusResponse,
 } from '@/services/paymentApi';
 import { ensureWalletVirtualAccount, getMyWallet, walletKeys } from '@/services/walletApi';
@@ -35,21 +36,21 @@ const FundWallet = () => {
   });
   const [step, setStep] = useState<Step>('amount');
   const [amount, setAmount] = useState('');
-  const [customerEmail, setCustomerEmail] = useState(user?.email ?? '');
   const [error, setError] = useState('');
   const [isLaunchingCheckout, setIsLaunchingCheckout] = useState(false);
   const [isProvisioningVirtualAccount, setIsProvisioningVirtualAccount] = useState(false);
   const [receipt, setReceipt] = useState<PaymentCheckoutStatusResponse | null>(null);
 
-  useEffect(() => {
-    if (user?.email && !customerEmail) {
-      setCustomerEmail(user.email);
-    }
-  }, [customerEmail, user?.email]);
-
   const amountValue = Number(amount || '0');
-  const normalizedEmail = customerEmail.trim();
+  const fundingQuoteQuery = useQuery({
+    queryKey: ['payments', 'wallet-funding-quote', amountValue],
+    queryFn: () => quoteWalletFunding({ amount: amountValue, currency: 'NGN' }),
+    enabled: Number.isFinite(amountValue) && amountValue >= 100,
+    staleTime: 30 * 1000,
+  });
+  const normalizedEmail = user?.email?.trim() ?? '';
   const displayAmount = formatCurrency(amountValue || 0);
+  const fundingQuote = fundingQuoteQuery.data;
   const fundingOptions = walletQuery.data?.fundingOptions;
   const providerName = toProviderLabel(fundingOptions?.checkoutProvider);
   const transferAccountProviderName = toProviderLabel(fundingOptions?.transferAccountProvider);
@@ -61,7 +62,7 @@ const FundWallet = () => {
     }
 
     if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
-      return `Provide a valid email address for ${providerName} checkout.`;
+      return 'Add a valid email address to your profile before funding your wallet.';
     }
 
     return null;
@@ -155,6 +156,10 @@ const FundWallet = () => {
         details={[
           { label: 'Provider', value: receipt.provider },
           { label: 'Email', value: receipt.customerEmail },
+          { label: 'Wallet Credit', value: formatCurrency(receipt.fundingAmount) },
+          { label: 'Service Fee', value: formatCurrency(receipt.serviceFee) },
+          { label: 'Estimated Processor Fee', value: formatCurrency(receipt.processorFeeEstimate) },
+          { label: 'Total Charge', value: formatCurrency(receipt.totalCharge) },
           { label: 'Purpose', value: 'Wallet funding' },
           ...(receipt.gatewayResponse ? [{ label: 'Gateway', value: receipt.gatewayResponse }] : []),
         ]}
@@ -229,23 +234,14 @@ const FundWallet = () => {
             ))}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="wallet-funding-email">Payment Email</Label>
-            <Input
-              id="wallet-funding-email"
-              type="email"
-              placeholder="you@example.com"
-              value={customerEmail}
-              onChange={event => {
-                setCustomerEmail(event.target.value);
-                if (error) {
-                  setError('');
-                }
-              }}
-              className="h-12"
-            />
-            <p className="text-xs text-muted-foreground">{providerName} requires an email address for wallet funding.</p>
-          </div>
+          {fundingQuote && (
+            <Card className="space-y-2 rounded-2xl border-border bg-card p-4 text-sm">
+              <SummaryRow label="Wallet credit" value={formatCurrency(fundingQuote.fundingAmount)} />
+              <SummaryRow label="Service fee" value={formatCurrency(fundingQuote.serviceFee)} />
+              <SummaryRow label="Estimated processor fee" value={formatCurrency(fundingQuote.processorFeeEstimate)} />
+              <SummaryRow label="Total charge" value={formatCurrency(fundingQuote.totalCharge)} />
+            </Card>
+          )}
 
           {fundingOptions?.transferAccountEnabled && (
             <Card className="space-y-4 rounded-2xl border-border bg-card p-4">
@@ -322,6 +318,10 @@ const FundWallet = () => {
             <div className="grid gap-3 rounded-xl border border-border bg-background/80 p-4 text-sm">
               <SummaryRow label="Provider" value={providerName} />
               <SummaryRow label="Email" value={normalizedEmail} />
+              <SummaryRow label="Wallet Credit" value={formatCurrency(fundingQuote?.fundingAmount ?? amountValue)} />
+              <SummaryRow label="Service Fee" value={formatCurrency(fundingQuote?.serviceFee ?? 0)} />
+              <SummaryRow label="Estimated Processor Fee" value={formatCurrency(fundingQuote?.processorFeeEstimate ?? 0)} />
+              <SummaryRow label="Total Charge" value={formatCurrency(fundingQuote?.totalCharge ?? amountValue)} />
               <SummaryRow label="Purpose" value="Wallet funding" />
             </div>
           </Card>

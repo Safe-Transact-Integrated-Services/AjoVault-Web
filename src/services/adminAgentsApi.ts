@@ -25,6 +25,8 @@ export interface AdminAgentApplication {
   lga?: string | null;
   location: string;
   idType: 'nin' | 'drivers' | 'voters' | 'passport';
+  idDocumentName?: string | null;
+  idDocumentDataUrl?: string | null;
   status: 'pending' | 'approved' | 'rejected';
   reviewNote?: string | null;
   submittedAtUtc: string;

@@ -53,6 +53,8 @@ export interface AgentApplication {
   lga?: string | null;
   location: string;
   idType: 'nin' | 'drivers' | 'voters' | 'passport';
+  idDocumentName?: string | null;
+  idDocumentDataUrl?: string | null;
   status: 'pending' | 'approved' | 'rejected';
   reviewNote?: string | null;
   submittedAtUtc: string;
@@ -74,6 +76,8 @@ export interface SubmitAgentApplicationInput {
   lga?: string;
   location: string;
   idType: AgentApplication['idType'];
+  idDocumentName: string;
+  idDocumentDataUrl: string;
 }
 
 export interface AgentActivity {
@@ -220,6 +224,10 @@ export interface AgentAuthorization {
   destinationAccountNumber?: string | null;
   destinationAccountName?: string | null;
   destinationBankName?: string | null;
+  serviceFee: number;
+  totalCharge: number;
+  agentCommissionAmount: number;
+  platformRevenueAmount: number;
   expiresAtUtc: string;
 }
 
@@ -244,6 +252,10 @@ export interface AgentTransactionPreview {
   currency: string;
   agentCode: string;
   authorizationCode: string;
+  serviceFee: number;
+  totalCharge: number;
+  agentCommissionAmount: number;
+  platformRevenueAmount: number;
   expiresAtUtc: string;
 }
 
@@ -277,7 +289,10 @@ export interface AgentTransactionReceipt {
   reference: string;
   customerBalanceAfter: number;
   agentFloatBalanceAfter: number;
+  serviceFee: number;
+  totalCharge: number;
   commissionEarned: number;
+  platformRevenueAmount: number;
   createdAtUtc: string;
   statementItems?: AgentStatementItem[] | null;
 }
@@ -343,6 +358,8 @@ export const submitAgentApplication = async (input: SubmitAgentApplicationInput)
       lga: input.lga?.trim() || null,
       location: input.location.trim(),
       idType: input.idType,
+      idDocumentName: input.idDocumentName.trim(),
+      idDocumentDataUrl: input.idDocumentDataUrl.trim(),
     },
   });
 

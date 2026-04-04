@@ -55,7 +55,7 @@ const Profile = () => {
   const trimmedFirstName = firstName.trim();
   const trimmedLastName = lastName.trim();
   const trimmedPhone = phone.trim();
-  const hasChanges = trimmedFirstName !== user.firstName || trimmedLastName !== user.lastName || trimmedPhone !== user.phone;
+  const hasChanges = false;
   const canSave = trimmedFirstName.length > 0 && trimmedLastName.length > 0 && !isSaving && hasChanges;
 
   const handleSave = async () => {
@@ -71,7 +71,7 @@ const Profile = () => {
       await updateProfile({
         firstName: trimmedFirstName,
         lastName: trimmedLastName,
-        phone: trimmedPhone,
+        phone: trimmedPhone || user.phone,
       });
       toast('Profile updated successfully.');
     } catch (saveError) {
@@ -125,12 +125,10 @@ const Profile = () => {
             <Input
               id="profile-first-name"
               value={firstName}
-              onChange={event => {
-                setFirstName(event.target.value);
-                setError('');
-              }}
               placeholder="First name"
               className="h-12"
+              readOnly
+              disabled
             />
           </div>
           <div className="space-y-2">
@@ -138,29 +136,27 @@ const Profile = () => {
             <Input
               id="profile-last-name"
               value={lastName}
-              onChange={event => {
-                setLastName(event.target.value);
-                setError('');
-              }}
               placeholder="Last name"
               className="h-12"
+              readOnly
+              disabled
             />
           </div>
         </div>
+        <p className="text-xs text-muted-foreground">First name and last name cannot be changed from this screen.</p>
 
         <div className="space-y-2">
           <Label htmlFor="profile-phone">Phone number</Label>
           <Input
             id="profile-phone"
             value={phone}
-            onChange={event => {
-              setPhone(event.target.value);
-              setError('');
-            }}
             placeholder="08000000000"
             type="tel"
             className="h-12"
+            readOnly
+            disabled
           />
+          <p className="text-xs text-muted-foreground">Phone number cannot be changed from this screen.</p>
         </div>
 
         <div className="space-y-2">

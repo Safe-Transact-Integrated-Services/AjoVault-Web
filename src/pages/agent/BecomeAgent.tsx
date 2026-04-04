@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ArrowLeft, CheckCircle, Shield, Upload, XCircle } from 'lucide-react';
+import { type ChangeEvent, useEffect, useRef, useState } from 'react';
+import { ArrowLeft, CheckCircle, Eye, FileText, Shield, Upload, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,10 +12,12 @@ import { getMyAgentPortalState, submitAgentApplication, type AgentPortalState } 
 import { getApiErrorMessage } from '@/lib/api/http';
 
 type Step = 'info' | 'id' | 'review' | 'submitted';
+const maxAgentDocumentSizeBytes = 1_200_000;
 
 const BecomeAgent = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated, isInitializing } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [step, setStep] = useState<Step>('info');
   const [portalState, setPortalState] = useState<AgentPortalState | null>(null);
   const [loadingState, setLoadingState] = useState(true);
@@ -28,6 +30,8 @@ const BecomeAgent = () => {
   const [lga, setLga] = useState('');
   const [locationText, setLocationText] = useState('');
   const [idType, setIdType] = useState('');
+  const [idDocumentName, setIdDocumentName] = useState('');
+  const [idDocumentDataUrl, setIdDocumentDataUrl] = useState('');
 
   useEffect(() => {
     const fullName = `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim();
@@ -78,6 +82,8 @@ const BecomeAgent = () => {
           setLga(application.lga ?? '');
           setLocationText(application.location);
           setIdType(application.idType);
+          setIdDocumentName(application.idDocumentName ?? '');
+          setIdDocumentDataUrl(application.idDocumentDataUrl ?? '');
         }
 
         if (nextState.profile || application?.status === 'pending' || application?.status === 'approved') {
@@ -123,6 +129,45 @@ const BecomeAgent = () => {
     navigate('/');
   };
 
+  const handleDocumentSelected = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      setError('Only image and PDF documents are supported.');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > maxAgentDocumentSizeBytes) {
+      setError('Document is too large. Keep it below 1.2 MB.');
+      event.target.value = '';
+      return;
+    }
+
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setIdDocumentName(file.name);
+      setIdDocumentDataUrl(dataUrl);
+      setError('');
+    } catch {
+      setError('Unable to read the selected document.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const clearDocument = () => {
+    setIdDocumentName('');
+    setIdDocumentDataUrl('');
+    setError('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const handleSubmit = async () => {
     if (!isAuthenticated) {
       navigate('/login', { state: { from: { pathname: '/agent/apply' } } });
@@ -141,6 +186,8 @@ const BecomeAgent = () => {
         lga,
         location: locationText,
         idType: idType as 'nin' | 'drivers' | 'voters' | 'passport',
+        idDocumentName,
+        idDocumentDataUrl,
       });
 
       setPortalState(nextState);
@@ -201,7 +248,7 @@ const BecomeAgent = () => {
               </Card>
             )}
 
-            <div className="space-y-4">
+              <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>First Name</Label>
@@ -258,15 +305,59 @@ const BecomeAgent = () => {
               </div>
 
               <Card className="space-y-2 p-4 text-xs text-muted-foreground">
-                <p>Document upload and operational verification will be wired in the next agent phase.</p>
-                <button type="button" className="flex w-full flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border py-8 text-muted-foreground">
-                  <Upload className="h-8 w-8" />
-                  <span>Document capture placeholder</span>
+                <p>Upload a clear image or PDF of the identification document you selected.</p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                  onChange={event => void handleDocumentSelected(event)}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex w-full flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border py-8 text-muted-foreground transition-colors hover:border-accent hover:text-foreground"
+                >
+                  {idDocumentDataUrl ? <FileText className="h-8 w-8 text-accent" /> : <Upload className="h-8 w-8" />}
+                  <span>{idDocumentDataUrl ? 'Replace uploaded document' : 'Tap to upload document'}</span>
                 </button>
+                {idDocumentDataUrl && (
+                  <div className="rounded-lg border border-border bg-background p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">{idDocumentName}</p>
+                        <p className="text-[11px] text-muted-foreground">Stored with this application for admin review.</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          asChild
+                        >
+                          <a href={idDocumentDataUrl} target="_blank" rel="noreferrer">
+                            <Eye className="mr-1 h-3.5 w-3.5" />
+                            View
+                          </a>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={clearDocument}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </Card>
             </div>
 
-            <Button className="h-12 w-full" onClick={() => setStep('review')} disabled={!idType}>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+
+            <Button className="h-12 w-full" onClick={() => setStep('review')} disabled={!idType || !idDocumentDataUrl}>
               Continue
             </Button>
           </motion.div>
@@ -284,6 +375,23 @@ const BecomeAgent = () => {
               <div className="flex justify-between"><span className="text-muted-foreground">Location</span><span className="font-medium">{locationText}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">ID Type</span><span className="font-medium capitalize">{idType}</span></div>
             </Card>
+
+            {idDocumentDataUrl && (
+              <Card className="space-y-3 p-4 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-muted-foreground">Uploaded document</p>
+                    <p className="font-medium">{idDocumentName}</p>
+                  </div>
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={idDocumentDataUrl} target="_blank" rel="noreferrer">
+                      <Eye className="mr-1 h-4 w-4" />
+                      View
+                    </a>
+                  </Button>
+                </div>
+              </Card>
+            )}
 
             <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
               Your application will be reviewed by the super-admin team before the agent portal is activated for this account.
@@ -329,6 +437,17 @@ const BecomeAgent = () => {
                   <div className="flex justify-between"><span className="text-muted-foreground">Submitted</span><span className="font-medium">{new Date(portalState.application.submittedAtUtc).toLocaleDateString()}</span></div>
                 </>
               )}
+              {portalState?.application?.idDocumentDataUrl && (
+                <div className="rounded-lg bg-muted p-3 text-left text-xs text-muted-foreground">
+                  <p className="mb-2">Uploaded ID document</p>
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={portalState.application.idDocumentDataUrl} target="_blank" rel="noreferrer">
+                      <Eye className="mr-1 h-3.5 w-3.5" />
+                      Open {portalState.application.idDocumentName ?? 'document'}
+                    </a>
+                  </Button>
+                </div>
+              )}
               {portalState?.application?.reviewNote && (
                 <div className="rounded-lg bg-muted p-3 text-left text-xs text-muted-foreground">
                   Review note: {portalState.application.reviewNote}
@@ -367,5 +486,20 @@ const BecomeAgent = () => {
     </div>
   );
 };
+
+const readFileAsDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+        return;
+      }
+
+      reject(new Error('File could not be read.'));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('File could not be read.'));
+    reader.readAsDataURL(file);
+  });
 
 export default BecomeAgent;

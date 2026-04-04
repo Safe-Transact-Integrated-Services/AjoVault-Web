@@ -15,7 +15,9 @@ import {
   finalizeFundraiserWithdrawal,
   fundraisingKeys,
   getFundraiserManagement,
+  quoteFundraiserWithdrawal,
   type FundraiserWithdrawal,
+  type FundraiserWithdrawalQuote,
 } from '@/services/fundraisingApi';
 import { formatCurrency } from '@/services/mockData';
 
@@ -42,6 +44,13 @@ const FundraiserWithdraw = () => {
 
   const management = managementQuery.data;
   const amountValue = Number(amount || '0');
+  const withdrawalQuoteQuery = useQuery<FundraiserWithdrawalQuote>({
+    queryKey: ['fundraising', 'withdrawal-quote', id, amountValue],
+    queryFn: () => quoteFundraiserWithdrawal(id!, { amount: amountValue, currency: 'NGN' }),
+    enabled: !!id && Number.isFinite(amountValue) && amountValue >= 100,
+    staleTime: 30 * 1000,
+  });
+  const withdrawalQuote = withdrawalQuoteQuery.data;
 
   const refreshCampaign = async () => {
     if (!id) {
@@ -172,6 +181,9 @@ const FundraiserWithdraw = () => {
         date={receipt.completedAtUtc ?? receipt.createdAtUtc}
         details={[
           { label: 'Campaign', value: management.title },
+          { label: 'Requested amount', value: formatCurrency(receipt.amount) },
+          { label: 'Withdrawal fee', value: formatCurrency(receipt.feeAmount) },
+          { label: 'Net payout', value: formatCurrency(receipt.netPayoutAmount) },
           { label: 'Beneficiary', value: receipt.destinationAccountName },
           { label: 'Bank', value: receipt.destinationBankName },
           ...(receipt.destinationAccountNumberMasked ? [{ label: 'Account', value: receipt.destinationAccountNumberMasked }] : []),
@@ -250,6 +262,14 @@ const FundraiserWithdraw = () => {
             />
           </div>
 
+          {withdrawalQuote && (
+            <Card className="grid gap-2 rounded-2xl border-border bg-card p-4 text-sm">
+              <SummaryRow label="Requested amount" value={formatCurrency(withdrawalQuote.requestedAmount)} />
+              <SummaryRow label="Withdrawal fee" value={formatCurrency(withdrawalQuote.withdrawalFee)} />
+              <SummaryRow label="Net payout" value={formatCurrency(withdrawalQuote.netPayoutAmount)} />
+            </Card>
+          )}
+
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <Button className="w-full" onClick={handleContinue}>
@@ -262,7 +282,11 @@ const FundraiserWithdraw = () => {
         <PinPad
           key={`fundraiser-withdraw-pin-${pinPadKey}`}
           title="Confirm With PIN"
-          subtitle="Enter your 4-digit transaction PIN."
+          subtitle={
+            withdrawalQuote
+              ? `${formatCurrency(withdrawalQuote.netPayoutAmount)} net payout after ${formatCurrency(withdrawalQuote.withdrawalFee)} fee.`
+              : 'Enter your 4-digit transaction PIN.'
+          }
           error={error}
           disabled={isSubmitting}
           onInput={() => setError('')}
@@ -275,7 +299,7 @@ const FundraiserWithdraw = () => {
           key={`fundraiser-withdraw-otp-${otpPadKey}`}
           length={6}
           title="Enter Provider OTP"
-          subtitle={`Finalize ${formatCurrency(receipt.amount)} to ${receipt.destinationAccountName}.`}
+          subtitle={`Finalize ${formatCurrency(receipt.netPayoutAmount)} to ${receipt.destinationAccountName}.`}
           error={error}
           disabled={isSubmitting}
           onInput={() => setError('')}
@@ -298,5 +322,12 @@ const mapReceiptStatus = (status: string): 'completed' | 'failed' | 'pending' =>
 
   return 'failed';
 };
+
+const SummaryRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex items-center justify-between gap-3">
+    <span className="text-muted-foreground">{label}</span>
+    <span className="text-right font-medium text-foreground">{value}</span>
+  </div>
+);
 
 export default FundraiserWithdraw;

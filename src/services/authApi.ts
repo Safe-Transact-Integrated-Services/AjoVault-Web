@@ -101,6 +101,11 @@ export interface AuthResult {
   session: AuthSession;
 }
 
+export interface LoginIdentifierLookupResult {
+  exists: boolean;
+  message: string;
+}
+
 const normalizeIdentityEmail = (email?: string | null) => {
   const value = email?.trim();
   if (!value || value.endsWith('@phone.ajovault.local')) {
@@ -196,6 +201,13 @@ export const loginUser = async (identifier: string, password: string): Promise<A
     session: mapSession(response),
   };
 };
+
+export const checkLoginIdentifier = (identifier: string) =>
+  apiRequest<LoginIdentifierLookupResult>('/api/identity/login/check-identifier', {
+    method: 'POST',
+    auth: false,
+    json: normalizeIdentifierPayload(identifier),
+  });
 
 export const registerUser = async (input: SignupInput) => {
   const response = await apiRequest<RegisterUserResponse>('/api/identity/register', {

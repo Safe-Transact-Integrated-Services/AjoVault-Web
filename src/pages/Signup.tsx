@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -54,6 +55,7 @@ const Signup = () => {
   const contactSummary = [trimmedEmail, trimmedPhoneNumber].filter(Boolean).join(' or ');
   const loginIdentifier = trimmedEmail || trimmedPhoneNumber;
   const isOtpExpired = step === 'otp' && otpExpiresAt !== null && otpSecondsRemaining <= 0;
+  const showDevelopmentOtpHelper = import.meta.env.DEV;
 
   const getOtpErrorMessage = (err: unknown) => {
     if (!isApiError(err)) {
@@ -122,8 +124,11 @@ const Signup = () => {
       setOtpMessage(response.message);
       syncOtpCountdown(response.expiresAtUtc);
       setStep('otp');
+      toast.success(response.message || 'OTP sent. Check your inbox or phone.');
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Unable to request OTP.'));
+      const message = getApiErrorMessage(err, 'Unable to request OTP.');
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -137,14 +142,18 @@ const Signup = () => {
     const normalizedOtp = otp.replace(/\D/g, '').trim();
 
     if (isOtpExpired) {
-      setError('OTP expired. Request a new code to continue.');
+      const message = 'OTP expired. Request a new code to continue.';
+      setError(message);
       setOtp('');
+      toast.error(message);
       return;
     }
 
     if (normalizedOtp.length !== 6) {
-      setError('OTP must be exactly 6 digits.');
+      const message = 'OTP must be exactly 6 digits.';
+      setError(message);
       setOtp('');
+      toast.error(message);
       return;
     }
 
@@ -163,9 +172,12 @@ const Signup = () => {
       setOtp(normalizedOtp);
       setOtpMessage(response.message);
       setStep('details');
+      toast.success(response.message || 'OTP verified successfully.');
     } catch (err) {
       setOtp('');
-      setError(getOtpErrorMessage(err));
+      const message = getOtpErrorMessage(err);
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -200,7 +212,9 @@ const Signup = () => {
 
       navigate('/login', { replace: true, state: { identifier: loginIdentifier, justSignedUp: true } });
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Unable to create your account.'));
+      const message = getApiErrorMessage(err, 'Unable to create your account.');
+      setError(message);
+      toast.error(message);
       setPinPadKey(current => current + 1);
     } finally {
       setLoading(false);
@@ -285,7 +299,7 @@ const Signup = () => {
                   <Label>Phone Number</Label>
                   <Input
                     type="tel"
-                    placeholder="+234 800 000 0000"
+                    placeholder="0800 000 0000"
                     value={phoneNumber}
                     onChange={event => {
                       setPhoneNumber(event.target.value);
@@ -330,17 +344,22 @@ const Signup = () => {
               </div>
 
               <div className="space-y-2 text-center">
-                <p className="text-sm text-muted-foreground">For local testing, use OTP {otpHint}</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOtp(otpHint);
-                    clearError();
-                  }}
-                  className="text-sm font-medium text-accent"
-                >
-                  Use test OTP
-                </button>
+                {showDevelopmentOtpHelper && (
+                  <>
+                    {/* Keep the fallback OTP helper limited to development builds. */}
+                    <p className="text-sm text-muted-foreground">For local testing, use OTP {otpHint}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOtp(otpHint);
+                        clearError();
+                      }}
+                      className="text-sm font-medium text-accent"
+                    >
+                      Use test OTP
+                    </button>
+                  </>
+                )}
                 {otpMessage && <p className="text-xs text-muted-foreground">{otpMessage}</p>}
                 {otpExpiresAt && !isOtpExpired && (
                   <p className="text-xs font-medium text-muted-foreground">

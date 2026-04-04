@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -7,20 +7,28 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Shield, AlertTriangle, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAdminAuth } from '@/contexts/AdminAuthContext';
+import { getRedirectPath, type RedirectTarget } from '@/lib/auth';
+
+interface AdminLoginLocationState {
+  from?: RedirectTarget;
+}
 
 const AdminLogin = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const locationState = location.state as AdminLoginLocationState | null;
   const { adminLogin, isAdminAuthenticated, isAdminInitializing, failedAttempts, isLocked, lockoutEndTime } = useAdminAuth();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [remainingTime, setRemainingTime] = useState('');
+  const redirectPath = getRedirectPath(locationState?.from);
 
   useEffect(() => {
     if (!isAdminInitializing && isAdminAuthenticated) {
-      navigate('/admin/dashboard', { replace: true });
+      navigate(redirectPath ?? '/admin/dashboard', { replace: true });
     }
-  }, [isAdminAuthenticated, isAdminInitializing, navigate]);
+  }, [isAdminAuthenticated, isAdminInitializing, navigate, redirectPath]);
 
   useEffect(() => {
     if (!isLocked || !lockoutEndTime) {
@@ -63,7 +71,7 @@ const AdminLogin = () => {
 
     if (ok) {
       toast.success('Welcome, Admin');
-      navigate('/admin/dashboard');
+      navigate(redirectPath ?? '/admin/dashboard', { replace: true });
       return;
     }
 

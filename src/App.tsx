@@ -1,10 +1,13 @@
+import { useEffect } from 'react';
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { toast } from 'sonner';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { AdminAuthProvider } from '@/contexts/AdminAuthContext';
+import { AUTH_SESSION_EXPIRED_EVENT } from '@/lib/api/authEvents';
 
 import AppLayout from '@/components/layout/AppLayout';
 import MobilePageLayout from '@/components/layout/MobilePageLayout';
@@ -89,6 +92,26 @@ import AdminSettings from '@/pages/admin/AdminSettings';
 
 const queryClient = new QueryClient();
 
+const AuthSessionNotifier = () => {
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const handleSessionExpired = () => {
+      toast.error('Your session expired. Please sign in again.');
+    };
+
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
+
+    return () => {
+      window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
+    };
+  }, []);
+
+  return null;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -96,6 +119,7 @@ const App = () => (
         <TooltipProvider>
           <Toaster />
           <Sonner />
+          <AuthSessionNotifier />
           <BrowserRouter>
             <Routes>
               <Route element={<MobilePageLayout />}>

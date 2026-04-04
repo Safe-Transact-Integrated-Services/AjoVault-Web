@@ -7,6 +7,20 @@ export interface InitializePaymentCheckoutInput {
   purpose?: string;
 }
 
+export interface QuoteWalletFundingInput {
+  amount: number;
+  currency?: string;
+}
+
+export interface WalletFundingQuoteResponse {
+  fundingAmount: number;
+  serviceFee: number;
+  processorFeeEstimate: number;
+  totalCharge: number;
+  currency: string;
+  feeMode: string;
+}
+
 export interface InitializePaymentCheckoutResponse {
   checkoutId: string;
   provider: string;
@@ -14,10 +28,15 @@ export interface InitializePaymentCheckoutResponse {
   accessCode: string;
   authorizationUrl: string;
   amount: number;
+  fundingAmount: number;
+  serviceFee: number;
+  processorFeeEstimate: number;
+  totalCharge: number;
   currency: string;
   status: string;
   customerEmail: string;
   purpose: string;
+  feeMode: string;
 }
 
 export interface PaymentCheckoutStatusResponse {
@@ -25,6 +44,10 @@ export interface PaymentCheckoutStatusResponse {
   provider: string;
   reference: string;
   amount: number;
+  fundingAmount: number;
+  serviceFee: number;
+  processorFeeEstimate: number;
+  totalCharge: number;
   currency: string;
   status: string;
   purpose: string;
@@ -32,6 +55,7 @@ export interface PaymentCheckoutStatusResponse {
   createdAtUtc: string;
   paidAtUtc?: string | null;
   gatewayResponse?: string | null;
+  feeMode: string;
 }
 
 export interface PayoutBank {
@@ -68,10 +92,26 @@ export interface CreateWalletTransferInput {
   provider?: string;
 }
 
+export interface QuoteTransferInput {
+  amount: number;
+  currency?: string;
+}
+
+export interface TransferQuoteResponse {
+  amount: number;
+  serviceFee: number;
+  stampDuty: number;
+  totalDebit: number;
+  currency: string;
+}
+
 export interface CreateTransferResponse {
   transferId: string;
   reference: string;
   amount: number;
+  serviceFee: number;
+  stampDuty: number;
+  totalDebit: number;
   currency: string;
   provider: string;
   status: string;
@@ -95,6 +135,15 @@ export interface FinalizeWalletTransferInput {
   reference: string;
   otp: string;
 }
+
+export const quoteWalletFunding = (input: QuoteWalletFundingInput) =>
+  apiRequest<WalletFundingQuoteResponse>('/api/payments/checkout/quote', {
+    method: 'POST',
+    json: {
+      amount: input.amount,
+      currency: input.currency ?? 'NGN',
+    },
+  });
 
 export const initializePaymentCheckout = (input: InitializePaymentCheckoutInput) =>
   apiRequest<InitializePaymentCheckoutResponse>('/api/payments/checkout/initialize', {
@@ -120,6 +169,15 @@ export const resolveTransferAccount = (input: ResolveTransferAccountInput) =>
       accountNumber: input.accountNumber.trim(),
       bankCode: input.bankCode,
       bankName: input.bankName?.trim() || undefined,
+      currency: input.currency ?? 'NGN',
+    },
+  });
+
+export const quoteWalletTransfer = (input: QuoteTransferInput) =>
+  apiRequest<TransferQuoteResponse>('/api/payments/transfers/quote', {
+    method: 'POST',
+    json: {
+      amount: input.amount,
       currency: input.currency ?? 'NGN',
     },
   });
