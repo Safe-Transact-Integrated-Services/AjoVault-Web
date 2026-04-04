@@ -381,6 +381,21 @@ const AdminAgents = () => {
                 ))}
               </div>
 
+              {selectedAgent.application?.idDocumentDataUrl && (
+                <div className="rounded-xl border border-border p-4">
+                  <p className="text-sm font-semibold">Uploaded ID document</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {selectedAgent.application.idDocumentName ?? 'Applicant document'}
+                  </p>
+                  <Button variant="outline" className="mt-3" asChild>
+                    <a href={selectedAgent.application.idDocumentDataUrl} target="_blank" rel="noreferrer">
+                      <Eye className="mr-2 h-4 w-4" />
+                      View document
+                    </a>
+                  </Button>
+                </div>
+              )}
+
               {selectedAgent.profile && (
                 <div className="space-y-3 rounded-xl border border-border p-4">
                   <div className="flex items-center gap-2">

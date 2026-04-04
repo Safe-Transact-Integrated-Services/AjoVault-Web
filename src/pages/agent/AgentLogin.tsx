@@ -4,19 +4,27 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Shield } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import PinPad from '@/components/shared/PinPad';
 import { useAuth } from '@/contexts/AuthContext';
+import { getRedirectPath, type RedirectTarget } from '@/lib/auth';
 import { getApiErrorMessage, isApiError } from '@/lib/api/http';
+
+interface AgentLoginLocationState {
+  from?: RedirectTarget;
+}
 
 const AgentLogin = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const locationState = location.state as AgentLoginLocationState | null;
   const { loginAgent, isAuthenticated, user } = useAuth();
   const [agentCode, setAgentCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [passwordPadKey, setPasswordPadKey] = useState(0);
+  const redirectPath = getRedirectPath(locationState?.from);
 
   useEffect(() => {
     if (!isAuthenticated || !user) {
@@ -24,12 +32,12 @@ const AgentLogin = () => {
     }
 
     if (user.role === 'agent') {
-      navigate('/agent', { replace: true });
+      navigate(redirectPath ?? '/agent', { replace: true });
       return;
     }
 
     navigate('/agent/apply', { replace: true, state: { from: location } });
-  }, [isAuthenticated, location, navigate, user]);
+  }, [isAuthenticated, location, navigate, redirectPath, user]);
 
   const handleSubmit = () => {
     if (agentCode.length >= 4) {
@@ -44,13 +52,16 @@ const AgentLogin = () => {
 
     try {
       await loginAgent(agentCode, password);
-      navigate('/agent', { replace: true });
+      navigate(redirectPath ?? '/agent', { replace: true });
     } catch (err) {
+      let message: string;
       if (isApiError(err) && err.status === 401) {
-        setError('Incorrect password or inactive agent code.');
+        message = 'Incorrect password or inactive agent code.';
       } else {
-        setError(getApiErrorMessage(err, 'Unable to sign in to the agent portal.'));
+        message = getApiErrorMessage(err, 'Unable to sign in to the agent portal.');
       }
+      setError(message);
+      toast.error(message);
       setPasswordPadKey(current => current + 1);
     } finally {
       setLoading(false);

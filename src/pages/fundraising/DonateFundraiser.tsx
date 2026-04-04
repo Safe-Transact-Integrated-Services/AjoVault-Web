@@ -22,6 +22,8 @@ import {
   fundraisingKeys,
   initializeFundraiserCheckout,
   initializeFundraiserCheckoutByShareCode,
+  quoteFundraiserDonation,
+  type FundraiserDonationQuote,
   type FundraiserDonationResult,
   type FundraiserCheckoutStatus,
 } from '@/services/fundraisingApi';
@@ -48,9 +50,11 @@ const DonateFundraiser = () => {
   const { user } = useAuth();
   const [step, setStep] = useState<Step>('details');
   const [amount, setAmount] = useState('');
+  const [tipAmount, setTipAmount] = useState('');
   const [donorName, setDonorName] = useState('');
   const [email, setEmail] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
+  const [coverProcessingFee, setCoverProcessingFee] = useState(true);
   const [method, setMethod] = useState<Method>('paystack');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -67,8 +71,23 @@ const DonateFundraiser = () => {
 
   const fundraiser = fundraiserQuery.data;
   const amountValue = Number(amount || '0');
+  const hasCustomTip = tipAmount.trim().length > 0;
+  const parsedTipValue = hasCustomTip ? Number(tipAmount) : undefined;
+  const tipValue = parsedTipValue ?? 0;
   const canUseWallet = !!user && !!fundraiser?.canDonateWithWallet;
   const canUsePaystack = !!fundraiser?.canDonateWithPaystack;
+  const donationQuoteQuery = useQuery<FundraiserDonationQuote>({
+    queryKey: ['fundraising', 'donation-quote', fundraiser?.id, amountValue, tipAmount, method, coverProcessingFee],
+    queryFn: () => quoteFundraiserDonation(fundraiser!.id, {
+      amount: amountValue,
+      tipAmount: parsedTipValue,
+      currency: 'NGN',
+      coverProcessingFee: method === 'paystack' && coverProcessingFee,
+    }),
+    enabled: !!fundraiser?.id && Number.isFinite(amountValue) && amountValue >= 100,
+    staleTime: 30 * 1000,
+  });
+  const donationQuote = donationQuoteQuery.data;
 
   useEffect(() => {
     if (user && !donorName) {
@@ -116,6 +135,10 @@ const DonateFundraiser = () => {
       return 'Minimum donation amount is NGN 100.';
     }
 
+    if (hasCustomTip && (!Number.isFinite(tipValue) || tipValue < 0)) {
+      return 'Tip amount must be zero or greater.';
+    }
+
     if (!isAnonymous && !donorName.trim()) {
       return 'Provide your name or donate anonymously.';
     }
@@ -148,12 +171,16 @@ const DonateFundraiser = () => {
   const setCheckoutReceipt = (status: FundraiserCheckoutStatus) => {
     setReceipt({
       status: mapReceiptStatus(status.status),
-      amount: status.amount,
+      amount: status.totalCharge,
       reference: status.reference,
       date: status.paidAtUtc ?? status.createdAtUtc,
       description: `Donation to ${fundraiser.title}`,
       details: [
         { label: 'Campaign', value: fundraiser.title },
+        { label: 'Donation', value: formatCurrency(status.donationAmount) },
+        { label: 'AjoVault Tip', value: formatCurrency(status.tipAmount) },
+        { label: 'Covered Processing Fee', value: formatCurrency(status.processingFeeAmount) },
+        { label: 'Total Charge', value: formatCurrency(status.totalCharge) },
         { label: 'Email', value: status.customerEmail },
         ...(status.gatewayResponse ? [{ label: 'Gateway', value: status.gatewayResponse }] : []),
       ],
@@ -164,13 +191,16 @@ const DonateFundraiser = () => {
   const setWalletReceipt = (donation: FundraiserDonationResult) => {
     setReceipt({
       status: 'completed',
-      amount: donation.amount,
+      amount: donation.totalChargeAmount,
       reference: donation.reference,
       date: donation.createdAtUtc,
       description: `Donation to ${fundraiser.title}`,
       details: [
         { label: 'Campaign', value: fundraiser.title },
         { label: 'Funding Source', value: 'Wallet' },
+        { label: 'Donation', value: formatCurrency(donation.amount) },
+        { label: 'AjoVault Tip', value: formatCurrency(donation.tipAmount) },
+        { label: 'Total Charge', value: formatCurrency(donation.totalChargeAmount) },
         { label: 'Campaign Balance', value: formatCurrency(donation.fundraiserBalanceAfter) },
         ...(donation.walletBalanceAfter !== undefined && donation.walletBalanceAfter !== null
           ? [{ label: 'Wallet Balance After', value: formatCurrency(donation.walletBalanceAfter) }]
@@ -194,17 +224,21 @@ const DonateFundraiser = () => {
       const initializedCheckout = code && !id
         ? await initializeFundraiserCheckoutByShareCode(code, {
           amount: amountValue,
+          tipAmount: parsedTipValue,
           currency: 'NGN',
           email: email.trim(),
           isAnonymous,
           donorName: isAnonymous ? undefined : donorName.trim(),
+          coverProcessingFee,
         })
         : await initializeFundraiserCheckout(fundraiser.id, {
           amount: amountValue,
+          tipAmount: parsedTipValue,
           currency: 'NGN',
           email: email.trim(),
           isAnonymous,
           donorName: isAnonymous ? undefined : donorName.trim(),
+          coverProcessingFee,
         });
 
       const popupResult = await resumePaystackTransaction(initializedCheckout.accessCode);
@@ -247,6 +281,7 @@ const DonateFundraiser = () => {
     try {
       const donation = await donateToFundraiserFromWallet(fundraiser.id, {
         amount: amountValue,
+        tipAmount: parsedTipValue,
         currency: 'NGN',
         isAnonymous,
         donorName: isAnonymous ? undefined : donorName.trim(),
@@ -321,7 +356,7 @@ const DonateFundraiser = () => {
           <PinPad
             key={pinPadKey}
             title="Confirm Donation"
-            subtitle={`${formatCurrency(amountValue)} to ${fundraiser.title}`}
+            subtitle={`${formatCurrency(donationQuote?.totalCharge ?? (amountValue + tipValue))} total to ${fundraiser.title}`}
             error={error}
             disabled={isSubmitting}
             onInput={() => setError('')}
@@ -383,6 +418,23 @@ const DonateFundraiser = () => {
             />
           </div>
 
+          <div className="space-y-2">
+            <Label>AjoVault Tip (optional)</Label>
+            <Input
+              type="number"
+              value={tipAmount}
+              onChange={event => {
+                setTipAmount(event.target.value.replace(/[^\d]/g, ''));
+                setError('');
+              }}
+              placeholder="Leave blank to use the campaign default"
+              className="h-12"
+            />
+            <p className="text-xs text-muted-foreground">
+              Leave this blank to use the default tip. Set it to `0` if you do not want to tip.
+            </p>
+          </div>
+
           <div className="space-y-3">
             <div className="flex items-center justify-between rounded-xl border border-border bg-card p-4">
               <div>
@@ -411,20 +463,22 @@ const DonateFundraiser = () => {
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label>Payment Email</Label>
-              <Input
-                type="email"
-                value={email}
-                onChange={event => {
-                  setEmail(event.target.value);
-                  setError('');
-                }}
-                placeholder="you@example.com"
-                className="h-12"
-              />
-              <p className="text-xs text-muted-foreground">Paystack requires an email address for donation checkout.</p>
-            </div>
+            {method === 'paystack' && (
+              <div className="space-y-2">
+                <Label>Payment Email</Label>
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={event => {
+                    setEmail(event.target.value);
+                    setError('');
+                  }}
+                  placeholder="you@example.com"
+                  className="h-12"
+                />
+                <p className="text-xs text-muted-foreground">Paystack requires an email address for donation checkout.</p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -472,6 +526,31 @@ const DonateFundraiser = () => {
             </div>
           </div>
 
+          {method === 'paystack' && (
+            <div className="flex items-center justify-between rounded-xl border border-border bg-card p-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">Cover Processing Fee</p>
+                <p className="text-xs text-muted-foreground">Add the provider charge so the campaign receives the full donation.</p>
+              </div>
+              <Switch
+                checked={coverProcessingFee}
+                onCheckedChange={checked => {
+                  setCoverProcessingFee(checked);
+                  setError('');
+                }}
+              />
+            </div>
+          )}
+
+          {donationQuote && (
+            <div className="space-y-2 rounded-2xl border border-border bg-card p-4 text-sm">
+              <SummaryRow label="Donation" value={formatCurrency(donationQuote.donationAmount)} />
+              <SummaryRow label="AjoVault Tip" value={formatCurrency(donationQuote.tipAmount)} />
+              <SummaryRow label="Processing Fee" value={formatCurrency(donationQuote.processingFeeAmount)} />
+              <SummaryRow label="Total Charge" value={formatCurrency(donationQuote.totalCharge)} />
+            </div>
+          )}
+
           {error && (
             <Alert variant="destructive">
               <AlertTitle>Unable to continue</AlertTitle>
@@ -483,7 +562,7 @@ const DonateFundraiser = () => {
             <Heart className="h-4 w-4" />
             {isSubmitting
               ? 'Processing donation...'
-              : `Donate ${amountValue > 0 ? formatCurrency(amountValue) : ''}`}
+              : `Donate ${amountValue > 0 ? formatCurrency(donationQuote?.totalCharge ?? amountValue) : ''}`}
           </Button>
         </motion.div>
       )}
@@ -519,5 +598,12 @@ const mapReceiptStatus = (status: string): ReceiptState['status'] => {
 };
 
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+const SummaryRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex items-center justify-between gap-4">
+    <span className="text-muted-foreground">{label}</span>
+    <span className="text-right font-medium text-foreground">{value}</span>
+  </div>
+);
 
 export default DonateFundraiser;

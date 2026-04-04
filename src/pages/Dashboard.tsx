@@ -10,6 +10,7 @@ import {
   Heart,
   PiggyBank,
   Receipt,
+  ShieldCheck,
   Target,
   TrendingUp,
   Users,
@@ -17,6 +18,7 @@ import {
 import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
+import { BILL_PAYMENTS_ENABLED } from '@/lib/features';
 import { creditPassportKeys, getCreditPassportScore } from '@/services/creditPassportApi';
 import { dashboardKeys, getDashboardSummary } from '@/services/dashboardApi';
 import { formatCurrency, formatDate } from '@/services/mockData';
@@ -61,7 +63,13 @@ const Dashboard = () => {
     { icon: ArrowDownLeft, label: 'Fund', path: '/wallet/fund', color: 'bg-accent/10 text-accent' },
     { icon: ArrowUpRight, label: 'Transfer', path: '/wallet/transfer', color: 'bg-primary/10 text-primary' },
     { icon: PiggyBank, label: 'Save', path: '/savings/create', color: 'bg-success/10 text-success' },
-    { icon: Receipt, label: 'Pay Bills', path: '/wallet/bills', color: 'bg-warning/10 text-warning' },
+    {
+      icon: Receipt,
+      label: 'Pay Bills',
+      path: '/wallet/bills',
+      color: BILL_PAYMENTS_ENABLED ? 'bg-warning/10 text-warning' : 'bg-muted text-muted-foreground',
+      disabled: !BILL_PAYMENTS_ENABLED,
+    },
   ];
 
   return (
@@ -114,16 +122,44 @@ const Dashboard = () => {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 + index * 0.05 }}
-            onClick={() => navigate(action.path)}
-            className="flex flex-col items-center gap-2"
+            onClick={() => {
+              if (action.disabled) {
+                return;
+              }
+
+              navigate(action.path);
+            }}
+            disabled={action.disabled}
+            className={`flex flex-col items-center gap-2 ${action.disabled ? 'cursor-not-allowed opacity-60' : ''}`}
           >
             <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${action.color}`}>
               <action.icon className="h-5 w-5" />
             </div>
-            <span className="text-xs font-medium text-foreground">{action.label}</span>
+            <span className={`text-xs font-medium ${action.disabled ? 'text-muted-foreground' : 'text-foreground'}`}>
+              {action.label}
+            </span>
           </motion.button>
         ))}
       </div>
+
+      <motion.button
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.35 }}
+        onClick={() => navigate('/more/agent-access')}
+        className="mb-6 flex w-full items-center justify-between rounded-2xl border border-primary/15 bg-primary/5 p-4 text-left"
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <ShieldCheck className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Agent Access Code</p>
+            <p className="text-xs text-muted-foreground">Generate a one-time code for agent-assisted transactions</p>
+          </div>
+        </div>
+        <Badge className="border-primary/20 bg-primary/10 text-primary">Open</Badge>
+      </motion.button>
 
       <div className="mb-6 grid grid-cols-2 gap-3">
         <button onClick={() => navigate('/savings')} className="rounded-xl border border-border bg-card p-4 text-left">

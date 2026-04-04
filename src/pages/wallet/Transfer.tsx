@@ -15,9 +15,11 @@ import {
   createWalletTransfer,
   finalizeWalletTransfer,
   getPayoutBanks,
+  quoteWalletTransfer,
   resolveTransferAccount,
   type CreateTransferResponse,
   type ResolveTransferAccountResponse,
+  type TransferQuoteResponse,
   type TransferStatusResponse,
 } from '@/services/paymentApi';
 import { formatCurrency } from '@/services/mockData';
@@ -55,8 +57,16 @@ const Transfer = () => {
     queryFn: getMyWallet,
   });
 
-  const selectedBank = banksQuery.data?.find(bank => bank.code === bankCode) ?? null;
   const amountValue = Number(amount || '0');
+  const transferQuoteQuery = useQuery<TransferQuoteResponse>({
+    queryKey: ['payments', 'transfer-quote', amountValue],
+    queryFn: () => quoteWalletTransfer({ amount: amountValue, currency: 'NGN' }),
+    enabled: Number.isFinite(amountValue) && amountValue >= 100,
+    staleTime: 30 * 1000,
+  });
+
+  const selectedBank = banksQuery.data?.find(bank => bank.code === bankCode) ?? null;
+  const transferQuote = transferQuoteQuery.data;
 
   const clearError = () => {
     if (error) {
@@ -141,7 +151,7 @@ const Transfer = () => {
       return;
     }
 
-    if ((walletQuery.data?.available ?? 0) < amountValue) {
+    if ((walletQuery.data?.available ?? 0) < (transferQuote?.totalDebit ?? amountValue)) {
       setError('Insufficient wallet balance.');
       return;
     }
@@ -222,6 +232,10 @@ const Transfer = () => {
           { label: 'Bank', value: receipt.destinationBankName },
           { label: 'Account Number', value: receipt.destinationAccountNumber },
           { label: 'Recipient', value: receipt.destinationAccountName },
+          { label: 'Transfer Amount', value: formatCurrency(receipt.amount) },
+          { label: 'Service Fee', value: formatCurrency(receipt.serviceFee) },
+          { label: 'Stamp Duty', value: formatCurrency(receipt.stampDuty) },
+          { label: 'Total Debit', value: formatCurrency(receipt.totalDebit) },
           { label: 'Provider', value: receipt.provider },
           ...(receipt.providerTransferCode ? [{ label: 'Provider Code', value: receipt.providerTransferCode }] : []),
           ...(receipt.message ? [{ label: 'Message', value: receipt.message }] : []),
@@ -419,6 +433,15 @@ const Transfer = () => {
             </Card>
           )}
 
+          {transferQuote && (
+            <Card className="grid gap-2 rounded-2xl border-border bg-card p-4 text-sm">
+              <SummaryRow label="Transfer Amount" value={formatCurrency(transferQuote.amount)} />
+              <SummaryRow label="Service Fee" value={formatCurrency(transferQuote.serviceFee)} />
+              <SummaryRow label="Stamp Duty" value={formatCurrency(transferQuote.stampDuty)} />
+              <SummaryRow label="Total Debit" value={formatCurrency(transferQuote.totalDebit)} />
+            </Card>
+          )}
+
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
@@ -438,7 +461,7 @@ const Transfer = () => {
           <PinPad
             key={pinPadKey}
             title="Confirm Withdrawal"
-            subtitle={`${formatCurrency(amountValue)} to ${resolvedAccount.accountName}`}
+            subtitle={`${formatCurrency(transferQuote?.totalDebit ?? amountValue)} total debit to ${resolvedAccount.accountName}`}
             error={error}
             disabled={isSubmitting}
             onInput={clearError}
@@ -461,6 +484,9 @@ const Transfer = () => {
             <SummaryRow label="Bank" value={receipt.destinationBankName} />
             <SummaryRow label="Account Number" value={receipt.destinationAccountNumber} />
             <SummaryRow label="Amount" value={formatCurrency(receipt.amount)} />
+            <SummaryRow label="Service Fee" value={formatCurrency(receipt.serviceFee)} />
+            <SummaryRow label="Stamp Duty" value={formatCurrency(receipt.stampDuty)} />
+            <SummaryRow label="Total Debit" value={formatCurrency(receipt.totalDebit)} />
           </Card>
 
           <div className="flex min-h-[50vh] items-center justify-center px-2">

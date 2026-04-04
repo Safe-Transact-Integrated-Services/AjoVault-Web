@@ -137,7 +137,7 @@ const AgentTransact = () => {
         </div>
         <h1 className="font-display text-2xl font-bold">Agent Transactions</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Complete customer-authorized cash services, balance enquiries, mini statements, bill payments, and assisted contributions. Amount, type, and target are locked by the backend.
+          Complete customer-authorized cash services, balance enquiries, mini statements, and assisted contributions. Amount, type, and target are locked by the backend.
         </p>
       </div>
 
@@ -204,6 +204,25 @@ const AgentTransact = () => {
             <div>
               <p className="text-xs text-muted-foreground">Expires</p>
               <p className="font-medium">{new Date(preview.expiresAtUtc).toLocaleTimeString()}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 rounded-xl bg-muted/60 p-3 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground">Service Fee</p>
+              <p className="font-medium">{currency.format(preview.serviceFee)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Total Customer Charge</p>
+              <p className="font-medium">{currency.format(preview.totalCharge)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Agent Share</p>
+              <p className="font-medium">{currency.format(preview.agentCommissionAmount)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">AjoVault Share</p>
+              <p className="font-medium">{currency.format(preview.platformRevenueAmount)}</p>
             </div>
           </div>
 
@@ -287,6 +306,18 @@ const AgentTransact = () => {
             <div>
               <p className="text-xs text-muted-foreground">Commission</p>
               <p className="font-medium">{currency.format(receipt.commissionEarned)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Service Fee</p>
+              <p className="font-medium">{currency.format(receipt.serviceFee)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Total Customer Charge</p>
+              <p className="font-medium">{currency.format(receipt.totalCharge)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">AjoVault Share</p>
+              <p className="font-medium">{currency.format(receipt.platformRevenueAmount)}</p>
             </div>
             {receipt.targetName ? (
               <div>

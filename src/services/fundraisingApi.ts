@@ -57,6 +57,10 @@ interface FundraiserCheckoutResponse {
   accessCode: string;
   authorizationUrl: string;
   amount: number;
+  donationAmount: number;
+  tipAmount: number;
+  processingFeeAmount: number;
+  totalCharge: number;
   currency: string;
   status: string;
   customerEmail: string;
@@ -67,6 +71,10 @@ interface FundraiserCheckoutStatusResponse {
   checkoutId: string;
   reference: string;
   amount: number;
+  donationAmount: number;
+  tipAmount: number;
+  processingFeeAmount: number;
+  totalCharge: number;
   currency: string;
   status: string;
   customerEmail: string;
@@ -80,6 +88,9 @@ interface FundraiserDonationResponse {
   donationId: string;
   fundraiserId: string;
   amount: number;
+  tipAmount: number;
+  processingFeeAmount: number;
+  totalChargeAmount: number;
   currency: string;
   fundingSource: string;
   status: string;
@@ -117,6 +128,8 @@ interface FundraiserWithdrawalResponse {
   withdrawalId: string;
   fundraiserId: string;
   amount: number;
+  feeAmount: number;
+  netPayoutAmount: number;
   currency: string;
   reference: string;
   provider: string;
@@ -209,6 +222,7 @@ export interface CreateFundraiserInput {
 
 export interface FundraiserWalletDonationInput {
   amount: number;
+  tipAmount?: number;
   currency?: string;
   isAnonymous: boolean;
   donorName?: string;
@@ -217,10 +231,19 @@ export interface FundraiserWalletDonationInput {
 
 export interface InitializeFundraiserCheckoutInput {
   amount: number;
+  tipAmount?: number;
   currency?: string;
   email?: string;
   isAnonymous: boolean;
   donorName?: string;
+  coverProcessingFee?: boolean;
+}
+
+export interface QuoteFundraiserDonationInput {
+  amount: number;
+  tipAmount?: number;
+  currency?: string;
+  coverProcessingFee?: boolean;
 }
 
 export interface SendFundraiserInviteInput {
@@ -272,6 +295,11 @@ export interface CreateFundraiserWithdrawalInput {
   pin: string;
 }
 
+export interface QuoteFundraiserWithdrawalInput {
+  amount: number;
+  currency?: string;
+}
+
 export interface FinalizeFundraiserWithdrawalInput {
   fundraiserId: string;
   reference: string;
@@ -282,6 +310,8 @@ export interface FundraiserWithdrawal {
   withdrawalId: string;
   fundraiserId: string;
   amount: number;
+  feeAmount: number;
+  netPayoutAmount: number;
   currency: string;
   reference: string;
   provider: string;
@@ -316,6 +346,9 @@ export interface FundraiserDonationResult {
   donationId: string;
   fundraiserId: string;
   amount: number;
+  tipAmount: number;
+  processingFeeAmount: number;
+  totalChargeAmount: number;
   currency: string;
   fundingSource: string;
   status: string;
@@ -339,6 +372,10 @@ export interface FundraiserCheckoutResult {
   accessCode: string;
   authorizationUrl: string;
   amount: number;
+  donationAmount: number;
+  tipAmount: number;
+  processingFeeAmount: number;
+  totalCharge: number;
   currency: string;
   status: string;
   customerEmail: string;
@@ -349,6 +386,10 @@ export interface FundraiserCheckoutStatus {
   checkoutId: string;
   reference: string;
   amount: number;
+  donationAmount: number;
+  tipAmount: number;
+  processingFeeAmount: number;
+  totalCharge: number;
   currency: string;
   status: string;
   customerEmail: string;
@@ -356,6 +397,36 @@ export interface FundraiserCheckoutStatus {
   createdAtUtc: string;
   paidAtUtc?: string | null;
   gatewayResponse?: string | null;
+}
+
+export interface FundraiserDonationQuote {
+  donationAmount: number;
+  tipAmount: number;
+  processingFeeAmount: number;
+  totalCharge: number;
+  currency: string;
+}
+
+interface FundraiserDonationQuoteResponse {
+  donationAmount: number;
+  tipAmount: number;
+  processingFeeAmount: number;
+  totalCharge: number;
+  currency: string;
+}
+
+interface FundraiserWithdrawalQuoteResponse {
+  requestedAmount: number;
+  withdrawalFee: number;
+  netPayoutAmount: number;
+  currency: string;
+}
+
+export interface FundraiserWithdrawalQuote {
+  requestedAmount: number;
+  withdrawalFee: number;
+  netPayoutAmount: number;
+  currency: string;
 }
 
 export const fundraisingKeys = {
@@ -408,6 +479,7 @@ export const donateToFundraiserFromWallet = async (
     method: 'POST',
     json: {
       amount: input.amount,
+      tipAmount: input.tipAmount ?? 0,
       currency: input.currency ?? 'NGN',
       isAnonymous: input.isAnonymous,
       donorName: input.donorName?.trim() || undefined,
@@ -418,6 +490,29 @@ export const donateToFundraiserFromWallet = async (
   return mapDonation(response);
 };
 
+export const quoteFundraiserDonation = async (
+  id: string,
+  input: QuoteFundraiserDonationInput,
+): Promise<FundraiserDonationQuote> => {
+  const response = await apiRequest<FundraiserDonationQuoteResponse>(`/api/fundraisers/${encodeURIComponent(id)}/donations/quote`, {
+    method: 'POST',
+    json: {
+      amount: input.amount,
+      tipAmount: input.tipAmount ?? 0,
+      currency: input.currency ?? 'NGN',
+      coverProcessingFee: input.coverProcessingFee ?? false,
+    },
+  });
+
+  return {
+    donationAmount: response.donationAmount,
+    tipAmount: response.tipAmount,
+    processingFeeAmount: response.processingFeeAmount,
+    totalCharge: response.totalCharge,
+    currency: response.currency,
+  };
+};
+
 export const initializeFundraiserCheckout = async (
   id: string,
   input: InitializeFundraiserCheckoutInput,
@@ -426,10 +521,12 @@ export const initializeFundraiserCheckout = async (
     method: 'POST',
     json: {
       amount: input.amount,
+      tipAmount: input.tipAmount ?? 0,
       currency: input.currency ?? 'NGN',
       email: input.email?.trim() || undefined,
       isAnonymous: input.isAnonymous,
       donorName: input.donorName?.trim() || undefined,
+      coverProcessingFee: input.coverProcessingFee ?? false,
     },
   });
 
@@ -444,10 +541,12 @@ export const initializeFundraiserCheckoutByShareCode = async (
     method: 'POST',
     json: {
       amount: input.amount,
+      tipAmount: input.tipAmount ?? 0,
       currency: input.currency ?? 'NGN',
       email: input.email?.trim() || undefined,
       isAnonymous: input.isAnonymous,
       donorName: input.donorName?.trim() || undefined,
+      coverProcessingFee: input.coverProcessingFee ?? false,
     },
   });
 
@@ -460,6 +559,10 @@ export const getFundraiserCheckoutStatus = async (reference: string): Promise<Fu
     checkoutId: response.checkoutId,
     reference: response.reference,
     amount: response.amount,
+    donationAmount: response.donationAmount,
+    tipAmount: response.tipAmount,
+    processingFeeAmount: response.processingFeeAmount,
+    totalCharge: response.totalCharge,
     currency: response.currency,
     status: response.status,
     customerEmail: response.customerEmail,
@@ -467,6 +570,26 @@ export const getFundraiserCheckoutStatus = async (reference: string): Promise<Fu
     createdAtUtc: response.createdAtUtc,
     paidAtUtc: response.paidAtUtc ?? undefined,
     gatewayResponse: response.gatewayResponse ?? undefined,
+  };
+};
+
+export const quoteFundraiserWithdrawal = async (
+  id: string,
+  input: QuoteFundraiserWithdrawalInput,
+): Promise<FundraiserWithdrawalQuote> => {
+  const response = await apiRequest<FundraiserWithdrawalQuoteResponse>(`/api/fundraisers/${encodeURIComponent(id)}/withdrawals/quote`, {
+    method: 'POST',
+    json: {
+      amount: input.amount,
+      currency: input.currency ?? 'NGN',
+    },
+  });
+
+  return {
+    requestedAmount: response.requestedAmount,
+    withdrawalFee: response.withdrawalFee,
+    netPayoutAmount: response.netPayoutAmount,
+    currency: response.currency,
   };
 };
 
@@ -615,6 +738,9 @@ const mapDonation = (response: FundraiserDonationResponse): FundraiserDonationRe
   donationId: response.donationId,
   fundraiserId: response.fundraiserId,
   amount: response.amount,
+  tipAmount: response.tipAmount,
+  processingFeeAmount: response.processingFeeAmount,
+  totalChargeAmount: response.totalChargeAmount,
   currency: response.currency,
   fundingSource: response.fundingSource,
   status: response.status,
@@ -638,6 +764,10 @@ const mapCheckout = (response: FundraiserCheckoutResponse): FundraiserCheckoutRe
   accessCode: response.accessCode,
   authorizationUrl: response.authorizationUrl,
   amount: response.amount,
+  donationAmount: response.donationAmount,
+  tipAmount: response.tipAmount,
+  processingFeeAmount: response.processingFeeAmount,
+  totalCharge: response.totalCharge,
   currency: response.currency,
   status: response.status,
   customerEmail: response.customerEmail,
@@ -668,6 +798,8 @@ const mapWithdrawal = (response: FundraiserWithdrawalResponse): FundraiserWithdr
   withdrawalId: response.withdrawalId,
   fundraiserId: response.fundraiserId,
   amount: response.amount,
+  feeAmount: response.feeAmount,
+  netPayoutAmount: response.netPayoutAmount,
   currency: response.currency,
   reference: response.reference,
   provider: response.provider,

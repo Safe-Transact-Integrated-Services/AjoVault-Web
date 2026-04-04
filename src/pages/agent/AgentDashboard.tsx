@@ -162,7 +162,7 @@ const AgentDashboard = () => {
           <p className="text-sm font-semibold">Operational services extended</p>
         </div>
         <p className="text-sm text-muted-foreground">
-          Agent-assisted registration, cash-in, cash-out, balance enquiry, mini statement, local transfer, bill payment, commission tracking, float ledger, wallet settlements, and assisted savings, circle, and group-goal contributions are live.
+          Agent-assisted registration, cash-in, cash-out, balance enquiry, mini statement, local transfer, commission tracking, float ledger, wallet settlements, and assisted savings, circle, and group-goal contributions are live.
         </p>
         <div className="rounded-lg bg-background/70 p-3 text-xs text-muted-foreground">
           <p className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {profile.location}{profile.lga ? `, ${profile.lga}` : ''}, {profile.state}</p>

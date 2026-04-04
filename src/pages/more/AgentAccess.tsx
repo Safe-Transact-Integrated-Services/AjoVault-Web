@@ -39,7 +39,6 @@ const transactionOptions: Array<{ value: AgentTransactionType; label: string }> 
   { value: 'cash_out', label: 'Cash-out' },
   { value: 'cash_in', label: 'Cash-in' },
   { value: 'transfer', label: 'Local transfer' },
-  { value: 'bill_payment', label: 'Bill payment' },
   { value: 'balance_enquiry', label: 'Balance enquiry' },
   { value: 'mini_statement', label: 'Mini statement' },
   { value: 'savings', label: 'Savings contribution' },
@@ -299,7 +298,7 @@ const AgentAccess = () => {
             </div>
             <h1 className="font-display text-2xl font-bold">Agent Access Code</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Generate a one-time code for agent-assisted cash services, balance enquiry, mini statement, local transfer, bill payment, or a fixed contribution to your savings, circle, or group goal.
+              Generate a one-time code for agent-assisted cash services, balance enquiry, mini statement, local transfer, or a fixed contribution to your savings, circle, or group goal.
             </p>
           </div>
 
@@ -600,6 +599,25 @@ const AgentAccess = () => {
                 <p className="text-xs text-muted-foreground">
                   {authorization.amount > 0 ? currency.format(authorization.amount) : 'No wallet debit'}
                 </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 rounded-xl bg-muted/60 p-3 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground">Service Fee</p>
+                <p className="font-medium">{currency.format(authorization.serviceFee)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Total Customer Charge</p>
+                <p className="font-medium">{currency.format(authorization.totalCharge)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Agent Share</p>
+                <p className="font-medium">{currency.format(authorization.agentCommissionAmount)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">AjoVault Share</p>
+                <p className="font-medium">{currency.format(authorization.platformRevenueAmount)}</p>
               </div>
             </div>
 

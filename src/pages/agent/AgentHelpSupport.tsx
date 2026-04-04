@@ -23,7 +23,7 @@ import {
 import { getApiErrorMessage } from '@/lib/api/http';
 
 const categoryOptions: { value: SupportCategory; label: string; helper: string }[] = [
-  { value: 'agent_transaction', label: 'Agent Transactions', helper: 'Cash services, transfer OTP, bill payment, and assisted flow failures.' },
+  { value: 'agent_transaction', label: 'Agent Transactions', helper: 'Cash services, transfer OTP, and assisted flow failures.' },
   { value: 'agent_settlement', label: 'Agent Settlements', helper: 'Commission movement, settlement timing, and wallet credit issues.' },
   { value: 'agent_float', label: 'Agent Float', helper: 'Float adjustment, float mismatch, and cash-in availability issues.' },
   { value: 'account', label: 'Account', helper: 'Agent login, linked customers, and portal access issues.' },

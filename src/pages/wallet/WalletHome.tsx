@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { EmptyTableState } from '@/components/shared/EmptyTableState';
+import { BILL_PAYMENTS_ENABLED } from '@/lib/features';
 import { formatCurrency, formatDate } from '@/services/mockData';
 import { getMyWallet, getWalletTransactions, walletKeys } from '@/services/walletApi';
 
@@ -49,9 +50,15 @@ const WalletHome = () => {
         {[
           { icon: Plus, label: 'Fund', path: '/wallet/fund' },
           { icon: ArrowUpRight, label: 'Transfer', path: '/wallet/transfer' },
-          { icon: Receipt, label: 'Pay Bills', path: '/wallet/bills' },
+          { icon: Receipt, label: 'Pay Bills', path: '/wallet/bills', disabled: !BILL_PAYMENTS_ENABLED },
         ].map(action => (
-          <Button key={action.label} variant="outline" className="h-auto flex-col gap-2 py-4" onClick={() => navigate(action.path)}>
+          <Button
+            key={action.label}
+            variant="outline"
+            className={`h-auto flex-col gap-2 py-4 ${action.disabled ? 'border-muted bg-muted/40 text-muted-foreground hover:bg-muted/40' : ''}`}
+            onClick={() => navigate(action.path)}
+            disabled={action.disabled}
+          >
             <action.icon className="h-5 w-5" />
             <span className="text-xs">{action.label}</span>
           </Button>
@@ -76,7 +83,7 @@ const WalletHome = () => {
         {!transactionsQuery.isLoading && !transactionsQuery.isError && recentTransactions.length === 0 && (
           <EmptyTableState
             title="No wallet transactions yet"
-            description="Your first wallet funding, transfer, or bill payment will appear here."
+            description="Your first wallet funding or transfer will appear here."
           />
         )}
         {recentTransactions.map(transaction => (
