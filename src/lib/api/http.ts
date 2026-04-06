@@ -3,6 +3,15 @@ import { clearAuthSession, getAccessToken } from './session';
 
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, '');
 const localApiBaseCandidates = ['https://localhost:51707', 'http://localhost:51707'] as const;
+const sensitiveRequestKeys = new Set([
+  'password',
+  'currentPassword',
+  'newPassword',
+  'pin',
+  'otp',
+  'refreshToken',
+  'token',
+]);
 
 export const API_BASE_URL = configuredApiBaseUrl ?? localApiBaseCandidates[0];
 
@@ -48,6 +57,8 @@ export const getApiErrorMessage = (error: unknown, fallback = 'Something went wr
 export const apiRequest = async <T>(path: string, options: ApiRequestOptions = {}): Promise<T> => {
   const { auth = true, headers, json, ...init } = options;
   const requestHeaders = new Headers(headers);
+
+  assertSecureSensitiveRequest(json);
 
   requestHeaders.set('Accept', 'application/json');
 
@@ -138,3 +149,48 @@ const shouldExpireAuthSession = (response: Response, error: ApiError) => {
   void error;
   return response.status === 401;
 };
+
+const assertSecureSensitiveRequest = (json: unknown) => {
+  if (!containsSensitiveValue(json)) {
+    return;
+  }
+
+  const apiUrl = new URL(API_BASE_URL);
+  if (!isSecureOrigin(apiUrl)) {
+    throw new Error('Sensitive actions require an HTTPS API endpoint.');
+  }
+
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const pageUrl = new URL(window.location.href);
+  if (!isSecureOrigin(pageUrl)) {
+    throw new Error('Sensitive actions are blocked on insecure pages. Open the app over HTTPS.');
+  }
+};
+
+const containsSensitiveValue = (value: unknown): boolean => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  if (Array.isArray(value)) {
+    return value.some(containsSensitiveValue);
+  }
+
+  return Object.entries(value as Record<string, unknown>).some(([key, nestedValue]) => {
+    if (sensitiveRequestKeys.has(key)) {
+      return true;
+    }
+
+    return containsSensitiveValue(nestedValue);
+  });
+};
+
+const isSecureOrigin = (url: URL) => url.protocol === 'https:' || isLocalOrigin(url);
+
+const isLocalOrigin = (url: URL) =>
+  url.hostname === 'localhost'
+  || url.hostname === '127.0.0.1'
+  || url.hostname === '::1';
