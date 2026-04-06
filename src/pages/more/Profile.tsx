@@ -19,6 +19,7 @@ const Profile = () => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const creditPassportQuery = useQuery({
@@ -35,6 +36,7 @@ const Profile = () => {
     setFirstName(user.firstName);
     setLastName(user.lastName);
     setPhone(user.phone);
+    setEmail(user.email ?? '');
     setError('');
   }, [user]);
 
@@ -52,15 +54,30 @@ const Profile = () => {
 
   const initials = `${user.firstName[0] ?? ''}${user.lastName[0] ?? ''}`.trim() || 'A';
   const score = creditPassportQuery.data?.score ?? user.creditScore;
-  const trimmedFirstName = firstName.trim();
-  const trimmedLastName = lastName.trim();
-  const trimmedPhone = phone.trim();
-  const hasChanges = false;
-  const canSave = trimmedFirstName.length > 0 && trimmedLastName.length > 0 && !isSaving && hasChanges;
+  const hasPhone = user.phone.trim().length > 0;
+  const hasEmail = !!user.email?.trim();
+  const canEditPhone = !hasPhone;
+  const canEditEmail = !hasEmail;
+  const normalizedPhone = phone.trim();
+  const normalizedEmail = email.trim();
+  const hasProfileAction = canEditPhone || canEditEmail;
+  const phoneIsValid = !canEditPhone || !normalizedPhone || /^[+0-9][0-9]{7,31}$/.test(normalizedPhone);
+  const emailIsValid = !canEditEmail || !normalizedEmail || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+  const hasChanges = (canEditPhone && normalizedPhone.length > 0) || (canEditEmail && normalizedEmail.length > 0);
+  const canSave = hasProfileAction && hasChanges && phoneIsValid && emailIsValid && !isSaving;
 
   const handleSave = async () => {
-    if (!trimmedFirstName || !trimmedLastName) {
-      setError('First name and last name are required.');
+    if (!hasChanges) {
+      return;
+    }
+
+    if (!phoneIsValid) {
+      setError('Please enter a valid phone number.');
+      return;
+    }
+
+    if (!emailIsValid) {
+      setError('Please enter a valid email address.');
       return;
     }
 
@@ -69,11 +86,12 @@ const Profile = () => {
 
     try {
       await updateProfile({
-        firstName: trimmedFirstName,
-        lastName: trimmedLastName,
-        phone: trimmedPhone || user.phone,
+        firstName,
+        lastName,
+        phone: canEditPhone ? normalizedPhone : user.phone,
+        email: canEditEmail ? normalizedEmail : user.email,
       });
-      toast('Profile updated successfully.');
+      toast.success('Profile updated successfully.');
     } catch (saveError) {
       setError(getApiErrorMessage(saveError, 'Unable to update profile.'));
     } finally {
@@ -143,8 +161,6 @@ const Profile = () => {
             />
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">First name and last name cannot be changed from this screen.</p>
-
         <div className="space-y-2">
           <Label htmlFor="profile-phone">Phone number</Label>
           <Input
@@ -153,36 +169,39 @@ const Profile = () => {
             placeholder="08000000000"
             type="tel"
             className="h-12"
-            readOnly
-            disabled
+            readOnly={!canEditPhone}
+            disabled={!canEditPhone}
+            onChange={event => setPhone(event.target.value)}
           />
-          <p className="text-xs text-muted-foreground">Phone number cannot be changed from this screen.</p>
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="profile-email">Email</Label>
           <Input
             id="profile-email"
-            value={user.email ?? 'No email on this account'}
-            readOnly
-            disabled
+            value={email}
+            placeholder="you@example.com"
+            readOnly={!canEditEmail}
+            disabled={!canEditEmail}
+            onChange={event => setEmail(event.target.value)}
             className="h-12"
           />
-          <p className="text-xs text-muted-foreground">Email cannot be changed from this screen yet.</p>
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <Button onClick={handleSave} disabled={!canSave} className="h-12 w-full">
-          {isSaving ? (
-            <>
-              <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            'Save changes'
-          )}
-        </Button>
+        {hasProfileAction ? (
+          <Button onClick={handleSave} disabled={!canSave} className="h-12 w-full">
+            {isSaving ? (
+              <>
+                <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save changes'
+            )}
+          </Button>
+        ) : null}
       </Card>
 
       <Card className="space-y-3 p-4">

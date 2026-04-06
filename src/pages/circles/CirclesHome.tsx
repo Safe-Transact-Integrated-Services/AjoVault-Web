@@ -20,7 +20,7 @@ const CirclesHome = () => {
   return (
     <div className="px-4 py-6 safe-top">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="font-display text-xl font-bold text-foreground">Circles</h1>
+        <h1 className="font-display text-xl font-bold text-foreground">Circles (Ajo)</h1>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => navigate('/circles/join')}>Join</Button>
           <Button size="sm" onClick={() => navigate('/circles/create')} className="gap-1">

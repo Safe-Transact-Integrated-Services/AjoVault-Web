@@ -43,6 +43,7 @@ interface RefreshTokenResponse {
 interface UpdateMyProfileRequest {
   fullName: string;
   phoneNumber?: string | null;
+  email?: string | null;
 }
 
 export interface SubmitKycNinInput {
@@ -94,6 +95,7 @@ export interface UpdateProfileInput {
   firstName: string;
   lastName: string;
   phone: string;
+  email?: string;
 }
 
 export interface AuthResult {
@@ -244,6 +246,7 @@ export const updateCurrentUser = async (input: UpdateProfileInput): Promise<User
   const payload: UpdateMyProfileRequest = {
     fullName: `${input.firstName.trim()} ${input.lastName.trim()}`.trim(),
     phoneNumber: input.phone.trim() || null,
+    email: input.email?.trim() || null,
   };
 
   const response = await apiRequest<IdentityUserProfileResponse>('/api/identity/me', {

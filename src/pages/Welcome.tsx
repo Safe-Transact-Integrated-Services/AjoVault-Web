@@ -24,7 +24,7 @@ const features = [
   },
   {
     icon: Users,
-    title: 'Ajo Circles',
+    title: 'Circles (Ajo)',
     desc: 'Rotational, random, and bidding circles.',
   },
   {
@@ -111,25 +111,10 @@ const Welcome = () => {
             Save Together. Safe Together.
           </p>
           <p className="mt-4 max-w-lg leading-relaxed text-muted-foreground">
-            AjoVault now brings personal savings, Ajo circles, shared goals, fundraising campaigns,
+            AjoVault brings personal savings, circles (Ajo), shared goals, fundraising campaigns,
             wallet transfers and agent-assisted transactions into one platform with
             transparent in-app pricing.
           </p>
-
-          <div className="mt-6 grid w-full max-w-md grid-cols-2 gap-3 text-left text-sm">
-            <div className="rounded-2xl border border-border bg-card/80 p-4 shadow-sm backdrop-blur">
-              <p className="font-semibold text-foreground">Wallet + transfers</p>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                Fee previews now show total debit before users confirm.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-border bg-card/80 p-4 shadow-sm backdrop-blur">
-              <p className="font-semibold text-foreground">Agent network</p>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                Agent access codes, assisted services, and agent operations are live.
-              </p>
-            </div>
-          </div>
 
           <div className="mt-8 w-full max-w-sm space-y-3">
             <Button className="h-12 w-full text-base font-semibold" onClick={() => navigate('/signup')}>
@@ -149,10 +134,9 @@ const Welcome = () => {
           viewport={{ once: true }}
           className="mb-3 text-center font-display text-2xl font-bold text-foreground"
         >
-          What you can do now
+          What you can do
         </motion.h2>
         <p className="mx-auto mb-8 max-w-lg text-center text-sm leading-relaxed text-muted-foreground">
-          The homepage now reflects the product we have in the app today, not the earlier MVP copy.
         </p>
         <div className="mx-auto grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((feature, index) => (
@@ -179,13 +163,10 @@ const Welcome = () => {
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true }}
-          className="mb-3 text-center font-display text-2xl font-bold text-foreground"
+          className="mb-8 text-center font-display text-2xl font-bold text-foreground"
         >
-          Current pricing defaults
+          Pricing
         </motion.h2>
-        <p className="mx-auto mb-8 max-w-2xl text-center text-sm text-muted-foreground">
-          Quick view of the live default pricing.
-        </p>
         <div className="mx-auto max-w-3xl space-y-4">
           {pricingCards.map((card, index) => (
             <motion.div

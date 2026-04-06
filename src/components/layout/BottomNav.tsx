@@ -6,7 +6,7 @@ const tabs = [
   { path: '/dashboard', icon: Home, label: 'Home' },
   { path: '/circles', icon: Users, label: 'Circles' },
   { path: '/savings', icon: PiggyBank, label: 'Savings' },
-  { path: '/fundraising', icon: Heart, label: 'Campaign' },
+  { path: '/fundraising', icon: Heart, label: 'Fundraising' },
   { path: '/more', icon: MoreHorizontal, label: 'More' },
 ];
 
