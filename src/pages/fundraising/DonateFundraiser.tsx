@@ -32,6 +32,9 @@ import { walletKeys } from '@/services/walletApi';
 
 const presetAmounts = [5000, 10000, 25000, 50000];
 
+const isPlaceholderPhoneEmail = (value?: string | null) =>
+  !!value && value.trim().toLowerCase().endsWith('@phone.ajovault.local');
+
 type Step = 'details' | 'pin' | 'receipt';
 type Method = 'wallet' | 'paystack';
 type ReceiptState = {
@@ -96,7 +99,7 @@ const DonateFundraiser = () => {
   }, [donorName, user]);
 
   useEffect(() => {
-    if (user?.email && !email) {
+    if (user?.email && !isPlaceholderPhoneEmail(user.email) && !email) {
       setEmail(user.email);
     }
   }, [email, user?.email]);
@@ -476,7 +479,7 @@ const DonateFundraiser = () => {
                   placeholder="you@example.com"
                   className="h-12"
                 />
-                <p className="text-xs text-muted-foreground">Paystack requires an email address for donation checkout.</p>
+                <p className="text-xs text-muted-foreground">Paystack needs a real email address for donation checkout.</p>
               </div>
             )}
           </div>
