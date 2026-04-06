@@ -162,38 +162,48 @@ const Dashboard = () => {
       </motion.button>
 
       <div className="mb-6 grid grid-cols-2 gap-3">
-        <button onClick={() => navigate('/savings')} className="rounded-xl border border-border bg-card p-4 text-left">
-          <div className="flex items-center gap-2 text-accent">
-            <PiggyBank className="h-4 w-4" />
-            <span className="text-xs font-medium">Active Savings</span>
+        <button onClick={() => navigate('/circles')} className="rounded-xl border border-border bg-card p-4 text-left">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-900">
+              <Users className="h-4 w-4" />
+            </div>
+            <span className="text-xs font-medium text-blue-900">Active Circles (Ajo)</span>
           </div>
+          <p className="mt-2 text-xs text-muted-foreground">Circles you currently belong to.</p>
+          <p className="mt-2 text-lg font-bold text-foreground">{circles?.activeCount ?? 0}</p>
+          <p className="text-xs text-muted-foreground">{circles?.memberCount ?? 0} members</p>
+        </button>
+        <button onClick={() => navigate('/savings')} className="rounded-xl border border-border bg-card p-4 text-left">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/10 text-success">
+              <PiggyBank className="h-4 w-4" />
+            </div>
+            <span className="text-xs font-medium text-success">Active Savings</span>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">Personal savings plans currently running.</p>
           <p className="mt-2 text-lg font-bold text-foreground">{savings?.activeCount ?? 0}</p>
           <p className="text-xs text-muted-foreground">
             {formatCurrency(savings?.totalSavedAmount ?? 0)} saved
           </p>
         </button>
-        <button onClick={() => navigate('/circles')} className="rounded-xl border border-border bg-card p-4 text-left">
-          <div className="flex items-center gap-2 text-primary">
-            <Users className="h-4 w-4" />
-            <span className="text-xs font-medium">Active Circles</span>
-          </div>
-          <p className="mt-2 text-lg font-bold text-foreground">{circles?.activeCount ?? 0}</p>
-          <p className="text-xs text-muted-foreground">{circles?.memberCount ?? 0} members</p>
-        </button>
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3">
         <button onClick={() => navigate('/group-goals')} className="rounded-xl border border-border bg-card p-4 text-left">
-          <div className="flex items-center gap-2 text-accent">
-            <Target className="h-4 w-4" />
-            <span className="text-xs font-medium">Group Goals</span>
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 text-accent">
+              <Target className="h-4 w-4" />
+            </div>
+            <span className="text-xs font-medium text-accent">Group Goals</span>
           </div>
           <p className="mt-2 text-sm font-semibold text-foreground">Save together towards a shared goal</p>
         </button>
         <button onClick={() => navigate('/fundraising')} className="rounded-xl border border-border bg-card p-4 text-left">
-          <div className="flex items-center gap-2 text-primary">
-            <Heart className="h-4 w-4" />
-            <span className="text-xs font-medium">Fundraising</span>
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-800">
+              <Heart className="h-4 w-4" />
+            </div>
+            <span className="text-xs font-medium text-violet-800">Fundraising</span>
           </div>
           <p className="mt-2 text-sm font-semibold text-foreground">Raise funds for events and projects</p>
         </button>
@@ -232,7 +242,7 @@ const Dashboard = () => {
             </div>
           )}
 
-          {recentActivities.slice(0, 5).map(transaction => (
+          {recentActivities.slice(0, 4).map(transaction => (
             <div key={transaction.activityId} className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
               <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${transaction.type === 'credit' ? 'bg-success/10' : 'bg-muted'}`}>
                 {transaction.type === 'credit'
