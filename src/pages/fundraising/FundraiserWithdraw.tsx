@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Landmark, Wallet } from 'lucide-react';
+import { ArrowLeft, Wallet } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import PinPad from '@/components/shared/PinPad';
 import Receipt from '@/components/shared/Receipt';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -78,7 +77,7 @@ const FundraiserWithdraw = () => {
     setStep('receipt');
 
     if (withdrawal.status === 'Completed') {
-      toast.success('Campaign withdrawal completed.');
+      toast.success('Campaign funds moved to your wallet.');
     } else if (withdrawal.status === 'Pending') {
       toast('Campaign withdrawal submitted and awaiting confirmation.');
     } else {
@@ -99,11 +98,6 @@ const FundraiserWithdraw = () => {
   }
 
   const handleContinue = () => {
-    if (!management.beneficiary.isVerified) {
-      setError('Verify the campaign beneficiary before withdrawing funds.');
-      return;
-    }
-
     if (!Number.isFinite(amountValue) || amountValue < 100) {
       setError('Minimum withdrawal amount is NGN 100.');
       return;
@@ -176,18 +170,17 @@ const FundraiserWithdraw = () => {
       <Receipt
         status={mapReceiptStatus(receipt.status)}
         amount={receipt.amount}
-        description={`Campaign withdrawal to ${receipt.destinationAccountName}`}
+        description="Campaign withdrawal to AjoVault Wallet"
         reference={receipt.reference}
         date={receipt.completedAtUtc ?? receipt.createdAtUtc}
         details={[
           { label: 'Campaign', value: management.title },
           { label: 'Requested amount', value: formatCurrency(receipt.amount) },
           { label: 'Withdrawal fee', value: formatCurrency(receipt.feeAmount) },
-          { label: 'Net payout', value: formatCurrency(receipt.netPayoutAmount) },
-          { label: 'Beneficiary', value: receipt.destinationAccountName },
-          { label: 'Bank', value: receipt.destinationBankName },
-          ...(receipt.destinationAccountNumberMasked ? [{ label: 'Account', value: receipt.destinationAccountNumberMasked }] : []),
-          { label: 'Provider', value: receipt.provider },
+          { label: 'Net credit to wallet', value: formatCurrency(receipt.netPayoutAmount) },
+          { label: 'Destination', value: 'AjoVault Wallet' },
+          { label: 'Campaign owner', value: receipt.beneficiaryName },
+          ...(receipt.provider !== 'Wallet' ? [{ label: 'Provider', value: receipt.provider }] : []),
           { label: 'Available Balance After', value: formatCurrency(receipt.availableBalanceAfter) },
           ...(receipt.message ? [{ label: 'Message', value: receipt.message }] : []),
         ]}
@@ -208,7 +201,7 @@ const FundraiserWithdraw = () => {
       {step === 'amount' && (
         <div className="space-y-6">
           <div>
-            <h1 className="font-display text-2xl font-bold text-foreground">Withdraw Campaign Funds</h1>
+            <h1 className="font-display text-2xl font-bold text-foreground">Move Campaign Funds To Wallet</h1>
             <p className="mt-1 text-sm text-muted-foreground">{management.title}</p>
           </div>
 
@@ -227,30 +220,27 @@ const FundraiserWithdraw = () => {
           <Card className="rounded-2xl p-4">
             <div className="flex items-start gap-3">
               <div className="rounded-full bg-success/10 p-3 text-success">
-                <Landmark className="h-5 w-5" />
+                <Wallet className="h-5 w-5" />
               </div>
               <div>
-                <p className="font-medium text-foreground">{management.beneficiary.accountName ?? 'No beneficiary set'}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {management.beneficiary.bankName ?? 'Verify beneficiary'} {management.beneficiary.accountNumberMasked ? ` / ${management.beneficiary.accountNumberMasked}` : ''}
+                <p className="font-medium text-foreground">AjoVault Wallet</p>
+                <p className="mt-1 text-sm text-muted-foreground">Campaign withdrawals land in your wallet first.</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Use Wallet withdrawals later to send funds to your active saved bank account.
                 </p>
               </div>
             </div>
           </Card>
-
-          {!management.beneficiary.isVerified && (
-            <Alert variant="destructive">
-              <AlertTitle>Beneficiary required</AlertTitle>
-              <AlertDescription>Verify the campaign beneficiary before creating a withdrawal.</AlertDescription>
-            </Alert>
-          )}
 
           <div className="space-y-2">
             <Input
               type="number"
               placeholder="Withdrawal amount"
               value={amount}
-              onChange={event => { setAmount(event.target.value.replace(/[^\d]/g, '')); setError(''); }}
+              onChange={event => {
+                setAmount(event.target.value.replace(/[^\d]/g, ''));
+                setError('');
+              }}
             />
           </div>
 
@@ -258,7 +248,10 @@ const FundraiserWithdraw = () => {
             <Input
               placeholder="Reason (optional)"
               value={reason}
-              onChange={event => { setReason(event.target.value); setError(''); }}
+              onChange={event => {
+                setReason(event.target.value);
+                setError('');
+              }}
             />
           </div>
 
@@ -266,7 +259,7 @@ const FundraiserWithdraw = () => {
             <Card className="grid gap-2 rounded-2xl border-border bg-card p-4 text-sm">
               <SummaryRow label="Requested amount" value={formatCurrency(withdrawalQuote.requestedAmount)} />
               <SummaryRow label="Withdrawal fee" value={formatCurrency(withdrawalQuote.withdrawalFee)} />
-              <SummaryRow label="Net payout" value={formatCurrency(withdrawalQuote.netPayoutAmount)} />
+              <SummaryRow label="Net credit to wallet" value={formatCurrency(withdrawalQuote.netPayoutAmount)} />
             </Card>
           )}
 
@@ -284,7 +277,7 @@ const FundraiserWithdraw = () => {
           title="Confirm With PIN"
           subtitle={
             withdrawalQuote
-              ? `${formatCurrency(withdrawalQuote.netPayoutAmount)} net payout after ${formatCurrency(withdrawalQuote.withdrawalFee)} fee.`
+              ? `${formatCurrency(withdrawalQuote.netPayoutAmount)} will be credited to your wallet after ${formatCurrency(withdrawalQuote.withdrawalFee)} fee.`
               : 'Enter your 4-digit transaction PIN.'
           }
           error={error}

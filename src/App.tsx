@@ -3,7 +3,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { AdminAuthProvider } from '@/contexts/AdminAuthContext';
@@ -21,7 +21,6 @@ import Welcome from '@/pages/Welcome';
 import Signup from '@/pages/Signup';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
-import WalletHome from '@/pages/wallet/WalletHome';
 import FundWallet from '@/pages/wallet/FundWallet';
 import Transfer from '@/pages/wallet/Transfer';
 import BillPayment from '@/pages/wallet/BillPayment';
@@ -44,6 +43,7 @@ import MorePage from '@/pages/more/MorePage';
 import Profile from '@/pages/more/Profile';
 import KycUpgrade from '@/pages/more/KycUpgrade';
 import Settings from '@/pages/more/Settings';
+import WithdrawalAccounts from '@/pages/more/WithdrawalAccounts';
 import HelpSupport from '@/pages/more/HelpSupport';
 import AgentAccess from '@/pages/more/AgentAccess';
 import NotFound from '@/pages/NotFound';
@@ -129,12 +129,13 @@ const App = () => (
                 <Route path="/agent/login" element={<AgentLogin />} />
                 <Route path="/agent/apply" element={<BecomeAgent />} />
                 <Route path="/fundraising/donate/:code" element={<DonateFundraiser />} />
+                <Route path="/wallet" element={<Navigate to="/transactions" replace />} />
+                <Route path="/wallet/history" element={<Navigate to="/transactions" replace />} />
               </Route>
 
               <Route element={<AuthRouteGuard />}>
                 <Route element={<AppLayout />}>
                   <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/wallet" element={<WalletHome />} />
                   <Route path="/savings" element={<SavingsHome />} />
                   <Route path="/savings/create" element={<CreateSavings />} />
                   <Route path="/savings/invite" element={<SavingsInvite />} />
@@ -158,12 +159,15 @@ const App = () => (
                   <Route path="/more" element={<MorePage />} />
                   <Route path="/more/profile" element={<Profile />} />
                   <Route path="/more/settings" element={<Settings />} />
+                  <Route path="/more/withdrawal-accounts" element={<WithdrawalAccounts />} />
                   <Route path="/more/agent-access" element={<AgentAccess />} />
                   <Route path="/more/help" element={<HelpSupport />} />
                   <Route path="/wallet/fund" element={<FundWallet />} />
                   <Route path="/wallet/transfer" element={<Transfer />} />
                   <Route path="/wallet/bills" element={<BillPayment />} />
-                  <Route path="/wallet/history" element={<TransactionHistory />} />
+                  <Route path="/transactions" element={<TransactionHistory />} />
+                  <Route path="/wallet" element={<Navigate to="/transactions" replace />} />
+                  <Route path="/wallet/history" element={<Navigate to="/transactions" replace />} />
                   <Route path="/notifications" element={<Notifications />} />
                   <Route path="/more/kyc" element={<KycUpgrade />} />
                   <Route path="/credit-passport" element={<CreditPassport />} />

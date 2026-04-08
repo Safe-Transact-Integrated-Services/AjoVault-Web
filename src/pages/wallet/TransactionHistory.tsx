@@ -38,7 +38,7 @@ const TransactionHistory = () => {
         <ArrowLeft className="h-4 w-4" /> Back
       </button>
 
-      <h1 className="mb-4 font-display text-2xl font-bold">Transaction History</h1>
+      <h1 className="mb-4 font-display text-2xl font-bold">Transactions</h1>
 
       <div className="mb-4 flex gap-2">
         {(['all', 'credit', 'debit'] as const).map(nextFilter => (

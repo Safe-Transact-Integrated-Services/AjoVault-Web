@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, ArrowLeft, Landmark, LoaderCircle, Wallet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import PinPad from '@/components/shared/PinPad';
 import Receipt from '@/components/shared/Receipt';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -9,54 +10,45 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getApiErrorMessage } from '@/lib/api/http';
 import {
   createWalletTransfer,
   finalizeWalletTransfer,
-  getPayoutBanks,
   quoteWalletTransfer,
-  resolveTransferAccount,
   type CreateTransferResponse,
-  type ResolveTransferAccountResponse,
   type TransferQuoteResponse,
   type TransferStatusResponse,
 } from '@/services/paymentApi';
 import { formatCurrency } from '@/services/mockData';
+import { withdrawalAccountKeys, getMyWithdrawalAccounts } from '@/services/withdrawalAccountsApi';
 import { getMyWallet, walletKeys } from '@/services/walletApi';
-import { toast } from 'sonner';
 
-type Step = 'recipient' | 'amount' | 'pin' | 'otp' | 'receipt';
+type Step = 'amount' | 'pin' | 'otp' | 'receipt';
 type TransferReceipt = CreateTransferResponse | TransferStatusResponse;
 
 const Transfer = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [step, setStep] = useState<Step>('recipient');
-  const [bankCode, setBankCode] = useState('');
-  const [accountNumber, setAccountNumber] = useState('');
+  const [step, setStep] = useState<Step>('amount');
   const [reason, setReason] = useState('');
   const [amount, setAmount] = useState('');
   const [error, setError] = useState('');
-  const [isResolving, setIsResolving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isFinalizingOtp, setIsFinalizingOtp] = useState(false);
   const [pinPadKey, setPinPadKey] = useState(0);
   const [otpPadKey, setOtpPadKey] = useState(0);
-  const [resolvedAccount, setResolvedAccount] = useState<ResolveTransferAccountResponse | null>(null);
   const [receipt, setReceipt] = useState<TransferReceipt | null>(null);
-
-  const banksQuery = useQuery({
-    queryKey: ['payments', 'banks'],
-    queryFn: getPayoutBanks,
-    staleTime: 5 * 60 * 1000,
-  });
 
   const walletQuery = useQuery({
     queryKey: walletKeys.me,
     queryFn: getMyWallet,
   });
 
+  const withdrawalAccountsQuery = useQuery({
+    queryKey: withdrawalAccountKeys.me,
+    queryFn: getMyWithdrawalAccounts,
+  });
+
+  const activeWithdrawalAccount = withdrawalAccountsQuery.data?.find(account => account.isActive) ?? null;
   const amountValue = Number(amount || '0');
   const transferQuoteQuery = useQuery<TransferQuoteResponse>({
     queryKey: ['payments', 'transfer-quote', amountValue],
@@ -64,19 +56,12 @@ const Transfer = () => {
     enabled: Number.isFinite(amountValue) && amountValue >= 100,
     staleTime: 30 * 1000,
   });
-
-  const selectedBank = banksQuery.data?.find(bank => bank.code === bankCode) ?? null;
   const transferQuote = transferQuoteQuery.data;
 
   const clearError = () => {
     if (error) {
       setError('');
     }
-  };
-
-  const resetResolvedAccount = () => {
-    setResolvedAccount(null);
-    setReceipt(null);
   };
 
   const finalizeReceipt = async (response: TransferReceipt) => {
@@ -105,44 +90,9 @@ const Transfer = () => {
     }
   };
 
-  const handleResolveRecipient = async () => {
-    const normalizedAccountNumber = accountNumber.replace(/[^\d]/g, '');
-    if (!bankCode) {
-      setError('Select a bank first.');
-      return;
-    }
-
-    if (normalizedAccountNumber.length !== 10) {
-      setError('Provide a valid 10-digit account number.');
-      return;
-    }
-
-    setIsResolving(true);
-    clearError();
-
-    try {
-      const account = await resolveTransferAccount({
-        accountNumber: normalizedAccountNumber,
-        bankCode,
-        bankName: selectedBank?.name,
-        currency: 'NGN',
-      });
-
-      setResolvedAccount(account);
-      setStep('amount');
-    } catch (resolveError) {
-      const message = getApiErrorMessage(resolveError, 'Unable to resolve this bank account.');
-      setError(message);
-      toast.error(message);
-    } finally {
-      setIsResolving(false);
-    }
-  };
-
   const handleContinueToPin = () => {
-    if (!resolvedAccount) {
-      setError('Resolve the destination account first.');
-      setStep('recipient');
+    if (!activeWithdrawalAccount) {
+      setError('Add and activate a withdrawal account before making withdrawals.');
       return;
     }
 
@@ -162,12 +112,6 @@ const Transfer = () => {
   };
 
   const handleSubmitTransfer = async (pin: string) => {
-    if (!resolvedAccount) {
-      setError('Resolve the destination account first.');
-      setStep('recipient');
-      return;
-    }
-
     setIsSubmitting(true);
     clearError();
 
@@ -175,9 +119,6 @@ const Transfer = () => {
       const response = await createWalletTransfer({
         amount: amountValue,
         currency: 'NGN',
-        destinationAccountNumber: resolvedAccount.accountNumber,
-        destinationBankCode: resolvedAccount.bankCode,
-        destinationBankName: resolvedAccount.bankName,
         reason,
         pin,
       });
@@ -196,11 +137,11 @@ const Transfer = () => {
   const handleFinalizeTransferOtp = async (otp: string) => {
     if (!receipt) {
       setError('Transfer details are missing. Start the withdrawal again.');
-      setStep('recipient');
+      setStep('amount');
       return;
     }
 
-    setIsFinalizingOtp(true);
+    setIsSubmitting(true);
     clearError();
 
     try {
@@ -216,7 +157,7 @@ const Transfer = () => {
       setOtpPadKey(current => current + 1);
       toast.error(message);
     } finally {
-      setIsFinalizingOtp(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -249,12 +190,7 @@ const Transfer = () => {
       <button
         type="button"
         onClick={() => {
-          if (isResolving || isSubmitting || isFinalizingOtp) {
-            return;
-          }
-
-          if (step === 'amount') {
-            setStep('recipient');
+          if (isSubmitting) {
             return;
           }
 
@@ -275,11 +211,11 @@ const Transfer = () => {
         <ArrowLeft className="h-4 w-4" /> Back
       </button>
 
-      {step === 'recipient' && (
+      {step === 'amount' && (
         <div className="space-y-6">
           <div>
             <h1 className="font-display text-2xl font-bold">Withdraw to Bank</h1>
-            <p className="mt-1 text-muted-foreground">Send money from your wallet to any supported Nigerian bank account.</p>
+            <p className="mt-1 text-muted-foreground">Your withdrawal will go to the active bank account saved in Settings.</p>
           </div>
 
           <Card className="rounded-2xl border-border bg-card p-4">
@@ -296,172 +232,110 @@ const Transfer = () => {
             </div>
           </Card>
 
-          <div className="space-y-2">
-            <Label htmlFor="transfer-bank">Bank</Label>
-            <Select
-              value={bankCode}
-              onValueChange={value => {
-                setBankCode(value);
-                clearError();
-                resetResolvedAccount();
-              }}
-            >
-              <SelectTrigger id="transfer-bank" className="h-12">
-                <SelectValue placeholder={banksQuery.isLoading ? 'Loading banks...' : 'Select bank'} />
-              </SelectTrigger>
-              <SelectContent>
-                {banksQuery.data?.map(bank => (
-                  <SelectItem key={bank.code} value={bank.code}>
-                    {bank.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="transfer-account-number">Account Number</Label>
-            <Input
-              id="transfer-account-number"
-              type="tel"
-              inputMode="numeric"
-              placeholder="0123456789"
-              value={accountNumber}
-              onChange={event => {
-                setAccountNumber(event.target.value.replace(/[^\d]/g, '').slice(0, 10));
-                clearError();
-                resetResolvedAccount();
-              }}
-              className="h-12"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="transfer-reason">Narration</Label>
-            <Input
-              id="transfer-reason"
-              placeholder="Optional"
-              value={reason}
-              onChange={event => {
-                setReason(event.target.value);
-                clearError();
-              }}
-              className="h-12"
-            />
-          </div>
-
-          {resolvedAccount && (
+          {withdrawalAccountsQuery.isLoading ? (
+            <Card className="rounded-2xl border-border bg-card p-4 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+                Loading withdrawal account...
+              </div>
+            </Card>
+          ) : activeWithdrawalAccount ? (
             <Card className="rounded-2xl border-success/20 bg-success/5 p-4">
               <div className="flex items-start gap-3">
                 <div className="rounded-xl bg-success/10 p-3 text-success">
                   <Landmark className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-foreground">{resolvedAccount.accountName}</p>
+                  <p className="font-medium text-foreground">{activeWithdrawalAccount.accountName}</p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {resolvedAccount.bankName} | {resolvedAccount.accountNumber}
+                    {activeWithdrawalAccount.bankName} / {activeWithdrawalAccount.accountNumberMasked}
                   </p>
+                  <p className="mt-1 text-xs text-success">Active withdrawal account</p>
                 </div>
               </div>
             </Card>
-          )}
-
-          {banksQuery.isError && (
-            <Alert variant="destructive">
+          ) : (
+            <Alert>
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Unable to load banks</AlertTitle>
-              <AlertDescription>Refresh the page and try again.</AlertDescription>
+              <AlertTitle>No active withdrawal account</AlertTitle>
+              <AlertDescription>
+                Add and activate a withdrawal account before making withdrawals.
+              </AlertDescription>
             </Alert>
           )}
 
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Unable to continue</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
+          {!activeWithdrawalAccount && (
+            <Button type="button" variant="outline" className="w-full" onClick={() => navigate('/more/withdrawal-accounts')}>
+              Open Withdrawal Accounts
+            </Button>
           )}
 
-          <Button
-            className="h-12 w-full"
-            onClick={handleResolveRecipient}
-            disabled={isResolving || banksQuery.isLoading}
-          >
-            {isResolving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : 'Verify account'}
-          </Button>
+          {activeWithdrawalAccount && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="transfer-amount">Amount (N)</Label>
+                <Input
+                  id="transfer-amount"
+                  type="number"
+                  inputMode="numeric"
+                  min="100"
+                  step="100"
+                  placeholder="0"
+                  value={amount}
+                  onChange={event => {
+                    setAmount(event.target.value.replace(/[^\d]/g, ''));
+                    clearError();
+                  }}
+                  className="h-14 text-center text-2xl font-bold"
+                />
+                <p className="text-xs text-muted-foreground">Minimum withdrawal amount is NGN 100.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="transfer-reason">Narration</Label>
+                <Input
+                  id="transfer-reason"
+                  placeholder="Optional"
+                  value={reason}
+                  onChange={event => {
+                    setReason(event.target.value);
+                    clearError();
+                  }}
+                  className="h-12"
+                />
+              </div>
+
+              {transferQuote && (
+                <Card className="grid gap-2 rounded-2xl border-border bg-card p-4 text-sm">
+                  <SummaryRow label="Transfer Amount" value={formatCurrency(transferQuote.amount)} />
+                  <SummaryRow label="Service Fee" value={formatCurrency(transferQuote.serviceFee)} />
+                  <SummaryRow label="Stamp Duty" value={formatCurrency(transferQuote.stampDuty)} />
+                  <SummaryRow label="Total Debit" value={formatCurrency(transferQuote.totalDebit)} />
+                </Card>
+              )}
+
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Unable to continue</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              <Button className="h-12 w-full" onClick={handleContinueToPin}>
+                Continue
+              </Button>
+            </>
+          )}
         </div>
       )}
 
-      {step === 'amount' && resolvedAccount && (
-        <div className="space-y-6">
-          <div>
-            <h1 className="font-display text-2xl font-bold">Enter Amount</h1>
-            <p className="mt-1 text-muted-foreground">
-              {resolvedAccount.accountName} | {resolvedAccount.bankName}
-            </p>
-          </div>
-
-          <Card className="grid gap-2 rounded-2xl border-border bg-card p-4 text-sm">
-            <SummaryRow label="Recipient" value={resolvedAccount.accountName} />
-            <SummaryRow label="Bank" value={resolvedAccount.bankName} />
-            <SummaryRow label="Account Number" value={resolvedAccount.accountNumber} />
-            <SummaryRow label="Available" value={formatCurrency(walletQuery.data?.available ?? 0)} />
-          </Card>
-
-          <div className="space-y-2">
-            <Label htmlFor="transfer-amount">Amount (N)</Label>
-            <Input
-              id="transfer-amount"
-              type="number"
-              inputMode="numeric"
-              min="100"
-              step="100"
-              placeholder="0"
-              value={amount}
-              onChange={event => {
-                setAmount(event.target.value.replace(/[^\d]/g, ''));
-                clearError();
-              }}
-              className="h-14 text-center text-2xl font-bold"
-            />
-            <p className="text-xs text-muted-foreground">Minimum withdrawal amount is NGN 100.</p>
-          </div>
-
-          {reason && (
-            <Card className="rounded-2xl border-border bg-card p-4 text-sm">
-              <SummaryRow label="Narration" value={reason} />
-            </Card>
-          )}
-
-          {transferQuote && (
-            <Card className="grid gap-2 rounded-2xl border-border bg-card p-4 text-sm">
-              <SummaryRow label="Transfer Amount" value={formatCurrency(transferQuote.amount)} />
-              <SummaryRow label="Service Fee" value={formatCurrency(transferQuote.serviceFee)} />
-              <SummaryRow label="Stamp Duty" value={formatCurrency(transferQuote.stampDuty)} />
-              <SummaryRow label="Total Debit" value={formatCurrency(transferQuote.totalDebit)} />
-            </Card>
-          )}
-
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Unable to continue</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          <Button className="h-12 w-full" onClick={handleContinueToPin}>
-            Continue
-          </Button>
-        </div>
-      )}
-
-      {step === 'pin' && resolvedAccount && (
+      {step === 'pin' && activeWithdrawalAccount && (
         <div className="flex min-h-[70vh] items-center justify-center px-2">
           <PinPad
             key={pinPadKey}
             title="Confirm Withdrawal"
-            subtitle={`${formatCurrency(transferQuote?.totalDebit ?? amountValue)} total debit to ${resolvedAccount.accountName}`}
+            subtitle={`${formatCurrency(transferQuote?.totalDebit ?? amountValue)} total debit to ${activeWithdrawalAccount.accountName}`}
             error={error}
             disabled={isSubmitting}
             onInput={clearError}
@@ -496,7 +370,7 @@ const Transfer = () => {
               title="Provider OTP"
               subtitle="Enter the Paystack transfer OTP"
               error={error}
-              disabled={isFinalizingOtp}
+              disabled={isSubmitting}
               onInput={clearError}
               onComplete={handleFinalizeTransferOtp}
             />

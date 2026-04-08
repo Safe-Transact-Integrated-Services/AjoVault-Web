@@ -32,8 +32,8 @@ const Receipt = ({
   details,
   primaryActionHref = '/dashboard',
   primaryActionLabel = 'Done',
-  secondaryActionHref = '/wallet/history',
-  secondaryActionLabel = 'View History',
+  secondaryActionHref = '/transactions',
+  secondaryActionLabel = 'View Transactions',
 }: ReceiptProps) => {
   const navigate = useNavigate();
   const { icon: Icon, label, color } = statusConfig[status];

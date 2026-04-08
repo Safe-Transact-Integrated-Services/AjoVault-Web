@@ -4,6 +4,9 @@ export interface User {
   firstName: string;
   lastName: string;
   email?: string;
+  emailVerified: boolean;
+  bvnLast4?: string | null;
+  ninLast4?: string | null;
   avatar?: string;
   kycTier: 'none' | 'basic' | 'verified' | 'premium';
   creditScore: number;

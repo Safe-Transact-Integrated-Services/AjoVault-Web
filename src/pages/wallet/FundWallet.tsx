@@ -191,7 +191,7 @@ const FundWallet = () => {
       {step === 'amount' && (
         <div className="space-y-6">
           <div>
-            <h1 className="font-display text-2xl font-bold">Fund Wallet</h1>
+            <h1 className="font-display text-2xl font-bold">Add Money</h1>
             <p className="mt-1 text-muted-foreground">Add money with a secure {providerName} checkout.</p>
           </div>
 
