@@ -36,8 +36,8 @@ const BillPayment = () => {
           </div>
         </Card>
 
-        <Button className="h-12 w-full" onClick={() => navigate('/wallet')}>
-          Back to Wallet
+        <Button className="h-12 w-full" onClick={() => navigate('/transactions')}>
+          Back to Transactions
         </Button>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Heart, Share2, ShieldCheck, Settings2 } from 'lucide-react';
+import { ArrowLeft, Heart, Share2, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -118,10 +118,6 @@ const FundraiserDetail = () => {
             <span className="text-muted-foreground">Status</span>
             <span className="font-medium capitalize text-foreground">{fundraiser.status}</span>
           </div>
-          <div className="mt-2 flex justify-between gap-3">
-            <span className="text-muted-foreground">Beneficiary</span>
-            <span className="font-medium text-foreground">{fundraiser.beneficiaryVerified ? 'Verified' : 'Pending setup'}</span>
-          </div>
           {fundraiser.withdrawnAmount > 0 && (
             <div className="mt-2 flex justify-between gap-3">
               <span className="text-muted-foreground">Withdrawn</span>
@@ -148,18 +144,6 @@ const FundraiserDetail = () => {
             </div>
           </div>
         )}
-
-        <div className="mb-4 rounded-xl border border-border bg-card p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <ShieldCheck className={`h-4 w-4 ${fundraiser.beneficiaryVerified ? 'text-success' : 'text-muted-foreground'}`} />
-            <h2 className="font-display text-base font-bold text-foreground">Campaign Trust</h2>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {fundraiser.beneficiaryVerified
-              ? 'This campaign has a verified payout beneficiary on file.'
-              : 'The organizer has not finished beneficiary verification yet.'}
-          </p>
-        </div>
 
         <div className="mb-6">
           <h2 className="mb-3 font-display text-base font-bold text-foreground">Recent Updates</h2>

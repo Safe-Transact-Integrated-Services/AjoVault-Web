@@ -26,14 +26,14 @@ const WalletHome = () => {
     <div className="px-4 py-6 safe-top">
       <h1 className="mb-6 font-display text-xl font-bold text-foreground">Wallet</h1>
 
-      <div className="mb-6 rounded-2xl bg-primary p-5 text-primary-foreground">
+      <div className="mb-5 rounded-2xl bg-primary px-4 py-3 text-primary-foreground">
         <div className="flex items-center justify-between">
-          <p className="text-sm opacity-80">Available Balance</p>
+          <p className="text-xs opacity-80">Available Balance</p>
           <button onClick={() => setShowBalance(!showBalance)}>
             {showBalance ? <EyeOff className="h-4 w-4 opacity-80" /> : <Eye className="h-4 w-4 opacity-80" />}
           </button>
         </div>
-        <p className="mt-1 text-3xl font-bold">
+        <p className="mt-0.5 text-[1.65rem] font-bold leading-tight">
           {showBalance
             ? walletQuery.isLoading
               ? 'Loading...'
@@ -41,21 +41,21 @@ const WalletHome = () => {
             : '********'}
         </p>
         {(wallet?.pending ?? 0) > 0 && showBalance && (
-          <p className="mt-1 text-xs opacity-80">Pending: {formatCurrency(wallet?.pending ?? 0, wallet?.currency ?? 'NGN')}</p>
+          <p className="mt-0.5 text-[11px] opacity-80">Pending: {formatCurrency(wallet?.pending ?? 0, wallet?.currency ?? 'NGN')}</p>
         )}
-        {walletQuery.isError && <p className="mt-2 text-xs opacity-80">Unable to load wallet balance.</p>}
+        {walletQuery.isError && <p className="mt-1 text-[11px] opacity-80">Unable to load wallet balance.</p>}
       </div>
 
       <div className="mb-6 grid grid-cols-3 gap-3">
         {[
-          { icon: Plus, label: 'Fund', path: '/wallet/fund' },
-          { icon: ArrowUpRight, label: 'Transfer', path: '/wallet/transfer' },
+          { icon: Plus, label: 'Add Money', path: '/wallet/fund' },
+          { icon: ArrowUpRight, label: 'Withdraw', path: '/wallet/transfer' },
           { icon: Receipt, label: 'Pay Bills', path: '/wallet/bills', disabled: !BILL_PAYMENTS_ENABLED },
         ].map(action => (
           <Button
             key={action.label}
             variant="outline"
-            className={`h-auto flex-col gap-2 py-4 ${action.disabled ? 'border-muted bg-muted/40 text-muted-foreground hover:bg-muted/40' : ''}`}
+            className={`h-auto flex-col gap-2 py-3 ${action.disabled ? 'border-muted bg-muted/40 text-muted-foreground hover:bg-muted/40' : ''}`}
             onClick={() => navigate(action.path)}
             disabled={action.disabled}
           >

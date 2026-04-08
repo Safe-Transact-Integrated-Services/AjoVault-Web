@@ -9,6 +9,7 @@ import PinPad from '@/components/shared/PinPad';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDefaultUserLoginPath, type RedirectTarget, getRedirectPath } from '@/lib/auth';
 import { getApiErrorMessage, isApiError } from '@/lib/api/http';
+import { validateLoginIdentifier } from '@/lib/authFormValidation';
 import { checkLoginIdentifier } from '@/services/authApi';
 
 interface LoginLocationState {
@@ -24,6 +25,8 @@ const Login = () => {
   const { login, isAuthenticated, user } = useAuth();
   const [identifier, setIdentifier] = useState(() => locationState?.identifier ?? '');
   const [showPassword, setShowPassword] = useState(false);
+  const [identifierError, setIdentifierError] = useState('');
+  const [identifierTouched, setIdentifierTouched] = useState(false);
   const [error, setError] = useState('');
   const [identifierCheckMessage, setIdentifierCheckMessage] = useState('');
   const [isCheckingIdentifier, setIsCheckingIdentifier] = useState(false);
@@ -38,6 +41,10 @@ const Login = () => {
   };
 
   const clearIdentifierState = () => {
+    if (identifierError) {
+      setIdentifierError('');
+    }
+
     if (error) {
       setError('');
     }
@@ -101,7 +108,14 @@ const Login = () => {
 
   const handleContinueToPassword = async () => {
     const trimmedIdentifier = identifier.trim();
-    if (!trimmedIdentifier) {
+    const nextIdentifierError = validateLoginIdentifier(trimmedIdentifier);
+
+    setIdentifierTouched(true);
+    setError('');
+    setIdentifierCheckMessage('');
+
+    if (nextIdentifierError) {
+      setIdentifierError(nextIdentifierError);
       return;
     }
 
@@ -168,10 +182,16 @@ const Login = () => {
                 setIdentifier(event.target.value);
                 clearIdentifierState();
               }}
+              onBlur={() => {
+                setIdentifierTouched(true);
+                setIdentifierError(validateLoginIdentifier(identifier));
+              }}
               className="h-12"
+              aria-invalid={!!identifierError}
             />
           </div>
 
+          {identifierTouched && identifierError && <p className="text-sm text-destructive">{identifierError}</p>}
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <Button type="submit" className="h-12 w-full" disabled={!identifier.trim() || isCheckingIdentifier}>

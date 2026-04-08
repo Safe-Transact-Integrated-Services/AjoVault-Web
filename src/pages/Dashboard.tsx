@@ -5,11 +5,11 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Bell,
+  ChevronRight,
   Eye,
   EyeOff,
   Heart,
   PiggyBank,
-  Receipt,
   ShieldCheck,
   Target,
   TrendingUp,
@@ -18,7 +18,7 @@ import {
 import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
-import { BILL_PAYMENTS_ENABLED } from '@/lib/features';
+import { getKycProgress } from '@/lib/kyc';
 import { creditPassportKeys, getCreditPassportScore } from '@/services/creditPassportApi';
 import { dashboardKeys, getDashboardSummary } from '@/services/dashboardApi';
 import { formatCurrency, formatDate } from '@/services/mockData';
@@ -43,6 +43,7 @@ const Dashboard = () => {
   const savings = dashboardQuery.data?.savings;
   const circles = dashboardQuery.data?.circles;
   const recentActivities = dashboardQuery.data?.recentActivities ?? [];
+  const kycProgress = getKycProgress(user);
   const currentHour = currentTime.getHours();
   const greeting =
     currentHour < 12
@@ -58,19 +59,6 @@ const Dashboard = () => {
 
     return () => window.clearInterval(timer);
   }, []);
-
-  const quickActions = [
-    { icon: ArrowDownLeft, label: 'Fund', path: '/wallet/fund', color: 'bg-accent/10 text-accent' },
-    { icon: ArrowUpRight, label: 'Transfer', path: '/wallet/transfer', color: 'bg-primary/10 text-primary' },
-    { icon: PiggyBank, label: 'Save', path: '/savings/create', color: 'bg-success/10 text-success' },
-    {
-      icon: Receipt,
-      label: 'Pay Bills',
-      path: '/wallet/bills',
-      color: BILL_PAYMENTS_ENABLED ? 'bg-warning/10 text-warning' : 'bg-muted text-muted-foreground',
-      disabled: !BILL_PAYMENTS_ENABLED,
-    },
-  ];
 
   return (
     <div className="px-4 py-6 safe-top">
@@ -92,55 +80,75 @@ const Dashboard = () => {
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-6 rounded-2xl bg-primary p-5 text-primary-foreground"
+        className="mb-6 rounded-2xl bg-primary px-3.5 py-2 text-primary-foreground"
       >
-        <div className="flex items-center justify-between">
-          <p className="text-sm opacity-80">Wallet Balance</p>
-          <button onClick={() => setShowBalance(!showBalance)}>
-            {showBalance ? <EyeOff className="h-4 w-4 opacity-80" /> : <Eye className="h-4 w-4 opacity-80" />}
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] opacity-80">Wallet Balance</p>
+          <button onClick={() => setShowBalance(!showBalance)} className="shrink-0">
+            {showBalance ? <EyeOff className="h-3.5 w-3.5 opacity-80" /> : <Eye className="h-3.5 w-3.5 opacity-80" />}
           </button>
         </div>
-        <p className="mt-1 text-2xl font-bold">
-          {showBalance
-            ? dashboardQuery.isLoading
-              ? 'Loading...'
-              : formatCurrency(wallet?.availableBalance ?? 0, wallet?.currency ?? 'NGN')
-            : '********'}
-        </p>
-        {(wallet?.pendingBalance ?? 0) > 0 && showBalance && (
-          <p className="mt-1 text-xs opacity-70">Pending: {formatCurrency(wallet?.pendingBalance ?? 0, wallet?.currency ?? 'NGN')}</p>
-        )}
-        {dashboardQuery.isError && (
-          <p className="mt-2 text-xs opacity-80">Unable to load the latest dashboard summary.</p>
-        )}
+        <div className="mt-0.5 flex items-center justify-between gap-3">
+          <p className="text-[1.38rem] font-bold leading-tight">
+            {showBalance
+              ? dashboardQuery.isLoading
+                ? 'Loading...'
+                : formatCurrency(wallet?.availableBalance ?? 0, wallet?.currency ?? 'NGN')
+              : '********'}
+          </p>
+        </div>
+        <div className="mt-0.5 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            {(wallet?.pendingBalance ?? 0) > 0 && showBalance && (
+              <p className="text-[10px] opacity-70">Pending: {formatCurrency(wallet?.pendingBalance ?? 0, wallet?.currency ?? 'NGN')}</p>
+            )}
+            {dashboardQuery.isError && (
+              <p className="text-[10px] opacity-80">Unable to load the latest dashboard summary.</p>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => navigate('/wallet/fund')}
+              className="inline-flex w-[108px] items-center justify-center gap-1 whitespace-nowrap rounded-full bg-white/15 px-2 py-1 text-xs font-semibold text-primary-foreground transition-colors hover:bg-white/20"
+            >
+              <ArrowDownLeft className="h-3 w-3" />
+              <span>Add Money</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/wallet/transfer')}
+              className="inline-flex w-[108px] items-center justify-center gap-1 whitespace-nowrap rounded-full border border-white/25 bg-white/10 px-2 py-1 text-xs font-semibold text-primary-foreground transition-colors hover:bg-white/15"
+            >
+              <ArrowUpRight className="h-3 w-3" />
+              <span>Withdraw</span>
+            </button>
+          </div>
+        </div>
       </motion.div>
 
-      <div className="mb-6 grid grid-cols-4 gap-3">
-        {quickActions.map((action, index) => (
-          <motion.button
-            key={action.label}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 + index * 0.05 }}
-            onClick={() => {
-              if (action.disabled) {
-                return;
-              }
-
-              navigate(action.path);
-            }}
-            disabled={action.disabled}
-            className={`flex flex-col items-center gap-2 ${action.disabled ? 'cursor-not-allowed opacity-60' : ''}`}
-          >
-            <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${action.color}`}>
-              <action.icon className="h-5 w-5" />
-            </div>
-            <span className={`text-xs font-medium ${action.disabled ? 'text-muted-foreground' : 'text-foreground'}`}>
-              {action.label}
-            </span>
-          </motion.button>
-        ))}
-      </div>
+      {kycProgress.nextStep !== 'complete' && (
+        <motion.button
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.25 }}
+        onClick={() => navigate('/more/kyc')}
+        className="mb-3 flex w-full items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-left"
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+            <ShieldCheck className="h-4 w-4" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-amber-950">KYC Status</p>
+            <p className="text-[11px] text-amber-800">
+              {kycProgress.summary} · {kycProgress.completedCount}/3 complete · {kycProgress.nextStepTitle}
+            </p>
+          </div>
+        </div>
+          <ChevronRight className="h-3.5 w-3.5 text-amber-700" />
+      </motion.button>
+      )}
 
       <motion.button
         initial={{ opacity: 0, y: 10 }}
@@ -162,51 +170,173 @@ const Dashboard = () => {
       </motion.button>
 
       <div className="mb-6 grid grid-cols-2 gap-3">
-        <button onClick={() => navigate('/circles')} className="rounded-xl border border-border bg-card p-4 text-left">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-900">
-              <Users className="h-4 w-4" />
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => navigate('/circles')}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              navigate('/circles');
+            }
+          }}
+          className="cursor-pointer rounded-xl border border-border bg-card p-3 text-left transition-colors hover:bg-muted/30"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+                <Users className="h-4 w-4" />
+              </div>
+              <span className="text-xs font-medium text-blue-700">Circles (Ajo)</span>
             </div>
-            <span className="text-xs font-medium text-blue-900">Active Circles (Ajo)</span>
+            <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-700" />
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">Circles you currently belong to.</p>
-          <p className="mt-2 text-lg font-bold text-foreground">{circles?.activeCount ?? 0}</p>
-          <p className="text-xs text-muted-foreground">{circles?.memberCount ?? 0} members</p>
-        </button>
-        <button onClick={() => navigate('/savings')} className="rounded-xl border border-border bg-card p-4 text-left">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/10 text-success">
-              <PiggyBank className="h-4 w-4" />
+          <p className="mt-1 text-[11px] text-muted-foreground">Circles you currently belong to.</p>
+          <p className="mt-1 text-base font-bold text-foreground">{circles?.activeCount ?? 0} circles</p>
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                navigate('/circles/join');
+              }}
+              className="inline-flex flex-1 items-center justify-center rounded-full border border-blue-200 px-3 py-1.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-50"
+            >
+              Join Circle
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                navigate('/circles/create');
+              }}
+              className="inline-flex flex-1 items-center justify-center rounded-full bg-blue-100 px-3 py-1.5 text-[11px] font-semibold text-blue-700 transition-colors hover:bg-blue-200"
+            >
+              Create Circle
+            </button>
+          </div>
+        </div>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => navigate('/savings')}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              navigate('/savings');
+            }
+          }}
+          className="cursor-pointer rounded-xl border border-border bg-card p-3 text-left transition-colors hover:bg-muted/30"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/10 text-success">
+                <PiggyBank className="h-4 w-4" />
+              </div>
+              <span className="text-xs font-medium text-success">Active Savings</span>
             </div>
-            <span className="text-xs font-medium text-success">Active Savings</span>
+            <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" />
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">Personal savings plans currently running.</p>
-          <p className="mt-2 text-lg font-bold text-foreground">{savings?.activeCount ?? 0}</p>
-          <p className="text-xs text-muted-foreground">
-            {formatCurrency(savings?.totalSavedAmount ?? 0)} saved
+          <p className="mt-1 text-xs text-muted-foreground">Savings plans currently running.</p>
+          <p className="mt-1 text-base font-bold text-foreground">
+            {formatCurrency(savings?.totalSavedAmount ?? 0)} <span className="font-bold">saved</span>
           </p>
-        </button>
+          <div className="mt-3 flex items-center">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                navigate('/savings/create');
+              }}
+              className="inline-flex w-full items-center justify-center rounded-full bg-success/10 px-3 py-1.5 text-[11px] font-semibold text-success transition-colors hover:bg-success/20"
+            >
+              Create Savings
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3">
-        <button onClick={() => navigate('/group-goals')} className="rounded-xl border border-border bg-card p-4 text-left">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 text-accent">
-              <Target className="h-4 w-4" />
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => navigate('/group-goals')}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              navigate('/group-goals');
+            }
+          }}
+          className="cursor-pointer rounded-xl border border-border bg-card p-3 text-left transition-colors hover:bg-muted/30"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 text-accent">
+                <Target className="h-4 w-4" />
+              </div>
+              <span className="text-xs font-medium text-accent">Group Goals</span>
             </div>
-            <span className="text-xs font-medium text-accent">Group Goals</span>
+            <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
           </div>
-          <p className="mt-2 text-sm font-semibold text-foreground">Save together towards a shared goal</p>
-        </button>
-        <button onClick={() => navigate('/fundraising')} className="rounded-xl border border-border bg-card p-4 text-left">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-800">
-              <Heart className="h-4 w-4" />
+          <p className="mt-1 text-[13px] font-semibold leading-tight text-foreground">Save together towards a shared goal</p>
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                navigate('/group-goals/join');
+              }}
+              className="inline-flex flex-1 items-center justify-center rounded-full border border-accent/30 px-3 py-1.5 text-[11px] font-medium text-accent transition-colors hover:bg-accent/5"
+            >
+              Join Goal
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                navigate('/group-goals/create');
+              }}
+              className="inline-flex flex-1 items-center justify-center rounded-full bg-accent/10 px-3 py-1.5 text-[11px] font-semibold text-accent transition-colors hover:bg-accent/20"
+            >
+              Create Goal
+            </button>
+          </div>
+        </div>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => navigate('/fundraising')}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              navigate('/fundraising');
+            }
+          }}
+          className="cursor-pointer rounded-xl border border-border bg-card p-3 text-left transition-colors hover:bg-muted/30"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-800">
+                <Heart className="h-4 w-4" />
+              </div>
+              <span className="text-xs font-medium text-violet-800">Fundraising</span>
             </div>
-            <span className="text-xs font-medium text-violet-800">Fundraising</span>
+            <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-800" />
           </div>
-          <p className="mt-2 text-sm font-semibold text-foreground">Raise funds for events and projects</p>
-        </button>
+          <p className="mt-1 text-[13px] font-semibold leading-tight text-foreground">Raise funds for events and projects</p>
+          <div className="mt-3 flex items-center">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                navigate('/fundraising/create');
+              }}
+              className="inline-flex w-full items-center justify-center rounded-full bg-violet-100 px-3 py-1.5 text-[11px] font-semibold text-violet-800 transition-colors hover:bg-violet-200"
+            >
+              Create Fundraiser
+            </button>
+          </div>
+        </div>
       </div>
 
       <button onClick={() => navigate('/credit-passport')} className="mb-6 flex w-full items-center justify-between rounded-xl border border-border bg-card p-4">
@@ -225,35 +355,35 @@ const Dashboard = () => {
       </button>
 
       <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-base font-bold text-foreground">Recent Activity</h2>
-          <button onClick={() => navigate('/wallet/history')} className="text-xs font-medium text-accent">See All</button>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="font-display text-base font-bold text-foreground">Recent Transactions</h2>
+          <button onClick={() => navigate('/transactions')} className="text-xs font-medium text-accent">See All</button>
         </div>
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {dashboardQuery.isLoading && (
-            <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
-              Loading recent activity...
+            <div className="rounded-xl border border-border bg-card px-3 py-3 text-sm text-muted-foreground">
+              Loading recent transactions...
             </div>
           )}
 
           {!dashboardQuery.isLoading && recentActivities.length === 0 && (
-            <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
-              No activity yet.
+            <div className="rounded-xl border border-border bg-card px-3 py-3 text-sm text-muted-foreground">
+              No transactions yet.
             </div>
           )}
 
-          {recentActivities.slice(0, 4).map(transaction => (
-            <div key={transaction.activityId} className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
-              <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${transaction.type === 'credit' ? 'bg-success/10' : 'bg-muted'}`}>
+          {recentActivities.slice(0, 3).map(transaction => (
+            <div key={transaction.activityId} className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5">
+              <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${transaction.type === 'credit' ? 'bg-success/10' : 'bg-muted'}`}>
                 {transaction.type === 'credit'
-                  ? <ArrowDownLeft className="h-4 w-4 text-success" />
-                  : <ArrowUpRight className="h-4 w-4 text-muted-foreground" />}
+                  ? <ArrowDownLeft className="h-3.5 w-3.5 text-success" />
+                  : <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">{transaction.description}</p>
-                <p className="text-xs text-muted-foreground">{formatDate(transaction.date)}</p>
+                <p className="truncate text-[13px] font-medium text-foreground">{transaction.description}</p>
+                <p className="text-[11px] text-muted-foreground">{formatDate(transaction.date)}</p>
               </div>
-              <p className={`text-sm font-semibold ${transaction.type === 'credit' ? 'text-success' : 'text-foreground'}`}>
+              <p className={`text-[13px] font-semibold ${transaction.type === 'credit' ? 'text-success' : 'text-foreground'}`}>
                 {transaction.type === 'credit' ? '+' : '-'}{formatCurrency(transaction.amount)}
               </p>
             </div>

@@ -84,9 +84,6 @@ export interface ResolveTransferAccountResponse {
 export interface CreateWalletTransferInput {
   amount: number;
   currency?: string;
-  destinationAccountNumber: string;
-  destinationBankCode: string;
-  destinationBankName?: string;
   reason?: string;
   pin: string;
   provider?: string;
@@ -188,9 +185,6 @@ export const createWalletTransfer = (input: CreateWalletTransferInput) =>
     json: {
       amount: input.amount,
       currency: input.currency ?? 'NGN',
-      destinationAccountNumber: input.destinationAccountNumber.trim(),
-      destinationBankCode: input.destinationBankCode,
-      destinationBankName: input.destinationBankName?.trim() || undefined,
       reason: input.reason?.trim() || undefined,
       pin: input.pin,
       provider: input.provider ?? 'Paystack',

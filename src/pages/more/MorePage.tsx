@@ -1,13 +1,13 @@
 import { useNavigate } from 'react-router-dom';
-import { Bell, ChevronRight, CreditCard, FileText, HelpCircle, KeyRound, LogOut, Shield, User, Wallet } from 'lucide-react';
+import { ChevronRight, CreditCard, FileText, HelpCircle, KeyRound, Landmark, LogOut, Shield, User, Wallet } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 const menuItems = [
   { icon: User, label: 'Profile', path: '/more/profile' },
-  { icon: Wallet, label: 'Wallet', path: '/wallet' },
+  { icon: Wallet, label: 'Transactions', path: '/transactions' },
   { icon: Shield, label: 'KYC Verification', path: '/more/kyc' },
+  { icon: Landmark, label: 'Withdrawal Accounts', path: '/more/withdrawal-accounts' },
   { icon: CreditCard, label: 'Credit Passport', path: '/credit-passport' },
-  { icon: Bell, label: 'Notifications', path: '/notifications' },
   { icon: KeyRound, label: 'Agent Access Code', path: '/more/agent-access' },
   { icon: FileText, label: 'Settings', path: '/more/settings' },
   { icon: HelpCircle, label: 'Help & Support', path: '/more/help' },

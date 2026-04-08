@@ -261,7 +261,7 @@ export interface FundraiserInviteResult {
 }
 
 export interface SaveFundraiserBeneficiaryInput {
-  beneficiaryName: string;
+  beneficiaryName?: string;
   accountNumber: string;
   bankCode: string;
   bankName?: string;
@@ -634,7 +634,7 @@ export const saveFundraiserBeneficiary = async (
   const response = await apiRequest<FundraiserBeneficiaryResponse>(`/api/fundraisers/${encodeURIComponent(id)}/beneficiary`, {
     method: 'POST',
     json: {
-      beneficiaryName: input.beneficiaryName.trim(),
+      beneficiaryName: input.beneficiaryName?.trim() || undefined,
       accountNumber: input.accountNumber.trim(),
       bankCode: input.bankCode,
       bankName: input.bankName?.trim() || undefined,

@@ -1,5 +1,6 @@
 import type { User } from '@/types';
 import { apiRequest } from '@/lib/api/http';
+import { normalizePhoneNumberInput } from '@/lib/authFormValidation';
 import type { AuthSession } from '@/lib/api/session';
 
 interface IdentityUserProfileResponse {
@@ -9,6 +10,9 @@ interface IdentityUserProfileResponse {
   phoneNumber?: string | null;
   role: string;
   kycTier: User['kycTier'];
+  emailVerified: boolean;
+  bvnLast4?: string | null;
+  ninLast4?: string | null;
   isActive: boolean;
   createdAtUtc: string;
   lastLoginAtUtc?: string | null;
@@ -77,6 +81,10 @@ export interface OtpVerificationResponse {
   message: string;
 }
 
+export interface VerifyEmailKycOtpInput {
+  otp: string;
+}
+
 export interface AuthContactInput {
   email?: string;
   phoneNumber?: string;
@@ -124,12 +132,12 @@ const normalizeIdentifierPayload = (identifier: string) => {
     return { email: value };
   }
 
-  return { phoneNumber: value };
+  return { phoneNumber: normalizePhoneNumberInput(value) };
 };
 
 const normalizeContactPayload = (input: AuthContactInput) => {
   const email = input.email?.trim() || undefined;
-  const phoneNumber = input.phoneNumber?.trim() || undefined;
+  const phoneNumber = input.phoneNumber ? normalizePhoneNumberInput(input.phoneNumber) : undefined;
 
   return {
     email,
@@ -155,6 +163,9 @@ export const mapIdentityProfileToUser = (profile: IdentityUserProfileResponse): 
     lastName,
     phone: profile.phoneNumber ?? '',
     email: normalizeIdentityEmail(profile.email),
+    emailVerified: profile.emailVerified,
+    bvnLast4: profile.bvnLast4 ?? null,
+    ninLast4: profile.ninLast4 ?? null,
     kycTier: profile.kycTier,
     creditScore: 0,
     role: profile.role,
@@ -262,6 +273,19 @@ export const submitKycNinVerification = (input: SubmitKycNinInput) =>
     method: 'POST',
     json: {
       nin: input.nin.trim(),
+    },
+  });
+
+export const requestEmailKycOtp = () =>
+  apiRequest<OtpChallengeResponse>('/api/identity/me/kyc/email/request-otp', {
+    method: 'POST',
+  });
+
+export const verifyEmailKycOtp = (input: VerifyEmailKycOtpInput) =>
+  apiRequest<OtpVerificationResponse>('/api/identity/me/kyc/email/verify', {
+    method: 'POST',
+    json: {
+      otp: input.otp.trim(),
     },
   });
 

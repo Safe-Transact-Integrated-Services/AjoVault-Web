@@ -10,6 +10,11 @@ import PinPad from '@/components/shared/PinPad';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDefaultAuthenticatedPath } from '@/lib/auth';
 import { getApiErrorMessage, isApiError } from '@/lib/api/http';
+import {
+  validateOptionalEmailAddress,
+  validateOptionalPhoneNumber,
+  validatePersonName,
+} from '@/lib/authFormValidation';
 
 type Step = 'contact' | 'otp' | 'details' | 'password' | 'pin';
 
@@ -38,10 +43,38 @@ const Signup = () => {
   const [loading, setLoading] = useState(false);
   const [passwordPadKey, setPasswordPadKey] = useState(0);
   const [pinPadKey, setPinPadKey] = useState(0);
+  const [emailError, setEmailError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [firstNameError, setFirstNameError] = useState('');
+  const [lastNameError, setLastNameError] = useState('');
 
   const clearError = () => {
     if (error) {
       setError('');
+    }
+  };
+
+  const clearContactValidation = (field: 'email' | 'phone') => {
+    clearError();
+
+    if (field === 'email' && emailError) {
+      setEmailError('');
+    }
+
+    if (field === 'phone' && phoneError) {
+      setPhoneError('');
+    }
+  };
+
+  const clearDetailsValidation = (field: 'firstName' | 'lastName') => {
+    clearError();
+
+    if (field === 'firstName' && firstNameError) {
+      setFirstNameError('');
+    }
+
+    if (field === 'lastName' && lastNameError) {
+      setLastNameError('');
     }
   };
 
@@ -56,6 +89,36 @@ const Signup = () => {
   const loginIdentifier = trimmedEmail || trimmedPhoneNumber;
   const isOtpExpired = step === 'otp' && otpExpiresAt !== null && otpSecondsRemaining <= 0;
   const showDevelopmentOtpHelper = import.meta.env.DEV;
+
+  const validateContactStep = () => {
+    const nextEmailError = validateOptionalEmailAddress(trimmedEmail);
+    const nextPhoneError = validateOptionalPhoneNumber(trimmedPhoneNumber);
+
+    setEmailError(nextEmailError);
+    setPhoneError(nextPhoneError);
+    setError('');
+
+    if (!trimmedEmail && !trimmedPhoneNumber) {
+      setError('Enter at least an email address or phone number.');
+      return false;
+    }
+
+    if (nextEmailError || nextPhoneError) {
+      return false;
+    }
+
+    return true;
+  };
+
+  const validateDetailsStep = () => {
+    const nextFirstNameError = validatePersonName(firstName, 'First name');
+    const nextLastNameError = validatePersonName(lastName, 'Last name');
+
+    setFirstNameError(nextFirstNameError);
+    setLastNameError(nextLastNameError);
+
+    return !nextFirstNameError && !nextLastNameError;
+  };
 
   const getOtpErrorMessage = (err: unknown) => {
     if (!isApiError(err)) {
@@ -108,8 +171,7 @@ const Signup = () => {
   }, [otpExpiresAt, step]);
 
   const sendOtpChallenge = async () => {
-    if (!hasContact) {
-      setError('Enter at least an email address or phone number.');
+    if (!validateContactStep()) {
       return;
     }
 
@@ -184,10 +246,12 @@ const Signup = () => {
   };
 
   const handleDetailsSubmit = () => {
-    if (firstName.trim() && lastName.trim()) {
-      setError('');
-      setStep('password');
+    if (!validateDetailsStep()) {
+      return;
     }
+
+    setError('');
+    setStep('password');
   };
 
   const handlePasswordComplete = async (nextPassword: string) => {
@@ -288,11 +352,14 @@ const Signup = () => {
                     value={email}
                     onChange={event => {
                       setEmail(event.target.value);
-                      clearError();
+                      clearContactValidation('email');
                     }}
+                    onBlur={() => setEmailError(validateOptionalEmailAddress(email))}
                     className="h-12"
                     inputMode="email"
+                    aria-invalid={!!emailError}
                   />
+                  {emailError && <p className="text-sm text-destructive">{emailError}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -303,11 +370,14 @@ const Signup = () => {
                     value={phoneNumber}
                     onChange={event => {
                       setPhoneNumber(event.target.value);
-                      clearError();
+                      clearContactValidation('phone');
                     }}
+                    onBlur={() => setPhoneError(validateOptionalPhoneNumber(phoneNumber))}
                     className="h-12"
                     inputMode="tel"
+                    aria-invalid={!!phoneError}
                   />
+                  {phoneError && <p className="text-sm text-destructive">{phoneError}</p>}
                 </div>
 
                 <p className="text-xs text-muted-foreground">At least one of email or phone number is required.</p>
@@ -409,10 +479,13 @@ const Signup = () => {
                     value={firstName}
                     onChange={event => {
                       setFirstName(event.target.value);
-                      clearError();
+                      clearDetailsValidation('firstName');
                     }}
+                    onBlur={() => setFirstNameError(validatePersonName(firstName, 'First name'))}
                     className="h-12"
+                    aria-invalid={!!firstNameError}
                   />
+                  {firstNameError && <p className="text-sm text-destructive">{firstNameError}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -422,10 +495,13 @@ const Signup = () => {
                     value={lastName}
                     onChange={event => {
                       setLastName(event.target.value);
-                      clearError();
+                      clearDetailsValidation('lastName');
                     }}
+                    onBlur={() => setLastNameError(validatePersonName(lastName, 'Last name'))}
                     className="h-12"
+                    aria-invalid={!!lastNameError}
                   />
+                  {lastNameError && <p className="text-sm text-destructive">{lastNameError}</p>}
                 </div>
               </div>
 

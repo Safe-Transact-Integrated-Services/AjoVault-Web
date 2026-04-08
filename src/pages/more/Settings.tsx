@@ -26,6 +26,7 @@ const Settings = () => {
     queryKey: settingsKeys.me,
     queryFn: getMySettings,
   });
+
   const [form, setForm] = useState<NotificationSettings | null>(null);
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -76,7 +77,7 @@ const Settings = () => {
       });
 
       setForm(next);
-      toast('Settings saved.');
+      toast.success('Settings saved.');
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: settingsKeys.me }),
         queryClient.invalidateQueries({ queryKey: notificationKeys.feed }),
@@ -97,7 +98,7 @@ const Settings = () => {
 
       <div>
         <h1 className="font-display text-2xl font-bold">Settings</h1>
-        <p className="text-sm text-muted-foreground">Manage how AjoVault updates you about savings, circles, and group goals.</p>
+        <p className="text-sm text-muted-foreground">Manage your notification and activity alert preferences.</p>
       </div>
 
       {settingsQuery.isLoading && (

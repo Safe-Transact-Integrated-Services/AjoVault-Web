@@ -91,6 +91,9 @@ const DonateFundraiser = () => {
     staleTime: 30 * 1000,
   });
   const donationQuote = donationQuoteQuery.data;
+  const displayedTipAmount = donationQuote?.tipAmount ?? tipValue;
+  const displayedProcessingFeeAmount = donationQuote?.processingFeeAmount ?? 0;
+  const displayedTotalCharge = donationQuote?.totalCharge ?? Math.max(0, amountValue + displayedTipAmount + displayedProcessingFeeAmount);
 
   useEffect(() => {
     if (user && !donorName) {
@@ -182,7 +185,7 @@ const DonateFundraiser = () => {
         { label: 'Campaign', value: fundraiser.title },
         { label: 'Donation', value: formatCurrency(status.donationAmount) },
         { label: 'AjoVault Tip', value: formatCurrency(status.tipAmount) },
-        { label: 'Covered Processing Fee', value: formatCurrency(status.processingFeeAmount) },
+        { label: 'Covered Processing Fee (incl. VAT)', value: formatCurrency(status.processingFeeAmount) },
         { label: 'Total Charge', value: formatCurrency(status.totalCharge) },
         { label: 'Email', value: status.customerEmail },
         ...(status.gatewayResponse ? [{ label: 'Gateway', value: status.gatewayResponse }] : []),
@@ -359,7 +362,7 @@ const DonateFundraiser = () => {
           <PinPad
             key={pinPadKey}
             title="Confirm Donation"
-            subtitle={`${formatCurrency(donationQuote?.totalCharge ?? (amountValue + tipValue))} total to ${fundraiser.title}`}
+            subtitle={`${formatCurrency(displayedTotalCharge)} total to ${fundraiser.title}`}
             error={error}
             disabled={isSubmitting}
             onInput={() => setError('')}
@@ -433,9 +436,6 @@ const DonateFundraiser = () => {
               placeholder="Leave blank to use the campaign default"
               className="h-12"
             />
-            <p className="text-xs text-muted-foreground">
-              Leave this blank to use the default tip. Set it to `0` if you do not want to tip.
-            </p>
           </div>
 
           <div className="space-y-3">
@@ -545,12 +545,12 @@ const DonateFundraiser = () => {
             </div>
           )}
 
-          {donationQuote && (
+          {amountValue > 0 && (
             <div className="space-y-2 rounded-2xl border border-border bg-card p-4 text-sm">
-              <SummaryRow label="Donation" value={formatCurrency(donationQuote.donationAmount)} />
-              <SummaryRow label="AjoVault Tip" value={formatCurrency(donationQuote.tipAmount)} />
-              <SummaryRow label="Processing Fee" value={formatCurrency(donationQuote.processingFeeAmount)} />
-              <SummaryRow label="Total Charge" value={formatCurrency(donationQuote.totalCharge)} />
+              <SummaryRow label="Donation" value={formatCurrency(donationQuote?.donationAmount ?? amountValue)} />
+              <SummaryRow label="AjoVault Tip" value={formatCurrency(displayedTipAmount)} />
+              <SummaryRow label="Processing Fee (incl. VAT)" value={formatCurrency(displayedProcessingFeeAmount)} />
+              <SummaryRow label="Total Charge" value={formatCurrency(displayedTotalCharge)} />
             </div>
           )}
 
@@ -565,7 +565,7 @@ const DonateFundraiser = () => {
             <Heart className="h-4 w-4" />
             {isSubmitting
               ? 'Processing donation...'
-              : `Donate ${amountValue > 0 ? formatCurrency(donationQuote?.totalCharge ?? amountValue) : ''}`}
+              : `Donate ${amountValue > 0 ? formatCurrency(displayedTotalCharge) : ''}`}
           </Button>
         </motion.div>
       )}
