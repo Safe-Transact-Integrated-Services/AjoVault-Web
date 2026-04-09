@@ -116,6 +116,16 @@ export interface LoginIdentifierLookupResult {
   message: string;
 }
 
+export interface ForgotPasswordResult {
+  message: string;
+  debugResetToken?: string | null;
+}
+
+export interface ForgotPinResult {
+  message: string;
+  debugOtp?: string | null;
+}
+
 const normalizeIdentityEmail = (email?: string | null) => {
   const value = email?.trim();
   if (!value || value.endsWith('@phone.ajovault.local')) {
@@ -220,6 +230,43 @@ export const checkLoginIdentifier = (identifier: string) =>
     method: 'POST',
     auth: false,
     json: normalizeIdentifierPayload(identifier),
+  });
+
+export const forgotPassword = (email: string) =>
+  apiRequest<ForgotPasswordResult>('/api/identity/forgot-password', {
+    method: 'POST',
+    auth: false,
+    json: {
+      email: email.trim(),
+    },
+  });
+
+export const resetPassword = (token: string, newPassword: string) =>
+  apiRequest('/api/identity/reset-password', {
+    method: 'POST',
+    auth: false,
+    json: {
+      token: token.trim(),
+      newPassword: newPassword.trim(),
+    },
+  });
+
+export const forgotPin = (identifier: string) =>
+  apiRequest<ForgotPinResult>('/api/identity/forgot-pin', {
+    method: 'POST',
+    auth: false,
+    json: normalizeIdentifierPayload(identifier),
+  });
+
+export const resetPin = (identifier: string, otp: string, newPin: string) =>
+  apiRequest('/api/identity/reset-pin', {
+    method: 'POST',
+    auth: false,
+    json: {
+      ...normalizeIdentifierPayload(identifier),
+      otp: otp.trim(),
+      newPin: newPin.trim(),
+    },
   });
 
 export const registerUser = async (input: SignupInput) => {

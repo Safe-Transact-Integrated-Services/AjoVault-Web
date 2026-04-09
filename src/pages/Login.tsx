@@ -142,6 +142,22 @@ const Login = () => {
     }
   };
 
+  const navigateToForgotPassword = () => {
+    navigate('/forgot-password', {
+      state: {
+        email: identifier.includes('@') ? identifier.trim() : '',
+      },
+    });
+  };
+
+  const navigateToForgotPin = () => {
+    navigate('/forgot-pin', {
+      state: {
+        identifier: identifier.trim(),
+      },
+    });
+  };
+
   return (
     <div className="min-h-screen px-6 py-6">
       <button
@@ -198,6 +214,15 @@ const Login = () => {
             {isCheckingIdentifier ? 'Checking account...' : 'Continue'}
           </Button>
 
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <button type="button" onClick={navigateToForgotPassword} className="font-medium text-accent">
+              Forgot password?
+            </button>
+            <button type="button" onClick={navigateToForgotPin} className="font-medium text-accent">
+              Forgot PIN?
+            </button>
+          </div>
+
           <p className="text-center text-sm text-muted-foreground">
             Don't have an account?{' '}
             <button type="button" onClick={() => navigate('/signup')} className="font-medium text-accent">
@@ -217,6 +242,14 @@ const Login = () => {
             onInput={clearPasswordError}
             onComplete={handlePasswordComplete}
           />
+          <div className="mt-5 flex items-center gap-4 text-sm">
+            <button type="button" onClick={navigateToForgotPassword} className="font-medium text-accent">
+              Forgot password?
+            </button>
+            <button type="button" onClick={navigateToForgotPin} className="font-medium text-accent">
+              Forgot PIN?
+            </button>
+          </div>
         </div>
       )}
     </div>

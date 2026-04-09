@@ -54,7 +54,7 @@ const CircleDetail = () => {
   };
 
   return (
-    <div className="min-h-screen px-4 py-6 safe-top pb-24">
+    <div className="min-h-screen px-4 py-6 safe-top pb-48">
       <button onClick={() => navigate(-1)} className="mb-6 flex items-center gap-1 text-sm text-muted-foreground">
         <ArrowLeft className="h-4 w-4" /> Back
       </button>

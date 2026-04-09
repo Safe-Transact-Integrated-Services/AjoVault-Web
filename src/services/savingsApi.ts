@@ -53,6 +53,21 @@ export interface SavingsContributionResponse {
   createdAtUtc: string;
 }
 
+export interface SavingsWithdrawalResponse {
+  withdrawalId: string;
+  planId: string;
+  requestedAmount: number;
+  penaltyAmount: number;
+  netAmount: number;
+  currency: string;
+  status: string;
+  reference: string;
+  walletBalanceAfter: number;
+  planBalanceAfter: number;
+  planStatus: string;
+  createdAtUtc: string;
+}
+
 export interface SavingsPlanDetail extends SavingsPlan {
   fundingSource: string;
   nextContributionDate: string;
@@ -86,6 +101,12 @@ export interface CreateSavingsPlanInput {
 export interface ContributeSavingsPlanInput {
   amount?: number;
   fundingSource?: string;
+  pin: string;
+}
+
+export interface WithdrawSavingsPlanInput {
+  amount: number;
+  reason?: string;
   pin: string;
 }
 
@@ -177,6 +198,16 @@ export const contributeToSavingsPlan = async (planId: string, input: ContributeS
     json: {
       amount: input.amount,
       fundingSource: input.fundingSource ?? 'wallet',
+      pin: input.pin,
+    },
+  });
+
+export const withdrawFromSavingsPlan = async (planId: string, input: WithdrawSavingsPlanInput) =>
+  apiRequest<SavingsWithdrawalResponse>(`/api/savings/plans/${encodeURIComponent(planId)}/withdrawals`, {
+    method: 'POST',
+    json: {
+      amount: input.amount,
+      reason: input.reason?.trim() || undefined,
       pin: input.pin,
     },
   });
