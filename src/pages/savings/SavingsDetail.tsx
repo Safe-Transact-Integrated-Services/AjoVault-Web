@@ -10,35 +10,26 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { contributeToSavingsPlan, getSavingsPlan, savingsKeys } from '@/services/savingsApi';
+import { getSavingsPlan, savingsKeys, withdrawFromSavingsPlan } from '@/services/savingsApi';
 import { dashboardKeys } from '@/services/dashboardApi';
-import { getPaymentCheckoutStatus } from '@/services/paymentApi';
 import { walletKeys } from '@/services/walletApi';
 import { formatCurrency, formatDate } from '@/services/mockData';
 import { getApiErrorMessage } from '@/lib/api/http';
-import { PaystackCheckoutCancelledError, resumePaystackTransaction } from '@/lib/payments/paystack';
 import { toast } from 'sonner';
 
 const milestones = [25, 50, 75, 100];
-const isContributionSuccessStatus = (status: string) => {
-  const normalized = status.trim().toLowerCase();
-  return normalized === 'success' || normalized === 'completed';
-};
-
-const isContributionPendingStatus = (status: string) => status.trim().toLowerCase() === 'pending';
 
 const SavingsDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showWithdraw, setShowWithdraw] = useState(false);
-  const [showContributionPanel, setShowContributionPanel] = useState(false);
-  const [contributionStep, setContributionStep] = useState<'amount' | 'pin'>('amount');
-  const [contributionAmount, setContributionAmount] = useState('');
-  const [contributionFundingSource, setContributionFundingSource] = useState<'wallet' | 'saved_card'>('wallet');
-  const [contributionError, setContributionError] = useState('');
-  const [isSubmittingContribution, setIsSubmittingContribution] = useState(false);
-  const [pinPadKey, setPinPadKey] = useState(0);
+  const [withdrawStep, setWithdrawStep] = useState<'details' | 'pin'>('details');
+  const [withdrawalAmount, setWithdrawalAmount] = useState('');
+  const [withdrawalReason, setWithdrawalReason] = useState('');
+  const [withdrawalError, setWithdrawalError] = useState('');
+  const [isSubmittingWithdrawal, setIsSubmittingWithdrawal] = useState(false);
+  const [withdrawPinPadKey, setWithdrawPinPadKey] = useState(0);
 
   const planQuery = useQuery({
     queryKey: id ? savingsKeys.detail(id) : savingsKeys.detail('missing'),
@@ -64,27 +55,36 @@ const SavingsDetail = () => {
   }
 
   const progress = Math.round(plan.progressPercent);
-  const amountValue = Number(contributionAmount || plan.contributionAmount || 0);
+  const withdrawalAmountValue = Number(withdrawalAmount || 0);
+  const normalizedPlanStatus = plan.status.trim().toLowerCase();
+  const isPlanActive = normalizedPlanStatus === 'active';
+  const isLockedBeforeMaturity =
+    plan.type === 'locked' && new Date(plan.endDate).getTime() > Date.now();
+  const canWithdraw = plan.savedAmount > 0 && !isLockedBeforeMaturity;
+  const canContribute = isPlanActive;
 
-  const startContribution = () => {
-    setContributionAmount(String(plan.contributionAmount));
-    setContributionFundingSource(
-      plan.fundingSource === 'saved_card' && plan.hasSavedCardAuthorization ? 'saved_card' : 'wallet',
-    );
-    setContributionError('');
-    setContributionStep('amount');
-    setShowContributionPanel(true);
+  const startWithdrawal = () => {
+    setWithdrawalAmount(String(plan.savedAmount));
+    setWithdrawalReason('');
+    setWithdrawalError('');
+    setWithdrawStep('details');
+    setShowWithdraw(true);
   };
 
-  const handleContinueToPin = () => {
-    if (!Number.isFinite(amountValue) || amountValue <= 0) {
-      setContributionError('Contribution amount must be greater than zero.');
+  const handleContinueToWithdrawPin = () => {
+    if (!Number.isFinite(withdrawalAmountValue) || withdrawalAmountValue <= 0) {
+      setWithdrawalError('Withdrawal amount must be greater than zero.');
       return;
     }
 
-    setContributionError('');
-    setPinPadKey(current => current + 1);
-    setContributionStep('pin');
+    if (withdrawalAmountValue > plan.savedAmount) {
+      setWithdrawalError('Withdrawal amount exceeds the current savings balance.');
+      return;
+    }
+
+    setWithdrawalError('');
+    setWithdrawPinPadKey(current => current + 1);
+    setWithdrawStep('pin');
   };
 
   const refreshSavingsQueries = async () => {
@@ -97,79 +97,35 @@ const SavingsDetail = () => {
     ]);
   };
 
-  const handleContribution = async (pin: string) => {
+  const handleWithdrawal = async (pin: string) => {
     if (!id) {
       return;
     }
 
-    setIsSubmittingContribution(true);
-    setContributionError('');
+    setIsSubmittingWithdrawal(true);
+    setWithdrawalError('');
 
     try {
-      const contribution = await contributeToSavingsPlan(plan.id, {
-        amount: amountValue,
-        fundingSource: contributionFundingSource,
+      const withdrawal = await withdrawFromSavingsPlan(plan.id, {
+        amount: withdrawalAmountValue,
+        reason: withdrawalReason,
         pin,
       });
 
-      if (contribution.requiresAction && contribution.accessCode) {
-        const popupResult = await resumePaystackTransaction(contribution.accessCode);
-        const checkoutStatus = await waitForCheckoutStatus(popupResult.reference || contribution.reference);
-
-        if (checkoutStatus.status === 'Success') {
-          await refreshSavingsQueries();
-          setShowContributionPanel(false);
-          toast.success('Saved-card contribution posted.');
-          return;
-        }
-
-        if (checkoutStatus.status === 'Pending') {
-          setShowContributionPanel(false);
-          toast('Saved-card contribution is awaiting confirmation.');
-          return;
-        }
-
-        const failureMessage = checkoutStatus.gatewayResponse || 'Saved-card contribution was not completed.';
-        setContributionError(failureMessage);
-        setContributionStep('amount');
-        toast.error(failureMessage);
-        return;
-      }
-
-      if (isContributionSuccessStatus(contribution.status)) {
-        await refreshSavingsQueries();
-        setShowContributionPanel(false);
-        toast.success(
-          contributionFundingSource === 'saved_card'
-            ? 'Saved-card contribution posted.'
-            : 'Savings contribution posted.',
-        );
-        return;
-      }
-
-      if (isContributionPendingStatus(contribution.status)) {
-        setShowContributionPanel(false);
-        toast('Contribution is awaiting confirmation.');
-        return;
-      }
-
-      setContributionError('Contribution was not completed.');
-      setContributionStep('amount');
-      toast.error('Contribution was not completed.');
-    } catch (contributionRequestError) {
-      if (contributionRequestError instanceof PaystackCheckoutCancelledError) {
-        setContributionError('Paystack checkout was cancelled.');
-        setContributionStep('amount');
-        toast('Paystack checkout was cancelled.');
-        return;
-      }
-
-      const message = getApiErrorMessage(contributionRequestError, 'Unable to post the savings contribution.');
-      setContributionError(message);
-      setPinPadKey(current => current + 1);
+      await refreshSavingsQueries();
+      setShowWithdraw(false);
+      toast.success(
+        withdrawal.penaltyAmount > 0
+          ? `${formatCurrency(withdrawal.netAmount)} moved to your wallet after ${formatCurrency(withdrawal.penaltyAmount)} penalty.`
+          : `${formatCurrency(withdrawal.netAmount)} moved to your wallet.`,
+      );
+    } catch (withdrawalRequestError) {
+      const message = getApiErrorMessage(withdrawalRequestError, 'Unable to create this savings withdrawal.');
+      setWithdrawalError(message);
+      setWithdrawPinPadKey(current => current + 1);
       toast.error(message);
     } finally {
-      setIsSubmittingContribution(false);
+      setIsSubmittingWithdrawal(false);
     }
   };
 
@@ -220,8 +176,10 @@ const SavingsDetail = () => {
       </div>
 
       <div className="grid grid-cols-3 gap-3">
-        <Button className="h-12 gap-2" onClick={startContribution}><Plus className="h-4 w-4" /> Contribute</Button>
-        <Button variant="outline" className="h-12 gap-2" onClick={() => setShowWithdraw(true)}>
+        <Button className="h-12 gap-2" onClick={() => navigate(`/savings/${plan.id}/contribute`)} disabled={!canContribute}>
+          <Plus className="h-4 w-4" /> {canContribute ? 'Contribute' : 'Plan Closed'}
+        </Button>
+        <Button variant="outline" className="h-12 gap-2" onClick={startWithdrawal} disabled={!canWithdraw}>
           <ArrowUpRight className="h-4 w-4" /> Withdraw
         </Button>
         <Button variant="outline" className="h-12 gap-2" onClick={() => navigate('/savings/invite')}>
@@ -229,94 +187,23 @@ const SavingsDetail = () => {
         </Button>
       </div>
 
-      {showContributionPanel && (
-        <div className="mt-6 rounded-xl border border-border bg-card p-4">
-          {contributionStep === 'amount' && (
-            <div className="space-y-4">
-              <div>
-                <h2 className="font-display text-lg font-bold text-foreground">Post Contribution</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Choose whether to debit your wallet or charge your most recent reusable Paystack card.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label>Funding Source</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <Button
-                    type="button"
-                    variant={contributionFundingSource === 'wallet' ? 'default' : 'outline'}
-                    className="h-12"
-                    onClick={() => {
-                      setContributionFundingSource('wallet');
-                      setContributionError('');
-                    }}
-                  >
-                    Wallet
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={contributionFundingSource === 'saved_card' ? 'default' : 'outline'}
-                    className="h-12"
-                    disabled={!plan.hasSavedCardAuthorization}
-                    onClick={() => {
-                      setContributionFundingSource('saved_card');
-                      setContributionError('');
-                    }}
-                  >
-                    Saved card
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {contributionFundingSource === 'saved_card'
-                    ? plan.savedCardLabel
-                      ? `Using ${plan.savedCardLabel}.`
-                      : 'Uses your latest reusable Paystack card.'
-                    : 'Your wallet will be debited immediately.'}
-                </p>
-                {!plan.hasSavedCardAuthorization && (
-                  <p className="text-xs text-muted-foreground">
-                    No reusable card is on file yet. Fund your wallet with Paystack card checkout first to enable this option.
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="savings-contribution-amount">Amount</Label>
-                <Input
-                  id="savings-contribution-amount"
-                  type="number"
-                  value={contributionAmount}
-                  onChange={event => {
-                    setContributionAmount(event.target.value.replace(/[^\d]/g, ''));
-                    setContributionError('');
-                  }}
-                  className="h-12"
-                />
-              </div>
-              {contributionError && (
-                <Alert variant="destructive">
-                  <AlertTitle>Unable to continue</AlertTitle>
-                  <AlertDescription>{contributionError}</AlertDescription>
-                </Alert>
-              )}
-              <div className="flex gap-3">
-                <Button variant="outline" className="h-12 flex-1" onClick={() => setShowContributionPanel(false)}>Cancel</Button>
-                <Button className="h-12 flex-1" onClick={handleContinueToPin}>Continue</Button>
-              </div>
-            </div>
+      {(!canContribute || !canWithdraw) && (
+        <div className="mt-3 space-y-2">
+          {!canContribute && (
+            <Alert>
+              <AlertTitle>Contributions unavailable</AlertTitle>
+              <AlertDescription>Only active savings plans can accept new contributions.</AlertDescription>
+            </Alert>
           )}
-
-          {contributionStep === 'pin' && (
-            <div className="py-4">
-              <PinPad
-                key={pinPadKey}
-                title="Confirm Contribution"
-                subtitle={`${formatCurrency(amountValue)} to ${plan.name} from ${contributionFundingSource === 'saved_card' ? 'saved card' : 'wallet'}`}
-                error={contributionError}
-                disabled={isSubmittingContribution}
-                onInput={() => setContributionError('')}
-                onComplete={handleContribution}
-              />
-            </div>
+          {!canWithdraw && (
+            <Alert>
+              <AlertTitle>Withdrawals unavailable</AlertTitle>
+              <AlertDescription>
+                {plan.savedAmount <= 0
+                  ? 'There is no savings balance available to move to your wallet yet.'
+                  : 'Locked savings can only be withdrawn after the maturity date.'}
+              </AlertDescription>
+            </Alert>
           )}
         </div>
       )}
@@ -343,38 +230,92 @@ const SavingsDetail = () => {
         </div>
       )}
 
-      <Dialog open={showWithdraw} onOpenChange={setShowWithdraw}>
+      <Dialog
+        open={showWithdraw}
+        onOpenChange={(open) => {
+          setShowWithdraw(open);
+          if (!open) {
+            setWithdrawalError('');
+            setWithdrawStep('details');
+          }
+        }}
+      >
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Early Withdrawal</DialogTitle>
-            <DialogDescription>
-              {plan.type === 'locked' || plan.type === 'goal'
-                ? 'Early withdrawals are not wired to the wallet yet. The backend currently returns the evaluation only, including any penalty.'
-                : 'Flexible savings withdrawals are the next step after contribution posting.'}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setShowWithdraw(false)}>Close</Button>
-          </DialogFooter>
+          {withdrawStep === 'details' ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Withdraw To Wallet</DialogTitle>
+                <DialogDescription>
+                  {plan.type === 'goal'
+                    ? 'Goal savings withdrawals move funds to your wallet first. A 5% penalty applies before the goal is completed.'
+                    : plan.type === 'locked'
+                      ? 'Locked savings can be moved to your wallet after the maturity date.'
+                      : 'Flexible savings withdrawals move funds straight to your wallet.'}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="savings-withdrawal-amount">Amount</Label>
+                  <Input
+                    id="savings-withdrawal-amount"
+                    type="number"
+                    value={withdrawalAmount}
+                    onChange={event => {
+                      setWithdrawalAmount(event.target.value.replace(/[^\d]/g, ''));
+                      setWithdrawalError('');
+                    }}
+                    className="h-12"
+                  />
+                  <p className="text-xs text-muted-foreground">Available to move: {formatCurrency(plan.savedAmount)}</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="savings-withdrawal-reason">Reason</Label>
+                  <Input
+                    id="savings-withdrawal-reason"
+                    value={withdrawalReason}
+                    onChange={event => {
+                      setWithdrawalReason(event.target.value);
+                      setWithdrawalError('');
+                    }}
+                    placeholder="Optional note for this withdrawal"
+                    className="h-12"
+                  />
+                </div>
+                {plan.type === 'goal' && (
+                  <Alert>
+                    <AlertTitle>Goal savings penalty</AlertTitle>
+                    <AlertDescription>A 5% penalty will be deducted from the requested amount if the goal is not yet completed.</AlertDescription>
+                  </Alert>
+                )}
+                {withdrawalError && (
+                  <Alert variant="destructive">
+                    <AlertTitle>Unable to continue</AlertTitle>
+                    <AlertDescription>{withdrawalError}</AlertDescription>
+                  </Alert>
+                )}
+              </div>
+              <DialogFooter className="gap-2">
+                <Button variant="outline" onClick={() => setShowWithdraw(false)}>Cancel</Button>
+                <Button onClick={handleContinueToWithdrawPin}>Continue</Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <div className="py-4">
+              <PinPad
+                key={withdrawPinPadKey}
+                title="Confirm Withdrawal"
+                subtitle={`${formatCurrency(withdrawalAmountValue)} from ${plan.name} to your wallet`}
+                error={withdrawalError}
+                disabled={isSubmittingWithdrawal}
+                onInput={() => setWithdrawalError('')}
+                onComplete={handleWithdrawal}
+              />
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
   );
 };
-
-const waitForCheckoutStatus = async (reference: string) => {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const latestStatus = await getPaymentCheckoutStatus(reference);
-    if (latestStatus.status !== 'Pending') {
-      return latestStatus;
-    }
-
-    await delay(1200);
-  }
-
-  return getPaymentCheckoutStatus(reference);
-};
-
-const delay = (milliseconds: number) => new Promise(resolve => window.setTimeout(resolve, milliseconds));
 
 export default SavingsDetail;

@@ -77,3 +77,45 @@ export const validatePersonName = (value: string, label: string) => {
 
   return '';
 };
+
+export const validatePasswordDigits = (value: string) => {
+  const normalizedValue = value.trim();
+
+  if (!normalizedValue) {
+    return 'Password is required.';
+  }
+
+  if (!/^\d{6}$/.test(normalizedValue)) {
+    return 'Password must be exactly 6 digits.';
+  }
+
+  return '';
+};
+
+export const validatePinDigits = (value: string) => {
+  const normalizedValue = value.trim();
+
+  if (!normalizedValue) {
+    return 'PIN is required.';
+  }
+
+  if (!/^\d{4}$/.test(normalizedValue)) {
+    return 'PIN must be exactly 4 digits.';
+  }
+
+  return '';
+};
+
+export const validateOtpCode = (value: string) => {
+  const normalizedValue = value.trim();
+
+  if (!normalizedValue) {
+    return 'OTP is required.';
+  }
+
+  if (!/^\d{6}$/.test(normalizedValue)) {
+    return 'OTP must be exactly 6 digits.';
+  }
+
+  return '';
+};

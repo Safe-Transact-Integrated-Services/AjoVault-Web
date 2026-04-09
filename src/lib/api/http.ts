@@ -7,6 +7,7 @@ const sensitiveRequestKeys = new Set([
   'password',
   'currentPassword',
   'newPassword',
+  'newPin',
   'pin',
   'otp',
   'refreshToken',

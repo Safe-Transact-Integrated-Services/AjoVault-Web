@@ -71,10 +71,10 @@ const TransactionHistory = () => {
         )}
         {filtered.map(transaction => (
           <div key={transaction.id} className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
-            <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${transaction.type === 'credit' ? 'bg-success/10' : 'bg-muted'}`}>
+            <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${transaction.type === 'credit' ? 'bg-success/10' : 'bg-destructive/10'}`}>
               {transaction.type === 'credit'
                 ? <ArrowDownLeft className="h-4 w-4 text-success" />
-                : <ArrowUpRight className="h-4 w-4 text-muted-foreground" />}
+                : <ArrowUpRight className="h-4 w-4 text-destructive" />}
             </div>
             <div className="flex-1 min-w-0">
               <p className="truncate text-sm font-medium text-foreground">{transaction.description}</p>
@@ -83,7 +83,7 @@ const TransactionHistory = () => {
                 <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">{categoryLabels[transaction.category]}</Badge>
               </div>
             </div>
-            <p className={`text-sm font-semibold ${transaction.type === 'credit' ? 'text-success' : 'text-foreground'}`}>
+            <p className={`text-sm font-semibold ${transaction.type === 'credit' ? 'text-success' : 'text-destructive'}`}>
               {transaction.type === 'credit' ? '+' : '-'}{formatCurrency(transaction.amount, transaction.currency)}
             </p>
           </div>

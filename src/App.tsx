@@ -20,6 +20,10 @@ import AgentRouteGuard from '@/components/layout/AgentRouteGuard';
 import Welcome from '@/pages/Welcome';
 import Signup from '@/pages/Signup';
 import Login from '@/pages/Login';
+import ForgotPassword from '@/pages/ForgotPassword';
+import ResetPassword from '@/pages/ResetPassword';
+import ForgotPin from '@/pages/ForgotPin';
+import ResetPin from '@/pages/ResetPin';
 import Dashboard from '@/pages/Dashboard';
 import FundWallet from '@/pages/wallet/FundWallet';
 import Transfer from '@/pages/wallet/Transfer';
@@ -28,6 +32,7 @@ import TransactionHistory from '@/pages/wallet/TransactionHistory';
 import SavingsHome from '@/pages/savings/SavingsHome';
 import CreateSavings from '@/pages/savings/CreateSavings';
 import SavingsDetail from '@/pages/savings/SavingsDetail';
+import SavingsContribute from '@/pages/savings/SavingsContribute';
 import SavingsInvite from '@/pages/savings/SavingsInvite';
 import SavingsInvitationDecision from '@/pages/savings/SavingsInvitationDecision';
 import CirclesHome from '@/pages/circles/CirclesHome';
@@ -126,6 +131,10 @@ const App = () => (
                 <Route path="/" element={<Welcome />} />
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/login" element={<Login />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/forgot-pin" element={<ForgotPin />} />
+                <Route path="/reset-pin" element={<ResetPin />} />
                 <Route path="/agent/login" element={<AgentLogin />} />
                 <Route path="/agent/apply" element={<BecomeAgent />} />
                 <Route path="/fundraising/donate/:code" element={<DonateFundraiser />} />
@@ -141,6 +150,7 @@ const App = () => (
                   <Route path="/savings/invite" element={<SavingsInvite />} />
                   <Route path="/savings/invitations/:id" element={<SavingsInvitationDecision />} />
                   <Route path="/savings/:id" element={<SavingsDetail />} />
+                  <Route path="/savings/:id/contribute" element={<SavingsContribute />} />
                   <Route path="/circles" element={<CirclesHome />} />
                   <Route path="/circles/create" element={<CreateCircle />} />
                   <Route path="/circles/join" element={<JoinCircle />} />
