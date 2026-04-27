@@ -127,8 +127,9 @@ const App = () => (
           <AuthSessionNotifier />
           <BrowserRouter>
             <Routes>
+              <Route path="/" element={<Welcome />} />
+
               <Route element={<MobilePageLayout />}>
-                <Route path="/" element={<Welcome />} />
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -232,6 +233,4 @@ const App = () => (
 );
 
 export default App;
-
-
 
