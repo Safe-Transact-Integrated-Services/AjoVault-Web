@@ -1,68 +1,133 @@
-import { ArrowLeft, Search, UserPlus } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { ArrowLeft, BadgeCheck, ChevronRight, UserPlus, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { mockAgentCustomers, formatCurrency } from '@/services/agentMockData';
-import { cn } from '@/lib/utils';
+import { Card } from '@/components/ui/card';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
+import { getApiErrorMessage } from '@/lib/api/http';
+import { getLinkedAgentCustomers, type AgentCustomer } from '@/services/agentApi';
 
-const kycColors: Record<string, string> = {
-  none: 'text-muted-foreground bg-muted',
-  basic: 'text-accent bg-accent/10',
-  verified: 'text-success bg-success/10',
-};
+const formatDate = (value: string) =>
+  new Date(value).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 
 const AgentCustomers = () => {
   const navigate = useNavigate();
-  const [search, setSearch] = useState('');
+  const [customers, setCustomers] = useState<AgentCustomer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const filtered = mockAgentCustomers.filter(c =>
-    `${c.firstName} ${c.lastName}`.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone.includes(search)
-  );
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      try {
+        const response = await getLinkedAgentCustomers();
+        if (active) {
+          setCustomers(response);
+        }
+      } catch (err) {
+        if (active) {
+          setError(getApiErrorMessage(err, 'Unable to load linked customers.'));
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
-    <div className="min-h-screen px-5 py-6 space-y-5">
-      <button onClick={() => navigate('/agent/more')} className="flex items-center gap-1 text-sm text-muted-foreground">
+    <div className="space-y-5 px-5 py-6">
+      <button onClick={() => navigate('/agent')} className="flex items-center gap-1 text-sm text-muted-foreground">
         <ArrowLeft className="h-4 w-4" /> Back
       </button>
 
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-xl font-bold">My Customers</h1>
-        <Button size="sm" onClick={() => navigate('/agent/register')} className="gap-1">
-          <UserPlus className="h-4 w-4" /> New
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-bold">Linked Customers</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Customers you registered or are currently linked to as an agent.
+          </p>
+        </div>
+        <Button className="shrink-0" onClick={() => navigate('/agent/register')}>
+          <UserPlus className="mr-2 h-4 w-4" />
+          Register
         </Button>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Search customers..." value={search} onChange={e => setSearch(e.target.value)} className="h-11 pl-9" />
-      </div>
+      {loading && <p className="text-sm text-muted-foreground">Loading linked customers...</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <Card className="divide-y divide-border">
-        {filtered.length === 0 ? (
-          <p className="p-6 text-center text-sm text-muted-foreground">No customers found</p>
-        ) : (
-          filtered.map(c => (
-            <div key={c.id} className="flex items-center gap-3 p-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold text-sm">
-                {c.firstName[0]}{c.lastName[0]}
+      {!loading && !error && !customers.length && (
+        <Card className="space-y-3 border-dashed p-5 text-center">
+          <EmptyTableState
+            title="No linked customers yet"
+            description="Your first assisted registration will appear here together with recent field activity."
+          />
+          <Button className="w-full" onClick={() => navigate('/agent/register')}>
+            Register First Customer
+          </Button>
+        </Card>
+      )}
+
+      {!!customers.length && (
+        <div className="space-y-3">
+          {customers.map(customer => (
+            <Card key={customer.customerUserId} className="space-y-3 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">{customer.fullName}</p>
+                  <p className="text-xs text-muted-foreground">{customer.phoneNumber ?? 'No phone number'}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-accent/10 px-2.5 py-1 text-[11px] font-semibold capitalize text-accent">
+                    {customer.kycTier}
+                  </span>
+                  {customer.isActive && <BadgeCheck className="h-4 w-4 text-success" />}
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">{c.firstName} {c.lastName}</p>
-                <p className="text-xs text-muted-foreground">{c.phone}</p>
+
+              <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide">Email</p>
+                  <p className="mt-1 text-sm text-foreground">{customer.email ?? 'Phone-only account'}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-wide">Linked</p>
+                  <p className="mt-1 text-sm text-foreground">{formatDate(customer.linkedAtUtc)}</p>
+                </div>
               </div>
-              <div className="text-right">
-                <span className={cn('inline-block rounded-full px-2 py-0.5 text-[10px] font-medium capitalize', kycColors[c.kycStatus])}>
-                  {c.kycStatus === 'none' ? 'No KYC' : c.kycStatus}
-                </span>
-                <p className="text-xs text-muted-foreground mt-0.5">{formatCurrency(c.totalDeposits)}</p>
+
+              <div className="rounded-xl bg-muted/50 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Latest activity</p>
+                    <p className="text-sm font-medium">
+                      {customer.lastActivity?.description ?? 'Customer linked to your agent profile'}
+                    </p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span className="capitalize">{customer.linkType}</span>
+                  <span>{formatDate(customer.lastActivityAtUtc ?? customer.linkedAtUtc)}</span>
+                </div>
               </div>
-            </div>
-          ))
-        )}
-      </Card>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

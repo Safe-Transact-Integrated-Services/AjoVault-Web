@@ -80,7 +80,7 @@ const CreditPassport = () => {
 
       <Card className="space-y-4 p-4">
         <h3 className="flex items-center gap-2 text-sm font-semibold">
-          <TrendingUp className="h-4 w-4 text-accent" /> Weighted Factors
+          <TrendingUp className="h-4 w-4 text-accent" /> Behavior Drivers
         </h3>
         {(scoreQuery.data?.breakdown ?? []).map(item => (
           <div key={item.factor} className="space-y-1">
@@ -99,6 +99,9 @@ const CreditPassport = () => {
           </div>
         ))}
         {scoreQuery.isLoading && <p className="text-xs text-muted-foreground">Loading score breakdown...</p>}
+        {!scoreQuery.isLoading && (scoreQuery.data?.breakdown?.length ?? 0) === 0 && (
+          <p className="text-xs text-muted-foreground">No score drivers yet. Fund your wallet, save, and join groups to build your score.</p>
+        )}
       </Card>
 
       <div>
@@ -119,6 +122,11 @@ const CreditPassport = () => {
           {unlocksQuery.isLoading && (
             <div className="flex items-center gap-3 p-3">
               <p className="text-sm text-muted-foreground">Loading unlocked benefits...</p>
+            </div>
+          )}
+          {!unlocksQuery.isLoading && (unlocksQuery.data?.unlocks?.length ?? 0) === 0 && (
+            <div className="p-3">
+              <p className="text-sm text-muted-foreground">No benefits unlocked yet. Keep saving and contributing consistently to move up faster.</p>
             </div>
           )}
         </Card>

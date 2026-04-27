@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -7,61 +7,79 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Shield, AlertTriangle, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAdminAuth } from '@/contexts/AdminAuthContext';
+import { getRedirectPath, type RedirectTarget } from '@/lib/auth';
+
+interface AdminLoginLocationState {
+  from?: RedirectTarget;
+}
 
 const AdminLogin = () => {
   const navigate = useNavigate();
-  const { adminLogin, isAdminAuthenticated, failedAttempts, isLocked, lockoutEndTime } = useAdminAuth();
-  const [email, setEmail] = useState('');
+  const location = useLocation();
+  const locationState = location.state as AdminLoginLocationState | null;
+  const { adminLogin, isAdminAuthenticated, isAdminInitializing, failedAttempts, isLocked, lockoutEndTime } = useAdminAuth();
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [remainingTime, setRemainingTime] = useState('');
+  const redirectPath = getRedirectPath(locationState?.from);
 
-  // Redirect if already authenticated
   useEffect(() => {
-    if (isAdminAuthenticated) navigate('/admin/dashboard', { replace: true });
-  }, [isAdminAuthenticated, navigate]);
+    if (!isAdminInitializing && isAdminAuthenticated) {
+      navigate(redirectPath ?? '/admin/dashboard', { replace: true });
+    }
+  }, [isAdminAuthenticated, isAdminInitializing, navigate, redirectPath]);
 
-  // Lockout countdown
   useEffect(() => {
-    if (!isLocked || !lockoutEndTime) return;
+    if (!isLocked || !lockoutEndTime) {
+      return undefined;
+    }
+
     const update = () => {
       const diff = lockoutEndTime - Date.now();
       if (diff <= 0) {
         setRemainingTime('');
         return;
       }
+
       const mins = Math.floor(diff / 60000);
       const secs = Math.floor((diff % 60000) / 1000);
       setRemainingTime(`${mins}:${secs.toString().padStart(2, '0')}`);
     };
+
     update();
-    const interval = setInterval(update, 1000);
-    return () => clearInterval(interval);
+    const interval = window.setInterval(update, 1000);
+    return () => window.clearInterval(interval);
   }, [isLocked, lockoutEndTime]);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
+
     if (isLocked) {
       toast.error('Account locked. Try again later.');
       return;
     }
-    if (!email.trim() || !password) {
+
+    if (!identifier.trim() || !password) {
       toast.error('Please enter credentials');
       return;
     }
+
     setLoading(true);
-    const ok = await adminLogin(email, password);
+    const ok = await adminLogin(identifier, password);
     setLoading(false);
+
     if (ok) {
       toast.success('Welcome, Admin');
-      navigate('/admin/dashboard');
-    } else {
-      toast.error(
-        isLocked
-          ? `Too many failed attempts. Locked for 15 minutes.`
-          : `Invalid credentials. ${Math.max(0, 5 - (failedAttempts + 1))} attempts remaining.`
-      );
+      navigate(redirectPath ?? '/admin/dashboard', { replace: true });
+      return;
     }
+
+    toast.error(
+      isLocked
+        ? 'Too many failed attempts. Locked for 15 minutes.'
+        : `Invalid credentials. ${Math.max(0, 5 - (failedAttempts + 1))} attempts remaining.`,
+    );
   };
 
   return (
@@ -80,7 +98,7 @@ const AdminLogin = () => {
         </CardHeader>
         <CardContent>
           {isLocked ? (
-            <div className="text-center space-y-4">
+            <div className="space-y-4 text-center">
               <div className="flex items-center justify-center gap-2 text-destructive">
                 <AlertTriangle className="h-5 w-5" />
                 <p className="text-sm font-medium">Account Locked</p>
@@ -93,13 +111,13 @@ const AdminLogin = () => {
           ) : (
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="identifier">Email or Phone</Label>
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="admin@ajovault.com"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
+                  id="identifier"
+                  type="text"
+                  placeholder="akinkunmi.okunola@gmail.com"
+                  value={identifier}
+                  onChange={event => setIdentifier(event.target.value)}
                   autoComplete="off"
                 />
               </div>
@@ -108,28 +126,30 @@ const AdminLogin = () => {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="••••••••"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="6-digit password"
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  onChange={event => setPassword(event.target.value.replace(/\D/g, '').slice(0, 6))}
                   autoComplete="off"
                 />
               </div>
               {failedAttempts > 0 && (
-                <p className="text-xs text-destructive flex items-center gap-1">
+                <p className="flex items-center gap-1 text-xs text-destructive">
                   <AlertTriangle className="h-3 w-3" />
                   {5 - failedAttempts} attempt{5 - failedAttempts !== 1 ? 's' : ''} remaining before lockout
                 </p>
               )}
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" className="w-full" disabled={loading || isAdminInitializing}>
                 {loading ? 'Signing in...' : 'Sign In'}
               </Button>
             </form>
           )}
           <button
             onClick={() => navigate('/')}
-            className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-accent transition-colors"
+            className="mt-4 w-full text-center text-sm text-muted-foreground transition-colors hover:text-accent"
           >
-            ← Back to App
+            Back to App
           </button>
         </CardContent>
       </Card>

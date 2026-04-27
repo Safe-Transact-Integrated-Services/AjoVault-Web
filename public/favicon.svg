@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="vaultGradient" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#113c34" />
+      <stop offset="1" stop-color="#1e8f73" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="18" fill="url(#vaultGradient)" />
+  <path
+    d="M32 12L50 20.6V30.8C50 41.7 42.9 51.6 32 55C21.1 51.6 14 41.7 14 30.8V20.6L32 12Z"
+    fill="#f7f7ef"
+    opacity="0.96"
+  />
+  <path
+    d="M31.9 22L24.7 41.8H29.7L31 37.9H38L39.4 41.8H44.6L37.2 22H31.9ZM32.4 33.9L34.5 27.5L36.6 33.9H32.4Z"
+    fill="#113c34"
+  />
+</svg>

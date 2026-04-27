@@ -1,125 +1,160 @@
-import { useState } from 'react';
-import { ArrowLeft, Banknote, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, BadgeCheck, Wallet } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
-import PinPad from '@/components/shared/PinPad';
-import { mockCommissionSummary, formatCurrency } from '@/services/agentMockData';
-import { motion, AnimatePresence } from 'framer-motion';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
+import {
+  agentKeys,
+  getAgentSettlements,
+  settleAgentCommissions,
+} from '@/services/agentApi';
+import { getApiErrorMessage } from '@/lib/api/http';
 
-type Step = 'overview' | 'withdraw' | 'pin' | 'success';
+const currency = new Intl.NumberFormat('en-NG', {
+  style: 'currency',
+  currency: 'NGN',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+const formatDateTime = (value: string) =>
+  new Date(value).toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 
 const AgentSettlements = () => {
   const navigate = useNavigate();
-  const [step, setStep] = useState<Step>('overview');
-  const [amount, setAmount] = useState('');
-  const [bankName, setBankName] = useState('');
-  const [accountNumber, setAccountNumber] = useState('');
+  const queryClient = useQueryClient();
+  const settlementsQuery = useQuery({
+    queryKey: agentKeys.settlements(),
+    queryFn: () => getAgentSettlements(),
+  });
 
-  const available = mockCommissionSummary.thisMonth - mockCommissionSummary.pending;
+  const settleMutation = useMutation({
+    mutationFn: settleAgentCommissions,
+    onSuccess: async receipt => {
+      toast.success(`Commission settled: ${currency.format(receipt.amount)}`);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: agentKeys.settlements() }),
+        queryClient.invalidateQueries({ queryKey: agentKeys.commissions() }),
+        queryClient.invalidateQueries({ queryKey: agentKeys.ledger() }),
+        queryClient.invalidateQueries({ queryKey: agentKeys.portal }),
+      ]);
+    },
+    onError: error => {
+      toast.error(getApiErrorMessage(error, 'Unable to settle commissions.'));
+    },
+  });
 
-  const handlePinComplete = async () => {
-    await new Promise(r => setTimeout(r, 1000));
-    setStep('success');
-  };
+  const overview = settlementsQuery.data;
+  const totalSettled = overview?.items.reduce((sum, item) => sum + item.amount, 0) ?? 0;
 
   return (
-    <div className="min-h-screen px-5 py-6">
-      {step !== 'success' && (
-        <button onClick={() => {
-          if (step === 'withdraw') setStep('overview');
-          else if (step === 'pin') setStep('withdraw');
-          else navigate('/agent/more');
-        }} className="mb-6 flex items-center gap-1 text-sm text-muted-foreground">
-          <ArrowLeft className="h-4 w-4" /> Back
-        </button>
+    <div className="min-h-screen space-y-5 px-5 py-6">
+      <button
+        onClick={() => navigate('/agent/more')}
+        className="flex items-center gap-1 text-sm text-muted-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" /> Back
+      </button>
+
+      <div className="space-y-2">
+        <h1 className="font-display text-xl font-bold">Agent Settlements</h1>
+        <p className="text-sm text-muted-foreground">
+          Move available commission into your AjoVault wallet and review past settlement receipts.
+        </p>
+      </div>
+
+      {settlementsQuery.isError && (
+        <Card className="border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
+          {getApiErrorMessage(settlementsQuery.error, 'Unable to load agent settlements.')}
+        </Card>
       )}
 
-      <AnimatePresence mode="wait">
-        {step === 'overview' && (
-          <motion.div key="overview" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
-            <h1 className="font-display text-xl font-bold flex items-center gap-2">
-              <Banknote className="h-5 w-5 text-success" /> Settlements
-            </h1>
+      <div className="grid grid-cols-2 gap-3">
+        <Card className="p-4">
+          <p className="text-xs text-muted-foreground">Available Commission</p>
+          <p className="mt-1 font-display text-2xl font-bold">
+            {currency.format(overview?.availableCommissionBalance ?? 0)}
+          </p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs text-muted-foreground">Wallet Balance</p>
+          <p className="mt-1 font-display text-2xl font-bold">
+            {currency.format(overview?.walletBalance ?? 0)}
+          </p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs text-muted-foreground">Settlements</p>
+          <p className="mt-1 text-sm font-semibold">{overview?.items.length ?? 0}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs text-muted-foreground">Total Settled</p>
+          <p className="mt-1 text-sm font-semibold">{currency.format(totalSettled)}</p>
+        </Card>
+      </div>
 
-            <Card className="p-5 bg-primary text-primary-foreground">
-              <p className="text-xs opacity-80">Available for Withdrawal</p>
-              <p className="font-display text-3xl font-bold mt-1">{formatCurrency(available)}</p>
-              {mockCommissionSummary.pending > 0 && (
-                <p className="text-xs opacity-70 mt-2">{formatCurrency(mockCommissionSummary.pending)} pending clearance</p>
-              )}
-            </Card>
+      <Card className="space-y-4 border-accent/20 bg-accent/5 p-5">
+        <div className="flex items-center gap-2">
+          <Wallet className="h-4 w-4 text-accent" />
+          <p className="text-sm font-semibold">Settle to Wallet</p>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          This moves all currently available commission into your AjoVault wallet in one settlement.
+        </p>
+        <Button
+          className="h-12 w-full"
+          disabled={settleMutation.isPending || !overview?.availableCommissionBalance}
+          onClick={() => settleMutation.mutate()}
+        >
+          {settleMutation.isPending ? 'Settling...' : 'Move Available Commission to Wallet'}
+        </Button>
+      </Card>
 
-            <div className="grid grid-cols-2 gap-3">
-              <Card className="p-4 text-center">
-                <p className="text-xs text-muted-foreground">This Month</p>
-                <p className="font-display font-bold mt-1">{formatCurrency(mockCommissionSummary.thisMonth)}</p>
-              </Card>
-              <Card className="p-4 text-center">
-                <p className="text-xs text-muted-foreground">All Time</p>
-                <p className="font-display font-bold mt-1">{formatCurrency(mockCommissionSummary.allTime)}</p>
-              </Card>
-            </div>
+      <Card className="space-y-3 p-5">
+        <div className="flex items-center gap-2">
+          <BadgeCheck className="h-4 w-4 text-accent" />
+          <h2 className="text-sm font-semibold">Settlement History</h2>
+        </div>
 
-            <Button className="w-full h-12" onClick={() => setStep('withdraw')} disabled={available <= 0}>
-              Withdraw Commission
-            </Button>
-          </motion.div>
-        )}
-
-        {step === 'withdraw' && (
-          <motion.div key="withdraw" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
-            <h1 className="font-display text-xl font-bold">Withdraw to Bank</h1>
-
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Amount (₦)</Label>
-                <Input placeholder="0" value={amount} onChange={e => setAmount(e.target.value.replace(/\D/g, ''))} inputMode="numeric" className="h-12 text-lg font-semibold" />
-                <p className="text-xs text-muted-foreground">Available: {formatCurrency(available)}</p>
+        {settlementsQuery.isLoading ? (
+          <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+            Loading settlements...
+          </div>
+        ) : overview?.items.length ? (
+          <div className="space-y-3">
+            {overview.items.map(item => (
+              <div key={item.settlementId} className="rounded-xl border border-border/70 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">{item.description}</p>
+                    <p className="text-xs text-muted-foreground">{item.reference}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-success">{currency.format(item.amount)}</p>
+                    <p className="text-[11px] text-muted-foreground capitalize">{item.status}</p>
+                  </div>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                  <span>Wallet after: {currency.format(item.walletBalanceAfter)}</span>
+                  <span>{formatDateTime(item.createdAtUtc)}</span>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Bank Name</Label>
-                <Input placeholder="e.g. First Bank" value={bankName} onChange={e => setBankName(e.target.value)} className="h-12" />
-              </div>
-              <div className="space-y-2">
-                <Label>Account Number</Label>
-                <Input placeholder="0000000000" value={accountNumber} onChange={e => setAccountNumber(e.target.value)} maxLength={10} inputMode="numeric" className="h-12" />
-              </div>
-            </div>
-
-            <Button className="w-full h-12" onClick={() => setStep('pin')} disabled={!amount || !bankName || accountNumber.length < 10 || Number(amount) > available}>
-              Continue
-            </Button>
-          </motion.div>
+            ))}
+          </div>
+        ) : (
+          <EmptyTableState
+            title="No settlement posted yet"
+            description="Settlement receipts will appear here after you move available commission into your wallet."
+          />
         )}
-
-        {step === 'pin' && (
-          <motion.div key="pin" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex flex-col items-center pt-10">
-            <PinPad title="Enter Agent PIN" subtitle={`Withdrawing ${formatCurrency(Number(amount))}`} onComplete={handlePinComplete} />
-          </motion.div>
-        )}
-
-        {step === 'success' && (
-          <motion.div key="success" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center pt-20 text-center space-y-4">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-success/10">
-              <CheckCircle className="h-10 w-10 text-success" />
-            </div>
-            <h2 className="font-display text-xl font-bold">Withdrawal Successful</h2>
-            <p className="text-sm text-muted-foreground max-w-xs">
-              {formatCurrency(Number(amount))} has been sent to your bank account. It should arrive within 24 hours.
-            </p>
-            <Card className="w-full p-4 space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-muted-foreground">Amount</span><span className="font-bold">{formatCurrency(Number(amount))}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Bank</span><span className="font-medium">{bankName}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Account</span><span className="font-medium">{accountNumber}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Reference</span><span className="font-mono text-xs">AJO-STL-{Date.now().toString().slice(-6)}</span></div>
-            </Card>
-            <Button className="w-full h-12" onClick={() => navigate('/agent')}>Done</Button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </Card>
     </div>
   );
 };

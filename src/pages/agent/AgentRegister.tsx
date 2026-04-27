@@ -1,146 +1,215 @@
 import { useState } from 'react';
-import { ArrowLeft, UserPlus, CheckCircle, Camera } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, Copy, UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { motion, AnimatePresence } from 'framer-motion';
+import { getApiErrorMessage } from '@/lib/api/http';
+import { registerAgentCustomer, type RegisterAgentCustomerResponse } from '@/services/agentApi';
 
-type Step = 'form' | 'kyc' | 'success';
+const currency = new Intl.NumberFormat('en-NG', {
+  style: 'currency',
+  currency: 'NGN',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
 
 const AgentRegister = () => {
   const navigate = useNavigate();
-  const [step, setStep] = useState<Step>('form');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [gender, setGender] = useState('');
-  const [dob, setDob] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<RegisterAgentCustomerResponse | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  const handleSubmit = () => {
-    if (firstName && lastName && phone) setStep('kyc');
+  const resetForm = () => {
+    setFirstName('');
+    setLastName('');
+    setPhoneNumber('');
+    setEmail('');
+    setPassword('');
+    setPin('');
+    setError('');
+    setResult(null);
+    setCopied(false);
   };
 
-  const handleKycSubmit = async () => {
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 1200));
-    setLoading(false);
-    setStep('success');
+  const handleCopyCredentials = async () => {
+    if (!result?.temporaryPassword || !result.temporaryPin) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(`Password: ${result.temporaryPassword}\nPIN: ${result.temporaryPin}`);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
   };
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setError('');
+
+    try {
+      const response = await registerAgentCustomer({
+        firstName,
+        lastName,
+        phoneNumber,
+        email,
+        password,
+        pin,
+      });
+
+      setResult(response);
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Unable to register customer.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (result) {
+    return (
+      <div className="space-y-5 px-5 py-6">
+        <button onClick={() => navigate('/agent')} className="flex items-center gap-1 text-sm text-muted-foreground">
+          <ArrowLeft className="h-4 w-4" /> Back to dashboard
+        </button>
+
+        <Card className="space-y-4 border-success/20 bg-success/5 p-5">
+          <div className="flex items-center gap-2">
+            <BadgeCheck className="h-5 w-5 text-success" />
+            <h1 className="font-display text-xl font-bold">Customer registered</h1>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            The customer account has been created and linked to your agent profile.
+          </p>
+        </Card>
+
+        <Card className="space-y-3 p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground">Customer</p>
+              <p className="text-sm font-semibold">{result.customer.fullName}</p>
+            </div>
+            <span className="rounded-full bg-accent/10 px-2.5 py-1 text-[11px] font-semibold capitalize text-accent">
+              {result.customer.kycTier}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground">Phone</p>
+              <p className="font-medium">{result.customer.phoneNumber ?? 'Not provided'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Email</p>
+              <p className="font-medium">{result.customer.email ?? 'Phone-only account'}</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="space-y-3 border-warning/20 bg-warning/5 p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs text-muted-foreground">Temporary password</p>
+              <p className="font-display text-3xl font-bold tracking-[0.25em]">{result.temporaryPassword}</p>
+            </div>
+          </div>
+          <div className="border-t border-warning/20 pt-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs text-muted-foreground">Temporary PIN</p>
+              <p className="font-display text-3xl font-bold tracking-[0.25em]">{result.temporaryPin}</p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => void handleCopyCredentials()}>
+              <Copy className="mr-2 h-4 w-4" />
+              {copied ? 'Copied' : 'Copy both'}
+            </Button>
+          </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Share the 6-digit password for login and the 4-digit PIN for financial actions securely with the customer.
+          </p>
+        </Card>
+
+        <Card className="p-5">
+          <p className="text-xs text-muted-foreground">Commission balance after this registration</p>
+          <p className="mt-1 font-display text-2xl font-bold">{currency.format(result.agentCommissionBalanceAfter)}</p>
+        </Card>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Button variant="outline" className="h-12" onClick={() => navigate('/agent/customers')}>
+            View Customers
+          </Button>
+          <Button className="h-12" onClick={resetForm}>
+            Register Another
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen px-5 py-6">
-      <button onClick={() => step === 'kyc' ? setStep('form') : step === 'success' ? navigate('/agent') : navigate('/agent')} className="mb-6 flex items-center gap-1 text-sm text-muted-foreground">
+    <div className="space-y-5 px-5 py-6">
+      <button onClick={() => navigate('/agent')} className="flex items-center gap-1 text-sm text-muted-foreground">
         <ArrowLeft className="h-4 w-4" /> Back
       </button>
 
-      <AnimatePresence mode="wait">
-        {step === 'form' && (
-          <motion.div key="form" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
-            <div>
-              <h1 className="font-display text-xl font-bold flex items-center gap-2">
-                <UserPlus className="h-5 w-5 text-accent" /> Register Customer
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">Create a new AjoVault account for a customer</p>
-            </div>
+      <div>
+        <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+          <UserPlus className="h-7 w-7 text-primary" />
+        </div>
+        <h1 className="font-display text-2xl font-bold">Register Customer</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Create a customer account from the field and link the account to your agent profile.
+        </p>
+      </div>
 
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>First Name</Label>
-                <Input placeholder="First name" value={firstName} onChange={e => setFirstName(e.target.value)} className="h-12" />
-              </div>
-              <div className="space-y-2">
-                <Label>Last Name</Label>
-                <Input placeholder="Last name" value={lastName} onChange={e => setLastName(e.target.value)} className="h-12" />
-              </div>
-              <div className="space-y-2">
-                <Label>Phone Number</Label>
-                <Input placeholder="+234 800 000 0000" value={phone} onChange={e => setPhone(e.target.value)} type="tel" className="h-12" />
-              </div>
-              <div className="space-y-2">
-                <Label>Gender</Label>
-                <Select value={gender} onValueChange={setGender}>
-                  <SelectTrigger className="h-12"><SelectValue placeholder="Select gender" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="male">Male</SelectItem>
-                    <SelectItem value="female">Female</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Date of Birth</Label>
-                <Input type="date" value={dob} onChange={e => setDob(e.target.value)} className="h-12" />
-              </div>
-            </div>
+      <Card className="space-y-4 p-5">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="firstName">First Name</Label>
+            <Input id="firstName" className="h-12" value={firstName} onChange={event => setFirstName(event.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="lastName">Last Name</Label>
+            <Input id="lastName" className="h-12" value={lastName} onChange={event => setLastName(event.target.value)} />
+          </div>
+        </div>
 
-            <Button className="w-full h-12" onClick={handleSubmit} disabled={!firstName || !lastName || !phone}>
-              Continue to KYC
-            </Button>
-          </motion.div>
-        )}
+        <div className="space-y-2">
+          <Label htmlFor="phoneNumber">Phone Number</Label>
+          <Input id="phoneNumber" type="tel" className="h-12" placeholder="+2348012345678" value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} />
+        </div>
 
-        {step === 'kyc' && (
-          <motion.div key="kyc" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
-            <div>
-              <h1 className="font-display text-xl font-bold">Basic KYC</h1>
-              <p className="text-sm text-muted-foreground mt-1">Capture customer identity for basic verification</p>
-            </div>
+        <div className="space-y-2">
+          <Label htmlFor="email">Email Address</Label>
+          <Input id="email" type="email" className="h-12" placeholder="Optional" value={email} onChange={event => setEmail(event.target.value)} />
+        </div>
 
-            <Card className="p-4 space-y-4">
-              <p className="text-xs text-muted-foreground">Take a photo of the customer's face for identity verification. This enables Tier 1 access.</p>
-              <button className="w-full flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border py-8 hover:border-accent transition-colors">
-                <Camera className="h-10 w-10 text-muted-foreground" />
-                <span className="text-sm font-medium text-muted-foreground">Tap to take photo</span>
-              </button>
-            </Card>
+        <div className="space-y-2">
+          <Label htmlFor="password">Temporary Password</Label>
+          <Input id="password" type="password" inputMode="numeric" maxLength={6} className="h-12" placeholder="6-digit password" value={password} onChange={event => setPassword(event.target.value.replace(/\D/g, '').slice(0, 6))} />
+        </div>
 
-            <Card className="p-4 space-y-3">
-              <h3 className="text-sm font-semibold">Customer Summary</h3>
-              <div className="text-sm space-y-1.5">
-                <div className="flex justify-between"><span className="text-muted-foreground">Name</span><span className="font-medium">{firstName} {lastName}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Phone</span><span className="font-medium">{phone}</span></div>
-                {gender && <div className="flex justify-between"><span className="text-muted-foreground">Gender</span><span className="font-medium capitalize">{gender}</span></div>}
-                {dob && <div className="flex justify-between"><span className="text-muted-foreground">DOB</span><span className="font-medium">{dob}</span></div>}
-              </div>
-            </Card>
+        <div className="space-y-2">
+          <Label htmlFor="pin">Temporary PIN</Label>
+          <Input id="pin" type="password" inputMode="numeric" maxLength={4} className="h-12" placeholder="4-digit PIN" value={pin} onChange={event => setPin(event.target.value.replace(/\D/g, '').slice(0, 4))} />
+        </div>
 
-            <div className="bg-accent/5 border border-accent/20 rounded-lg p-3 text-xs text-muted-foreground">
-              <strong className="text-foreground">Note:</strong> The customer will receive an SMS with their account details and a temporary PIN. They can access their account via USSD (*347*247#) or the mobile app.
-            </div>
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
-            <Button className="w-full h-12" onClick={handleKycSubmit} disabled={loading}>
-              {loading ? 'Creating Account...' : 'Register Customer'}
-            </Button>
-          </motion.div>
-        )}
-
-        {step === 'success' && (
-          <motion.div key="success" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center pt-20 text-center space-y-4">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-success/10">
-              <CheckCircle className="h-10 w-10 text-success" />
-            </div>
-            <h2 className="font-display text-xl font-bold">Account Created!</h2>
-            <p className="text-sm text-muted-foreground max-w-xs">
-              {firstName} {lastName}'s account has been created. An SMS with login details has been sent to {phone}.
-            </p>
-            <Card className="w-full p-4 space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-muted-foreground">USSD Access</span><span className="font-mono font-semibold">*347*247#</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Account Tier</span><span className="font-medium">Tier 1 (Basic)</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Daily Limit</span><span className="font-medium">₦50,000</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Your Commission</span><span className="font-semibold text-success">+₦200</span></div>
-            </Card>
-            <div className="flex gap-3 w-full pt-2">
-              <Button variant="outline" className="flex-1 h-12" onClick={() => { setStep('form'); setFirstName(''); setLastName(''); setPhone(''); setGender(''); setDob(''); }}>
-                Register Another
-              </Button>
-              <Button className="flex-1 h-12" onClick={() => navigate('/agent')}>Done</Button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        <Button
+          className="h-12 w-full"
+          onClick={() => void handleSubmit()}
+          disabled={submitting || !firstName || !lastName || !phoneNumber || password.length !== 6 || pin.length !== 4}
+        >
+          {submitting ? 'Registering...' : 'Register Customer'}
+        </Button>
+      </Card>
     </div>
   );
 };

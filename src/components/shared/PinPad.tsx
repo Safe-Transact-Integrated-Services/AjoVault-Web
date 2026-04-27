@@ -8,14 +8,29 @@ interface PinPadProps {
   title?: string;
   subtitle?: string;
   error?: string;
+  disabled?: boolean;
+  onInput?: () => void;
 }
 
-const PinPad = ({ length = 4, onComplete, title = 'Enter PIN', subtitle, error }: PinPadProps) => {
+const PinPad = ({
+  length = 4,
+  onComplete,
+  title = 'Enter PIN',
+  subtitle,
+  error,
+  disabled = false,
+  onInput,
+}: PinPadProps) => {
   const [pin, setPin] = useState('');
 
   const handlePress = (digit: string) => {
+    if (disabled) {
+      return;
+    }
+
     if (pin.length < length) {
       const newPin = pin + digit;
+      onInput?.();
       setPin(newPin);
       if (newPin.length === length) {
         setTimeout(() => onComplete(newPin), 150);
@@ -23,7 +38,14 @@ const PinPad = ({ length = 4, onComplete, title = 'Enter PIN', subtitle, error }
     }
   };
 
-  const handleDelete = () => setPin(p => p.slice(0, -1));
+  const handleDelete = () => {
+    if (disabled || pin.length === 0) {
+      return;
+    }
+
+    onInput?.();
+    setPin(currentPin => currentPin.slice(0, -1));
+  };
 
   const dots = Array.from({ length }, (_, i) => (
     <div
@@ -57,10 +79,11 @@ const PinPad = ({ length = 4, onComplete, title = 'Enter PIN', subtitle, error }
               if (key === 'del') handleDelete();
               else if (key !== '') handlePress(key);
             }}
-            disabled={key === ''}
+            disabled={key === '' || disabled}
             className={cn(
               'flex h-16 w-16 items-center justify-center rounded-full text-xl font-semibold transition-all',
               key === '' && 'invisible',
+              disabled && key !== '' && 'cursor-not-allowed opacity-60',
               key === 'del'
                 ? 'text-muted-foreground active:bg-muted'
                 : 'text-foreground active:bg-accent/10 active:scale-95'

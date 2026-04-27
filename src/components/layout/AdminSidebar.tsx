@@ -4,6 +4,7 @@ import {
   UserCog,
   ArrowLeftRight,
   AlertTriangle,
+  Mail,
   Settings,
   LogOut,
   Shield,
@@ -34,6 +35,7 @@ const mainItems = [
 ];
 
 const systemItems = [
+  { title: 'Messaging', url: '/admin/messaging', icon: Mail },
   { title: 'Settings', url: '/admin/settings', icon: Settings },
 ];
 
@@ -47,6 +49,11 @@ export function AdminSidebar() {
 
   const isActive = (path: string) =>
     path === '/admin/dashboard' ? currentPath === '/admin/dashboard' : currentPath.startsWith(path);
+
+  const handleLogout = async () => {
+    await adminLogout();
+    navigate('/admin/login', { replace: true });
+  };
 
   return (
     <Sidebar collapsible="icon">
@@ -121,7 +128,9 @@ export function AdminSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              onClick={() => { adminLogout(); navigate('/'); }}
+              onClick={() => {
+                void handleLogout();
+              }}
               className="text-destructive hover:bg-destructive/10"
             >
               <LogOut className="mr-2 h-4 w-4" />

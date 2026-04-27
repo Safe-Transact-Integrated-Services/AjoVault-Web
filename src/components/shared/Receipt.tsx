@@ -11,6 +11,10 @@ interface ReceiptProps {
   reference: string;
   date: string;
   details?: { label: string; value: string }[];
+  primaryActionHref?: string;
+  primaryActionLabel?: string;
+  secondaryActionHref?: string;
+  secondaryActionLabel?: string;
 }
 
 const statusConfig = {
@@ -19,7 +23,18 @@ const statusConfig = {
   pending: { icon: Clock, label: 'Pending', color: 'text-warning' },
 };
 
-const Receipt = ({ status, amount, description, reference, date, details }: ReceiptProps) => {
+const Receipt = ({
+  status,
+  amount,
+  description,
+  reference,
+  date,
+  details,
+  primaryActionHref = '/dashboard',
+  primaryActionLabel = 'Done',
+  secondaryActionHref = '/transactions',
+  secondaryActionLabel = 'View Transactions',
+}: ReceiptProps) => {
   const navigate = useNavigate();
   const { icon: Icon, label, color } = statusConfig[status];
 
@@ -41,8 +56,8 @@ const Receipt = ({ status, amount, description, reference, date, details }: Rece
         </div>
 
         <div className="mt-8 space-y-3">
-          <Button className="w-full" onClick={() => navigate('/dashboard')}>Done</Button>
-          <Button variant="outline" className="w-full" onClick={() => navigate('/wallet/history')}>View History</Button>
+          <Button className="w-full" onClick={() => navigate(primaryActionHref)}>{primaryActionLabel}</Button>
+          <Button variant="outline" className="w-full" onClick={() => navigate(secondaryActionHref)}>{secondaryActionLabel}</Button>
         </div>
       </div>
     </div>

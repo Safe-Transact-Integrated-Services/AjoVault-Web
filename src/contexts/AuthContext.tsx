@@ -1,14 +1,34 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { AUTH_SESSION_EXPIRED_EVENT } from '@/lib/api/authEvents';
 import type { User } from '@/types';
 import { clearAuthSession, getAuthSession, persistAuthSession } from '@/lib/api/session';
-import { getCurrentUser, loginUser, logoutUser, refreshUserSession, registerUser, type SignupInput } from '@/services/authApi';
+import {
+  getCurrentUser,
+  loginUser,
+  logoutUser,
+  refreshUserSession,
+  registerUser,
+  requestOtp,
+  updateCurrentUser,
+  verifyOtp,
+  type AuthContactInput,
+  type OtpChallengeResponse,
+  type OtpVerificationResponse,
+  type SignupInput,
+  type UpdateProfileInput,
+} from '@/services/authApi';
+import { loginAgent } from '@/services/agentApi';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isInitializing: boolean;
   login: (identifier: string, password: string) => Promise<User>;
-  signup: (input: SignupInput) => Promise<User>;
+  loginAgent: (agentCode: string, password: string) => Promise<User>;
+  signup: (input: SignupInput) => Promise<void>;
+  requestOtp: (input: AuthContactInput) => Promise<OtpChallengeResponse>;
+  verifyOtp: (input: AuthContactInput, otp: string) => Promise<OtpVerificationResponse>;
+  updateProfile: (input: UpdateProfileInput) => Promise<User>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<User | null>;
 }
@@ -28,7 +48,6 @@ export const useAuth = () => {
 const mergeUser = (nextUser: User, currentUser: User | null): User => ({
   ...nextUser,
   creditScore: currentUser?.creditScore ?? nextUser.creditScore,
-  kycTier: currentUser?.kycTier ?? nextUser.kycTier,
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -93,6 +112,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const handleSessionExpired = () => {
+      clearAuthSession();
+      setUser(null);
+    };
+
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
+
+    return () => {
+      window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
+    };
+  }, []);
+
   const login = useCallback(async (identifier: string, password: string) => {
     const result = await loginUser(identifier, password);
     persistAuthSession(result.session);
@@ -100,10 +136,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return result.user;
   }, []);
 
+  const handleAgentLogin = useCallback(async (agentCode: string, password: string) => {
+    const result = await loginAgent(agentCode, password);
+    persistAuthSession(result.session);
+    setUser(currentUser => mergeUser(result.user, currentUser));
+    return result.user;
+  }, []);
+
   const signup = useCallback(async (input: SignupInput) => {
     await registerUser(input);
-    return login(input.email?.trim() || input.phoneNumber, input.password);
-  }, [login]);
+  }, []);
+
+  const handleRequestOtp = useCallback((input: AuthContactInput) => requestOtp(input), []);
+  const handleVerifyOtp = useCallback((input: AuthContactInput, otp: string) => verifyOtp(input, otp), []);
+  const updateProfile = useCallback(async (input: UpdateProfileInput) => {
+    const result = await updateCurrentUser(input);
+    setUser(currentUser => mergeUser(result, currentUser));
+    return result;
+  }, []);
 
   const logout = useCallback(async () => {
     const session = getAuthSession();
@@ -125,10 +175,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAuthenticated: !!user,
     isInitializing,
     login,
+    loginAgent: handleAgentLogin,
     signup,
+    requestOtp: handleRequestOtp,
+    verifyOtp: handleVerifyOtp,
+    updateProfile,
     logout,
     refreshProfile,
-  }), [isInitializing, login, logout, refreshProfile, signup, user]);
+  }), [handleAgentLogin, handleRequestOtp, handleVerifyOtp, isInitializing, login, logout, refreshProfile, signup, updateProfile, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
