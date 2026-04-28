@@ -150,14 +150,6 @@ const Login = () => {
     });
   };
 
-  const navigateToForgotPin = () => {
-    navigate('/forgot-pin', {
-      state: {
-        identifier: identifier.trim(),
-      },
-    });
-  };
-
   return (
     <div className="min-h-screen px-6 py-6">
       <button
@@ -214,12 +206,9 @@ const Login = () => {
             {isCheckingIdentifier ? 'Checking account...' : 'Continue'}
           </Button>
 
-          <div className="flex items-center justify-between gap-3 text-sm">
+          <div className="text-sm">
             <button type="button" onClick={navigateToForgotPassword} className="font-medium text-accent">
               Forgot password?
-            </button>
-            <button type="button" onClick={navigateToForgotPin} className="font-medium text-accent">
-              Forgot PIN?
             </button>
           </div>
 
@@ -245,9 +234,6 @@ const Login = () => {
           <div className="mt-5 flex items-center gap-4 text-sm">
             <button type="button" onClick={navigateToForgotPassword} className="font-medium text-accent">
               Forgot password?
-            </button>
-            <button type="button" onClick={navigateToForgotPin} className="font-medium text-accent">
-              Forgot PIN?
             </button>
           </div>
         </div>

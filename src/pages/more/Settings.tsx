@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
+import { useAuth } from '@/contexts/AuthContext';
 import { dashboardKeys } from '@/services/dashboardApi';
 import { getApiErrorMessage } from '@/lib/api/http';
 import { notificationKeys } from '@/services/notificationsApi';
@@ -22,6 +23,7 @@ type NotificationToggleKey =
 const Settings = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const settingsQuery = useQuery({
     queryKey: settingsKeys.me,
     queryFn: getMySettings,
@@ -56,6 +58,15 @@ const Settings = () => {
   const updateToggle = (key: NotificationToggleKey, value: boolean) => {
     setForm(current => current ? { ...current, [key]: value } : current);
     setError('');
+  };
+
+  const handleResetPin = () => {
+    const identifier = user?.email?.trim() || user?.phone?.trim() || '';
+    navigate('/forgot-pin', {
+      state: {
+        identifier,
+      },
+    });
   };
 
   const handleSave = async () => {
@@ -148,6 +159,19 @@ const Settings = () => {
                 <Switch checked={form[key as NotificationToggleKey]} onCheckedChange={value => updateToggle(key as NotificationToggleKey, value)} />
               </div>
             ))}
+          </Card>
+
+          <Card className="space-y-3 p-4">
+            <div className="flex items-center gap-2">
+              <Lock className="h-4 w-4 text-accent" />
+              <h2 className="font-semibold text-foreground">Security</h2>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Reset your 4-digit transaction PIN if you no longer remember it.
+            </p>
+            <Button type="button" variant="outline" onClick={handleResetPin} className="h-11 w-full">
+              Reset transaction PIN
+            </Button>
           </Card>
 
           <Card className="space-y-3 p-4">
