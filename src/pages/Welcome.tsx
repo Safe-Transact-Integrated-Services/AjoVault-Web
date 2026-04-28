@@ -752,7 +752,7 @@ const Welcome = () => {
           </div>
 
           <div className="flex flex-col items-center justify-between gap-4 text-[10px] font-bold uppercase text-white/25 md:flex-row">
-            <p>Copyright 2026 AjoVault Financial Technologies. All rights reserved.</p>
+            <p>Copyright 2026 safe transact integrated services ltd. All rights reserved.</p>
             <p>Built by the AjoVault Team</p>
           </div>
         </div>
