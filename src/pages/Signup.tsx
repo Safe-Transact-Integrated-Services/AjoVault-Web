@@ -16,7 +16,7 @@ import {
   validatePersonName,
 } from '@/lib/authFormValidation';
 
-type Step = 'contact' | 'otp' | 'details' | 'password' | 'pin';
+type Step = 'contact' | 'otp' | 'password' | 'pin';
 
 const formatCountdown = (seconds: number) => {
   const safeSeconds = Math.max(seconds, 0);
@@ -54,7 +54,7 @@ const Signup = () => {
     }
   };
 
-  const clearContactValidation = (field: 'email' | 'phone') => {
+  const clearContactValidation = (field: 'email' | 'phone' | 'firstName' | 'lastName') => {
     clearError();
 
     if (field === 'email' && emailError) {
@@ -64,10 +64,6 @@ const Signup = () => {
     if (field === 'phone' && phoneError) {
       setPhoneError('');
     }
-  };
-
-  const clearDetailsValidation = (field: 'firstName' | 'lastName') => {
-    clearError();
 
     if (field === 'firstName' && firstNameError) {
       setFirstNameError('');
@@ -91,33 +87,32 @@ const Signup = () => {
   const showDevelopmentOtpHelper = import.meta.env.DEV;
 
   const validateContactStep = () => {
+    const nextFirstNameError = validatePersonName(firstName, 'First name');
+    const nextLastNameError = validatePersonName(lastName, 'Last name');
     const nextEmailError = validateOptionalEmailAddress(trimmedEmail);
     const nextPhoneError = validateOptionalPhoneNumber(trimmedPhoneNumber);
 
+    setFirstNameError(nextFirstNameError);
+    setLastNameError(nextLastNameError);
     setEmailError(nextEmailError);
     setPhoneError(nextPhoneError);
     setError('');
+
+    if (!firstName.trim() || !lastName.trim()) {
+      setError('First name and last name are required.');
+      return false;
+    }
 
     if (!trimmedEmail && !trimmedPhoneNumber) {
       setError('Enter at least an email address or phone number.');
       return false;
     }
 
-    if (nextEmailError || nextPhoneError) {
+    if (nextFirstNameError || nextLastNameError || nextEmailError || nextPhoneError) {
       return false;
     }
 
     return true;
-  };
-
-  const validateDetailsStep = () => {
-    const nextFirstNameError = validatePersonName(firstName, 'First name');
-    const nextLastNameError = validatePersonName(lastName, 'Last name');
-
-    setFirstNameError(nextFirstNameError);
-    setLastNameError(nextLastNameError);
-
-    return !nextFirstNameError && !nextLastNameError;
   };
 
   const getOtpErrorMessage = (err: unknown) => {
@@ -233,7 +228,7 @@ const Signup = () => {
 
       setOtp(normalizedOtp);
       setOtpMessage(response.message);
-      setStep('details');
+      setStep('password');
       toast.success(response.message || 'OTP verified successfully.');
     } catch (err) {
       setOtp('');
@@ -243,15 +238,6 @@ const Signup = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleDetailsSubmit = () => {
-    if (!validateDetailsStep()) {
-      return;
-    }
-
-    setError('');
-    setStep('password');
   };
 
   const handlePasswordComplete = async (nextPassword: string) => {
@@ -295,14 +281,8 @@ const Signup = () => {
       return;
     }
 
-    if (step === 'details') {
-      setStep('otp');
-      setError('');
-      return;
-    }
-
     if (step === 'password') {
-      setStep('details');
+      setStep('otp');
       setError('');
       return;
     }
@@ -345,6 +325,38 @@ const Signup = () => {
 
               <div className="space-y-4">
                 <div className="space-y-2">
+                  <Label>First Name</Label>
+                  <Input
+                    placeholder="Adaeze"
+                    value={firstName}
+                    onChange={event => {
+                      setFirstName(event.target.value);
+                      clearContactValidation('firstName');
+                    }}
+                    onBlur={() => setFirstNameError(validatePersonName(firstName, 'First name'))}
+                    className="h-12"
+                    aria-invalid={!!firstNameError}
+                  />
+                  {firstNameError && <p className="text-sm text-destructive">{firstNameError}</p>}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Last Name</Label>
+                  <Input
+                    placeholder="Okafor"
+                    value={lastName}
+                    onChange={event => {
+                      setLastName(event.target.value);
+                      clearContactValidation('lastName');
+                    }}
+                    onBlur={() => setLastNameError(validatePersonName(lastName, 'Last name'))}
+                    className="h-12"
+                    aria-invalid={!!lastNameError}
+                  />
+                  {lastNameError && <p className="text-sm text-destructive">{lastNameError}</p>}
+                </div>
+
+                <div className="space-y-2">
                   <Label>Email Address</Label>
                   <Input
                     type="email"
@@ -385,7 +397,7 @@ const Signup = () => {
 
               {error && <p className="text-sm text-destructive">{error}</p>}
 
-              <Button type="submit" className="h-12 w-full" disabled={!hasContact || loading}>
+              <Button type="submit" className="h-12 w-full" disabled={!firstName.trim() || !lastName.trim() || !hasContact || loading}>
                 {loading ? 'Sending OTP...' : 'Continue'}
               </Button>
             </form>
@@ -460,59 +472,6 @@ const Signup = () => {
                 disabled={otp.replace(/\D/g, '').length < 6 || loading || isOtpExpired}
               >
                 {loading ? 'Verifying...' : isOtpExpired ? 'OTP Expired' : 'Verify'}
-              </Button>
-            </div>
-          )}
-
-          {step === 'details' && (
-            <div className="space-y-6">
-              <div>
-                <h1 className="font-display text-2xl font-bold">Your Details</h1>
-                <p className="mt-1 text-muted-foreground">Tell us a bit about yourself</p>
-              </div>
-
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>First Name</Label>
-                  <Input
-                    placeholder="Adaeze"
-                    value={firstName}
-                    onChange={event => {
-                      setFirstName(event.target.value);
-                      clearDetailsValidation('firstName');
-                    }}
-                    onBlur={() => setFirstNameError(validatePersonName(firstName, 'First name'))}
-                    className="h-12"
-                    aria-invalid={!!firstNameError}
-                  />
-                  {firstNameError && <p className="text-sm text-destructive">{firstNameError}</p>}
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Last Name</Label>
-                  <Input
-                    placeholder="Okafor"
-                    value={lastName}
-                    onChange={event => {
-                      setLastName(event.target.value);
-                      clearDetailsValidation('lastName');
-                    }}
-                    onBlur={() => setLastNameError(validatePersonName(lastName, 'Last name'))}
-                    className="h-12"
-                    aria-invalid={!!lastNameError}
-                  />
-                  {lastNameError && <p className="text-sm text-destructive">{lastNameError}</p>}
-                </div>
-              </div>
-
-              {error && <p className="text-sm text-destructive">{error}</p>}
-
-              <Button
-                className="h-12 w-full"
-                onClick={handleDetailsSubmit}
-                disabled={!firstName.trim() || !lastName.trim()}
-              >
-                Continue
               </Button>
             </div>
           )}
