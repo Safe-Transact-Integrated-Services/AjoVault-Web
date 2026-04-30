@@ -11,6 +11,8 @@ import { getDefaultUserLoginPath, type RedirectTarget, getRedirectPath } from '@
 import { getApiErrorMessage, isApiError } from '@/lib/api/http';
 import { validateLoginIdentifier } from '@/lib/authFormValidation';
 import { checkLoginIdentifier } from '@/services/authApi';
+import AuthLayout from '@/components/layout/AuthLayout';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface LoginLocationState {
   from?: RedirectTarget;
@@ -159,100 +161,128 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen px-6 py-6">
-      <button
-        onClick={() => {
-          if (showPassword) {
-            setShowPassword(false);
-            setError('');
-            return;
-          }
+    <AuthLayout>
+      <div className="relative">
+        <button
+          onClick={() => {
+            if (showPassword) {
+              setShowPassword(false);
+              setError('');
+              return;
+            }
 
-          navigate('/');
-        }}
-        className="mb-6 flex items-center gap-1 text-sm text-muted-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back
-      </button>
-
-      {!showPassword ? (
-        <form
-          className="space-y-6"
-          onSubmit={event => {
-            event.preventDefault();
-            void handleContinueToPassword();
+            navigate('/');
           }}
+          className="mb-8 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors group"
         >
-          <div>
-            <h1 className="font-display text-2xl font-bold">Welcome Back</h1>
-            <p className="mt-1 text-muted-foreground">Enter your phone number or email to continue</p>
-          </div>
+          <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" /> Back
+        </button>
 
-          <div className="space-y-2">
-            <Label htmlFor="identifier">Phone Number or Email</Label>
-            <Input
-              id="identifier"
-              placeholder="0800 000 0000 or you@example.com"
-              value={identifier}
-              onChange={event => {
-                setIdentifier(event.target.value);
-                clearIdentifierState();
-              }}
-              onBlur={() => {
-                setIdentifierTouched(true);
-                setIdentifierError(validateLoginIdentifier(identifier));
-              }}
-              className="h-12"
-              aria-invalid={!!identifierError}
-            />
-          </div>
+        <AnimatePresence mode="wait">
+          {!showPassword ? (
+            <motion.div
+              key="identifier"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+              className="space-y-8"
+            >
+              <div>
+                <h1 className="font-display text-3xl font-bold text-[#102A56]">Welcome Back! 👋</h1>
+                <p className="mt-2 text-muted-foreground">Please enter your details to Sign In</p>
+              </div>
 
-          {identifierTouched && identifierError && <p className="text-sm text-destructive">{identifierError}</p>}
-          {error && <p className="text-sm text-destructive">{error}</p>}
+              <form
+                className="space-y-6"
+                onSubmit={event => {
+                  event.preventDefault();
+                  void handleContinueToPassword();
+                }}
+              >
+                <div className="space-y-2">
+                  <Label htmlFor="identifier" className="text-sm font-semibold text-[#102A56]">Phone Number or Email</Label>
+                  <Input
+                    id="identifier"
+                    placeholder="0800 000 0000 or you@example.com"
+                    value={identifier}
+                    onChange={event => {
+                      setIdentifier(event.target.value);
+                      clearIdentifierState();
+                    }}
+                    onBlur={() => {
+                      setIdentifierTouched(true);
+                      setIdentifierError(validateLoginIdentifier(identifier));
+                    }}
+                    className="h-12 bg-[#F8FAFC] border-none focus-visible:ring-1 focus-visible:ring-[#3B82F6]"
+                    aria-invalid={!!identifierError}
+                  />
+                  {identifierTouched && identifierError && <p className="text-xs text-destructive">{identifierError}</p>}
+                </div>
 
-          <Button type="submit" className="h-12 w-full" disabled={!identifier.trim() || isCheckingIdentifier}>
-            {isCheckingIdentifier ? 'Checking account...' : 'Continue'}
-          </Button>
+                {error && <p className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg">{error}</p>}
 
-          <div className="flex items-center justify-between gap-3 text-sm">
-            <button type="button" onClick={navigateToForgotPassword} className="font-medium text-accent">
-              Forgot password?
-            </button>
-            <button type="button" onClick={navigateToForgotPin} className="font-medium text-accent">
-              Forgot PIN?
-            </button>
-          </div>
+                <Button 
+                  type="submit" 
+                  className="h-14 w-full bg-[#102A56] hover:bg-[#1d3a6d] text-white font-black uppercase rounded-full shadow-xl shadow-[#102A56]/20 transition-all hover:scale-105 active:scale-95 disabled:hover:scale-100" 
+                  disabled={!identifier.trim() || isCheckingIdentifier}
+                >
+                  {isCheckingIdentifier ? 'Checking...' : 'Continue'}
+                </Button>
 
-          <p className="text-center text-sm text-muted-foreground">
-            Don't have an account?{' '}
-            <button type="button" onClick={() => navigate('/signup')} className="font-medium text-accent">
-              Sign Up
-            </button>
-          </p>
-        </form>
-      ) : (
-        <div className="flex flex-col items-center pt-10">
-          <PinPad
-            key={passwordPadKey}
-            length={6}
-            title="Enter your password"
-            subtitle={loading ? 'Signing in...' : identifierCheckMessage || `Logging in as ${identifier}`}
-            error={error}
-            disabled={loading}
-            onInput={clearPasswordError}
-            onComplete={handlePasswordComplete}
-          />
-          <div className="mt-5 flex items-center gap-4 text-sm">
-            <button type="button" onClick={navigateToForgotPassword} className="font-medium text-accent">
-              Forgot password?
-            </button>
-            <button type="button" onClick={navigateToForgotPin} className="font-medium text-accent">
-              Forgot PIN?
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <button type="button" onClick={navigateToForgotPassword} className="font-semibold text-[#3B82F6] hover:underline">
+                    Forgot password?
+                  </button>
+                  <button type="button" onClick={navigateToForgotPin} className="font-semibold text-[#3B82F6] hover:underline">
+                    Forgot PIN?
+                  </button>
+                </div>
+
+                <p className="text-center text-sm text-muted-foreground">
+                  Not yet a User?{' '}
+                  <button 
+                    type="button" 
+                    onClick={() => navigate('/signup')} 
+                    className="font-semibold text-[#3B82F6] hover:underline"
+                  >
+                    Create an account
+                  </button>
+                </p>
+              </form>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="password"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col items-center"
+            >
+              <PinPad
+                key={passwordPadKey}
+                length={6}
+                title="Enter your password"
+                subtitle={loading ? 'Signing in...' : identifierCheckMessage || `Logging in as ${identifier}`}
+                error={error}
+                disabled={loading}
+                onInput={clearPasswordError}
+                onComplete={handlePasswordComplete}
+              />
+              <div className="mt-8 flex items-center gap-6 text-sm">
+                <button type="button" onClick={navigateToForgotPassword} className="font-semibold text-[#3B82F6] hover:underline">
+                  Forgot password?
+                </button>
+                <button type="button" onClick={navigateToForgotPin} className="font-semibold text-[#3B82F6] hover:underline">
+                  Forgot PIN?
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </AuthLayout>
   );
 };
 

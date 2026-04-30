@@ -163,6 +163,7 @@ const Modal = ({
             type="button"
             onClick={handleSubmitClick}
             disabled={otp.length !== length || isLoading || isExpired}
+            className="bg-[#102A56] hover:bg-[#1d3a6d] text-white font-bold px-8 rounded-lg"
           >
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Verify

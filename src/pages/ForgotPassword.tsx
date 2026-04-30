@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { getApiErrorMessage } from '@/lib/api/http';
 import { validateEmailAddress } from '@/lib/authFormValidation';
 import { forgotPassword } from '@/services/authApi';
+import AuthLayout from '@/components/layout/AuthLayout';
+import { motion } from 'framer-motion';
 
 interface ForgotPasswordLocationState {
   email?: string;
@@ -54,70 +56,80 @@ const ForgotPassword = () => {
   };
 
   return (
-    <div className="min-h-screen px-6 py-6">
-      <button
-        onClick={() => navigate('/login')}
-        className="mb-6 flex items-center gap-1 text-sm text-muted-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back to login
-      </button>
+    <AuthLayout>
+      <div className="relative">
+        <button
+          onClick={() => navigate('/login')}
+          className="mb-8 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors group"
+        >
+          <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" /> Back to login
+        </button>
 
-      <div className="space-y-6">
-        <div>
-          <h1 className="font-display text-2xl font-bold">Forgot Password</h1>
-          <p className="mt-1 text-muted-foreground">Enter your email address and we’ll help you reset your password.</p>
-        </div>
-
-        {!submitted ? (
-          <form className="space-y-5" onSubmit={handleSubmit}>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email address</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={event => {
-                  setEmail(event.target.value);
-                  if (emailError) {
-                    setEmailError('');
-                  }
-                  if (error) {
-                    setError('');
-                  }
-                }}
-                onBlur={() => setEmailError(validateEmailAddress(email))}
-                className="h-12"
-                aria-invalid={!!emailError}
-              />
-            </div>
-
-            {emailError && <p className="text-sm text-destructive">{emailError}</p>}
-            {error && <p className="text-sm text-destructive">{error}</p>}
-
-            <Button type="submit" className="h-12 w-full" disabled={loading}>
-              {loading ? 'Sending reset link...' : 'Send reset link'}
-            </Button>
-          </form>
-        ) : (
-          <div className="space-y-4 rounded-2xl border bg-card p-5">
-            <p className="text-sm text-foreground">{message}</p>
-            {debugResetToken && (
-              <div className="space-y-2 rounded-xl bg-muted/60 p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Development reset token</p>
-                <p className="break-all font-mono text-sm text-foreground">{debugResetToken}</p>
-              </div>
-            )}
-            <Button
-              className="h-12 w-full"
-              onClick={() => navigate('/reset-password', { state: { token: debugResetToken } })}
-            >
-              Continue to reset password
-            </Button>
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-8"
+        >
+          <div>
+            <h1 className="font-display text-3xl font-bold text-[#102A56]">Forgot Password</h1>
+            <p className="mt-2 text-muted-foreground">Enter your email address and we’ll help you reset your password.</p>
           </div>
-        )}
+
+          {!submitted ? (
+            <form className="space-y-6" onSubmit={handleSubmit}>
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-sm font-semibold text-[#102A56]">Email address</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={event => {
+                    setEmail(event.target.value);
+                    if (emailError) {
+                      setEmailError('');
+                    }
+                    if (error) {
+                      setError('');
+                    }
+                  }}
+                  onBlur={() => setEmailError(validateEmailAddress(email))}
+                  className="h-12 bg-[#F8FAFC] border-none focus-visible:ring-1 focus-visible:ring-[#3B82F6]"
+                  aria-invalid={!!emailError}
+                />
+                {emailError && <p className="text-xs text-destructive">{emailError}</p>}
+              </div>
+
+              {error && <p className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg">{error}</p>}
+
+              <Button 
+                type="submit" 
+                className="h-14 w-full bg-[#102A56] hover:bg-[#1d3a6d] text-white font-black uppercase rounded-full shadow-xl shadow-[#102A56]/20 transition-all hover:scale-105 active:scale-95 disabled:hover:scale-100" 
+                disabled={loading}
+              >
+                {loading ? 'Sending...' : 'Send reset link'}
+              </Button>
+            </form>
+          ) : (
+            <div className="space-y-6 rounded-2xl border bg-white p-6 shadow-sm">
+              <p className="text-sm text-foreground leading-relaxed">{message}</p>
+              {debugResetToken && (
+                <div className="space-y-3 rounded-xl bg-[#F8FAFC] p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-[#3B82F6]">Development reset token</p>
+                  <p className="break-all font-mono text-xs text-muted-foreground">{debugResetToken}</p>
+                </div>
+              )}
+              <Button
+                className="h-14 w-full bg-[#102A56] hover:bg-[#1d3a6d] text-white font-black uppercase rounded-full shadow-xl shadow-[#102A56]/20"
+                onClick={() => navigate('/reset-password', { state: { token: debugResetToken } })}
+              >
+                Continue
+              </Button>
+            </div>
+          )}
+        </motion.div>
       </div>
-    </div>
+    </AuthLayout>
   );
 };
 
