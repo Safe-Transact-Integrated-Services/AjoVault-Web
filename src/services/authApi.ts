@@ -97,6 +97,7 @@ export interface SignupInput {
   lastName: string;
   password: string;
   pin: string;
+  referralId?: string;
 }
 
 export interface UpdateProfileInput {
@@ -279,6 +280,7 @@ export const registerUser = async (input: SignupInput) => {
       lastName: input.lastName.trim(),
       password: input.password,
       pin: input.pin,
+      referralId: input.referralId?.trim() || undefined,
     },
   });
 

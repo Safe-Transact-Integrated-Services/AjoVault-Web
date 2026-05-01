@@ -41,6 +41,7 @@ const Signup = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [referralId, setReferralId] = useState('');
   const [otpHint, setOtpHint] = useState('123456');
   const [otpMessage, setOtpMessage] = useState('');
   const [otpExpiresAt, setOtpExpiresAt] = useState<string | null>(null);
@@ -251,6 +252,7 @@ const Signup = () => {
         lastName,
         password,
         pin,
+        referralId: referralId.trim() || undefined,
       });
 
       setIsPinModalOpen(false);
@@ -379,6 +381,16 @@ const Signup = () => {
                       aria-invalid={!!phoneError}
                     />
                     {phoneError && <p className="text-xs text-destructive">{phoneError}</p>}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-[#102A56]">Referral ID (Optional)</Label>
+                    <Input
+                      placeholder="Enter referral code"
+                      value={referralId}
+                      onChange={event => setReferralId(event.target.value)}
+                      className="h-12 bg-[#F8FAFC] border-none focus-visible:ring-1 focus-visible:ring-[#3B82F6]"
+                    />
                   </div>
 
                   {/* <p className="text-xs text-muted-foreground italic">All fields are required to create your account.</p> */}
