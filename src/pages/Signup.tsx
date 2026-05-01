@@ -266,6 +266,7 @@ const Signup = () => {
       });
 
       setIsTermsModalOpen(false);
+      toast.success(`Welcome to AjoVault, ${firstName}! Your account has been created successfully.`);
       navigate('/login', { replace: true, state: { identifier: loginIdentifier, justSignedUp: true } });
     } catch (err) {
       const message = getApiErrorMessage(err, 'Unable to create your account.');

@@ -49,7 +49,6 @@ const Login = () => {
     if (!locationState?.justSignedUp) {
       return;
     }
-    toast.success('Account created successfully. Sign in with your details.');
     navigate(location.pathname, {
       replace: true,
       state: {
