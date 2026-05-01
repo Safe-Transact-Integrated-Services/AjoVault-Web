@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Modal from '@/components/shared/Modal';
+import TermsModal from '@/components/shared/TermsModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDefaultAuthenticatedPath } from '@/lib/auth';
 import { getApiErrorMessage, isApiError } from '@/lib/api/http';
@@ -34,6 +35,8 @@ const Signup = () => {
   const [step, setStep] = useState<Step>('contact');
   const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+  const [tempPin, setTempPin] = useState('');
   const [email, setEmail] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -241,7 +244,13 @@ const Signup = () => {
     setIsPinModalOpen(true);
   };
 
-  const handlePinComplete = async (pin: string) => {
+  const handlePinComplete = (pin: string) => {
+    setTempPin(pin);
+    setIsPinModalOpen(false);
+    setIsTermsModalOpen(true);
+  };
+
+  const handleTermsAccept = async () => {
     setLoading(true);
     setError('');
 
@@ -252,17 +261,20 @@ const Signup = () => {
         firstName,
         lastName,
         password,
-        pin,
+        pin: tempPin,
         referralId: referralId.trim() || undefined,
       });
 
-      setIsPinModalOpen(false);
+      setIsTermsModalOpen(false);
       navigate('/login', { replace: true, state: { identifier: loginIdentifier, justSignedUp: true } });
     } catch (err) {
       const message = getApiErrorMessage(err, 'Unable to create your account.');
       setError(message);
       toast.error(message);
-      setPinPadKey(current => current + 1);
+      // Re-open PIN modal if there's an error so they can retry? 
+      // Actually, if it's an API error, they might need to go back or retry terms.
+      setIsTermsModalOpen(false);
+      setIsPinModalOpen(true);
     } finally {
       setLoading(false);
     }
@@ -519,6 +531,13 @@ const Signup = () => {
         description="Set a 4-digit PIN to secure your transactions and account."
         length={4}
         clearError={clearError}
+      />
+
+      <TermsModal
+        isOpen={isTermsModalOpen}
+        onClose={() => setIsTermsModalOpen(false)}
+        onAccept={handleTermsAccept}
+        isLoading={loading}
       />
     </AuthLayout>
   );

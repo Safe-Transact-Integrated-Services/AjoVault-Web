@@ -152,13 +152,6 @@ const Login = () => {
     });
   };
 
-  const navigateToForgotPin = () => {
-    navigate('/forgot-pin', {
-      state: {
-        identifier: identifier.trim(),
-      },
-    });
-  };
 
   return (
     <AuthLayout>
@@ -230,12 +223,9 @@ const Login = () => {
                   {isCheckingIdentifier ? 'Checking...' : 'Continue'}
                 </Button>
 
-                <div className="flex items-center justify-between gap-3 text-sm">
+                <div className="flex items-center justify-center text-sm">
                   <button type="button" onClick={navigateToForgotPassword} className="font-semibold text-[#3B82F6] hover:underline">
                     Forgot password?
-                  </button>
-                  <button type="button" onClick={navigateToForgotPin} className="font-semibold text-[#3B82F6] hover:underline">
-                    Forgot PIN?
                   </button>
                 </div>
 
@@ -270,12 +260,9 @@ const Login = () => {
                 onInput={clearPasswordError}
                 onComplete={handlePasswordComplete}
               />
-              <div className="mt-8 flex items-center gap-6 text-sm">
+              <div className="mt-8 flex items-center justify-center text-sm">
                 <button type="button" onClick={navigateToForgotPassword} className="font-semibold text-[#3B82F6] hover:underline">
                   Forgot password?
-                </button>
-                <button type="button" onClick={navigateToForgotPin} className="font-semibold text-[#3B82F6] hover:underline">
-                  Forgot PIN?
                 </button>
               </div>
             </motion.div>
