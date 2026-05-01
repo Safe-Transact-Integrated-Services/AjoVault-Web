@@ -24,6 +24,7 @@ const ForgotPassword = () => {
   const [debugResetToken, setDebugResetToken] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const hasDebugResetToken = debugResetToken.length > 0;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -65,7 +66,7 @@ const ForgotPassword = () => {
       <div className="space-y-6">
         <div>
           <h1 className="font-display text-2xl font-bold">Forgot Password</h1>
-          <p className="mt-1 text-muted-foreground">Enter your email address and we’ll help you reset your password.</p>
+          <p className="mt-1 text-muted-foreground">Enter your email address and we&apos;ll help you reset your password.</p>
         </div>
 
         {!submitted ? (
@@ -102,18 +103,31 @@ const ForgotPassword = () => {
         ) : (
           <div className="space-y-4 rounded-2xl border bg-card p-5">
             <p className="text-sm text-foreground">{message}</p>
+            <p className="text-sm text-muted-foreground">
+              Check your inbox for the password reset email and use the reset button there to continue.
+            </p>
             {debugResetToken && (
               <div className="space-y-2 rounded-xl bg-muted/60 p-4">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Development reset token</p>
                 <p className="break-all font-mono text-sm text-foreground">{debugResetToken}</p>
               </div>
             )}
-            <Button
-              className="h-12 w-full"
-              onClick={() => navigate('/reset-password', { state: { token: debugResetToken } })}
-            >
-              Continue to reset password
-            </Button>
+            {hasDebugResetToken ? (
+              <Button
+                className="h-12 w-full"
+                onClick={() => navigate('/reset-password', { state: { token: debugResetToken } })}
+              >
+                Continue to reset password
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                className="h-12 w-full"
+                onClick={() => navigate('/login')}
+              >
+                Back to login
+              </Button>
+            )}
           </div>
         )}
       </div>

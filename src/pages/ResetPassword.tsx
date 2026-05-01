@@ -26,6 +26,7 @@ const ResetPassword = () => {
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const tokenProvidedByLink = token.trim().length > 0;
 
   useEffect(() => {
     const queryToken = searchParams.get('token');
@@ -79,29 +80,39 @@ const ResetPassword = () => {
       <div className="space-y-6">
         <div>
           <h1 className="font-display text-2xl font-bold">Reset Password</h1>
-          <p className="mt-1 text-muted-foreground">Enter the reset token and choose a new 6-digit password.</p>
+          <p className="mt-1 text-muted-foreground">
+            {tokenProvidedByLink
+              ? 'Choose a new 6-digit password to complete your reset.'
+              : 'Enter the reset token and choose a new 6-digit password.'}
+          </p>
         </div>
 
         <form className="space-y-5" onSubmit={handleSubmit}>
-          <div className="space-y-2">
-            <Label htmlFor="token">Reset token</Label>
-            <Input
-              id="token"
-              placeholder="Paste your reset token"
-              value={token}
-              onChange={event => {
-                setToken(event.target.value);
-                if (tokenError) {
-                  setTokenError('');
-                }
-                if (error) {
-                  setError('');
-                }
-              }}
-              className="h-12"
-              aria-invalid={!!tokenError}
-            />
-          </div>
+          {tokenProvidedByLink ? (
+            <div className="rounded-xl border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+              Reset link detected. Your token has already been applied from the email link.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="token">Reset token</Label>
+              <Input
+                id="token"
+                placeholder="Paste your reset token"
+                value={token}
+                onChange={event => {
+                  setToken(event.target.value);
+                  if (tokenError) {
+                    setTokenError('');
+                  }
+                  if (error) {
+                    setError('');
+                  }
+                }}
+                className="h-12"
+                aria-invalid={!!tokenError}
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="newPassword">New password</Label>
