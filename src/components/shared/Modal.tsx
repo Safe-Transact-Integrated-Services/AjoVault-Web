@@ -109,43 +109,36 @@ const Modal = ({
             </InputOTPGroup>
           </InputOTP>
 
-          <div className="flex w-full flex-col items-center space-y-2 text-center text-sm">
-            {error && <p className="text-destructive font-medium">{error}</p>}
-            
-            {!isExpired && secondsRemaining > 0 && (
-              <p className="text-muted-foreground">
-                Code expires in {formatCountdown(secondsRemaining)}
+          <div className="flex w-full flex-col items-center space-y-4 text-center">
+            {error && <p className="text-sm font-medium text-destructive bg-destructive/10 p-2 rounded-md w-full">{error}</p>}
+
+            {isExpired && (
+              <p className="text-sm font-medium text-destructive">
+                OTP expired. Request a new code to continue.
               </p>
             )}
 
-            {isExpired && onResend && (
-              <div className="flex flex-col items-center space-y-3 w-full">
-                <p className="text-destructive font-medium">OTP expired. Request a new code to continue.</p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={handleResend}
-                  disabled={isLoading}
-                >
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Retry OTP
-                </Button>
+            {onResend && (
+              <div className="w-full space-y-3">
+                <div className="flex flex-col items-center gap-2">
+                  <p className="text-xs text-muted-foreground">Didn't receive a code?</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResend}
+                    disabled={isLoading || (!isExpired && secondsRemaining > 0)}
+                    className="w-full h-11 font-black uppercase tracking-wider border-2 bg-[#102A56] text-slate-50 hover:text-[#102A56] hover:bg-slate-50 transition-all active:scale-95"
+                  >
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : null}
+                    {!isExpired && secondsRemaining > 0
+                      ? `Resend in ${formatCountdown(secondsRemaining)}`
+                      : 'Resend OTP'}
+                  </Button>
+                </div>
               </div>
-            )}
-            
-            {!isExpired && secondsRemaining === 0 && onResend && (
-               <div className="mt-2 text-muted-foreground">
-                 Didn't receive a code?{' '}
-                 <button
-                   type="button"
-                   onClick={handleResend}
-                   disabled={isLoading}
-                   className="text-primary font-medium hover:underline disabled:opacity-50"
-                 >
-                   Resend
-                 </button>
-               </div>
             )}
           </div>
         </div>
@@ -156,6 +149,7 @@ const Modal = ({
             variant="outline"
             onClick={onClose}
             disabled={isLoading}
+            className='hover:text-slate-50 hover:bg-[#102A56]'
           >
             Cancel
           </Button>
