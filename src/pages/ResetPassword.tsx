@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { getApiErrorMessage } from '@/lib/api/http';
 import { validatePasswordDigits } from '@/lib/authFormValidation';
 import { resetPassword } from '@/services/authApi';
+import AuthLayout from '@/components/layout/AuthLayout';
+import { motion } from 'framer-motion';
 
 interface ResetPasswordLocationState {
   token?: string;
@@ -68,101 +70,111 @@ const ResetPassword = () => {
   };
 
   return (
-    <div className="min-h-screen px-6 py-6">
-      <button
-        onClick={() => navigate('/login')}
-        className="mb-6 flex items-center gap-1 text-sm text-muted-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back to login
-      </button>
+    <AuthLayout>
+      <div className="relative">
+        <button
+          onClick={() => navigate('/login')}
+          className="mb-8 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors group"
+        >
+          <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" /> Back to login
+        </button>
 
-      <div className="space-y-6">
-        <div>
-          <h1 className="font-display text-2xl font-bold">Reset Password</h1>
-          <p className="mt-1 text-muted-foreground">Enter the reset token and choose a new 6-digit password.</p>
-        </div>
-
-        <form className="space-y-5" onSubmit={handleSubmit}>
-          <div className="space-y-2">
-            <Label htmlFor="token">Reset token</Label>
-            <Input
-              id="token"
-              placeholder="Paste your reset token"
-              value={token}
-              onChange={event => {
-                setToken(event.target.value);
-                if (tokenError) {
-                  setTokenError('');
-                }
-                if (error) {
-                  setError('');
-                }
-              }}
-              className="h-12"
-              aria-invalid={!!tokenError}
-            />
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-8"
+        >
+          <div>
+            <h1 className="font-display text-3xl font-bold text-[#102A56]">Reset Password</h1>
+            <p className="mt-2 text-muted-foreground">Enter the reset token and choose a new 6-digit password.</p>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="newPassword">New password</Label>
-            <Input
-              id="newPassword"
-              type="password"
-              inputMode="numeric"
-              maxLength={6}
-              placeholder="Enter 6 digits"
-              value={newPassword}
-              onChange={event => {
-                setNewPassword(event.target.value.replace(/\D/g, '').slice(0, 6));
-                if (passwordError) {
-                  setPasswordError('');
-                }
-                if (confirmPasswordError) {
-                  setConfirmPasswordError('');
-                }
-                if (error) {
-                  setError('');
-                }
-              }}
-              className="h-12"
-              aria-invalid={!!passwordError}
-            />
-          </div>
+          <form className="space-y-6" onSubmit={handleSubmit}>
+            <div className="space-y-2">
+              <Label htmlFor="token" className="text-sm font-semibold text-[#102A56]">Reset token</Label>
+              <Input
+                id="token"
+                placeholder="Paste your reset token"
+                value={token}
+                onChange={event => {
+                  setToken(event.target.value);
+                  if (tokenError) {
+                    setTokenError('');
+                  }
+                  if (error) {
+                    setError('');
+                  }
+                }}
+                className="h-12 bg-[#F8FAFC] border-none focus-visible:ring-1 focus-visible:ring-[#3B82F6]"
+                aria-invalid={!!tokenError}
+              />
+              {tokenError && <p className="text-xs text-destructive">{tokenError}</p>}
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm new password</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              inputMode="numeric"
-              maxLength={6}
-              placeholder="Re-enter 6 digits"
-              value={confirmPassword}
-              onChange={event => {
-                setConfirmPassword(event.target.value.replace(/\D/g, '').slice(0, 6));
-                if (confirmPasswordError) {
-                  setConfirmPasswordError('');
-                }
-                if (error) {
-                  setError('');
-                }
-              }}
-              className="h-12"
-              aria-invalid={!!confirmPasswordError}
-            />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="newPassword" className="text-sm font-semibold text-[#102A56]">New password</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="Enter 6 digits"
+                value={newPassword}
+                onChange={event => {
+                  setNewPassword(event.target.value.replace(/\D/g, '').slice(0, 6));
+                  if (passwordError) {
+                    setPasswordError('');
+                  }
+                  if (confirmPasswordError) {
+                    setConfirmPasswordError('');
+                  }
+                  if (error) {
+                    setError('');
+                  }
+                }}
+                className="h-12 bg-[#F8FAFC] border-none focus-visible:ring-1 focus-visible:ring-[#3B82F6]"
+                aria-invalid={!!passwordError}
+              />
+              {passwordError && <p className="text-xs text-destructive">{passwordError}</p>}
+            </div>
 
-          {tokenError && <p className="text-sm text-destructive">{tokenError}</p>}
-          {passwordError && <p className="text-sm text-destructive">{passwordError}</p>}
-          {confirmPasswordError && <p className="text-sm text-destructive">{confirmPasswordError}</p>}
-          {error && <p className="text-sm text-destructive">{error}</p>}
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword" className="text-sm font-semibold text-[#102A56]">Confirm new password</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="Re-enter 6 digits"
+                value={confirmPassword}
+                onChange={event => {
+                  setConfirmPassword(event.target.value.replace(/\D/g, '').slice(0, 6));
+                  if (confirmPasswordError) {
+                    setConfirmPasswordError('');
+                  }
+                  if (error) {
+                    setError('');
+                  }
+                }}
+                className="h-12 bg-[#F8FAFC] border-none focus-visible:ring-1 focus-visible:ring-[#3B82F6]"
+                aria-invalid={!!confirmPasswordError}
+              />
+              {confirmPasswordError && <p className="text-xs text-destructive">{confirmPasswordError}</p>}
+            </div>
 
-          <Button type="submit" className="h-12 w-full" disabled={loading}>
-            {loading ? 'Resetting password...' : 'Reset password'}
-          </Button>
-        </form>
+            {error && <p className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg">{error}</p>}
+
+            <Button 
+              type="submit" 
+              className="h-14 w-full bg-[#102A56] hover:bg-[#1d3a6d] text-white font-black uppercase rounded-full shadow-xl shadow-[#102A56]/20 transition-all hover:scale-105 active:scale-95 disabled:hover:scale-100" 
+              disabled={loading}
+            >
+              {loading ? 'Resetting...' : 'Reset password'}
+            </Button>
+          </form>
+        </motion.div>
       </div>
-    </div>
+    </AuthLayout>
   );
 };
 

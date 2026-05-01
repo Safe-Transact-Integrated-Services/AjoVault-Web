@@ -127,16 +127,18 @@ const App = () => (
           <AuthSessionNotifier />
           <BrowserRouter>
             <Routes>
+              <Route path="/" element={<Welcome />} />
+
+              <Route path="/signup" element={<Signup />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/forgot-pin" element={<ForgotPin />} />
+              <Route path="/reset-pin" element={<ResetPin />} />
+              <Route path="/agent/login" element={<AgentLogin />} />
+              <Route path="/agent/apply" element={<BecomeAgent />} />
+
               <Route element={<MobilePageLayout />}>
-                <Route path="/" element={<Welcome />} />
-                <Route path="/signup" element={<Signup />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/reset-password" element={<ResetPassword />} />
-                <Route path="/forgot-pin" element={<ForgotPin />} />
-                <Route path="/reset-pin" element={<ResetPin />} />
-                <Route path="/agent/login" element={<AgentLogin />} />
-                <Route path="/agent/apply" element={<BecomeAgent />} />
                 <Route path="/fundraising/donate/:code" element={<DonateFundraiser />} />
                 <Route path="/wallet" element={<Navigate to="/transactions" replace />} />
                 <Route path="/wallet/history" element={<Navigate to="/transactions" replace />} />
@@ -232,6 +234,4 @@ const App = () => (
 );
 
 export default App;
-
-
 

@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { getApiErrorMessage } from '@/lib/api/http';
 import { validateLoginIdentifier, validateOtpCode, validatePinDigits } from '@/lib/authFormValidation';
 import { resetPin } from '@/services/authApi';
+import AuthLayout from '@/components/layout/AuthLayout';
+import { motion } from 'framer-motion';
 
 interface ResetPinLocationState {
   identifier?: string;
@@ -65,125 +67,135 @@ const ResetPin = () => {
   };
 
   return (
-    <div className="min-h-screen px-6 py-6">
-      <button
-        onClick={() => navigate('/login')}
-        className="mb-6 flex items-center gap-1 text-sm text-muted-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back to login
-      </button>
+    <AuthLayout>
+      <div className="relative">
+        <button
+          onClick={() => navigate('/login')}
+          className="mb-8 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors group"
+        >
+          <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" /> Back to login
+        </button>
 
-      <div className="space-y-6">
-        <div>
-          <h1 className="font-display text-2xl font-bold">Reset PIN</h1>
-          <p className="mt-1 text-muted-foreground">Enter the reset code and choose a new 4-digit PIN.</p>
-        </div>
-
-        <form className="space-y-5" onSubmit={handleSubmit}>
-          <div className="space-y-2">
-            <Label htmlFor="identifier">Phone Number or Email</Label>
-            <Input
-              id="identifier"
-              placeholder="0800 000 0000 or you@example.com"
-              value={identifier}
-              onChange={event => {
-                setIdentifier(event.target.value);
-                if (identifierError) {
-                  setIdentifierError('');
-                }
-                if (error) {
-                  setError('');
-                }
-              }}
-              onBlur={() => setIdentifierError(validateLoginIdentifier(identifier))}
-              className="h-12"
-              aria-invalid={!!identifierError}
-            />
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-8"
+        >
+          <div>
+            <h1 className="font-display text-3xl font-bold text-[#102A56]">Reset PIN</h1>
+            <p className="mt-2 text-muted-foreground">Enter the reset code and choose a new 4-digit PIN.</p>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="otp">Reset code</Label>
-            <Input
-              id="otp"
-              inputMode="numeric"
-              maxLength={6}
-              placeholder="Enter 6 digits"
-              value={otp}
-              onChange={event => {
-                setOtp(event.target.value.replace(/\D/g, '').slice(0, 6));
-                if (otpError) {
-                  setOtpError('');
-                }
-                if (error) {
-                  setError('');
-                }
-              }}
-              className="h-12"
-              aria-invalid={!!otpError}
-            />
-          </div>
+          <form className="space-y-6" onSubmit={handleSubmit}>
+            <div className="space-y-2">
+              <Label htmlFor="identifier" className="text-sm font-semibold text-[#102A56]">Phone Number or Email</Label>
+              <Input
+                id="identifier"
+                placeholder="0800 000 0000 or you@example.com"
+                value={identifier}
+                onChange={event => {
+                  setIdentifier(event.target.value);
+                  if (identifierError) {
+                    setIdentifierError('');
+                  }
+                  if (error) {
+                    setError('');
+                  }
+                }}
+                onBlur={() => setIdentifierError(validateLoginIdentifier(identifier))}
+                className="h-12 bg-[#F8FAFC] border-none focus-visible:ring-1 focus-visible:ring-[#3B82F6]"
+                aria-invalid={!!identifierError}
+              />
+              {identifierError && <p className="text-xs text-destructive">{identifierError}</p>}
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="newPin">New PIN</Label>
-            <Input
-              id="newPin"
-              type="password"
-              inputMode="numeric"
-              maxLength={4}
-              placeholder="Enter 4 digits"
-              value={newPin}
-              onChange={event => {
-                setNewPin(event.target.value.replace(/\D/g, '').slice(0, 4));
-                if (pinError) {
-                  setPinError('');
-                }
-                if (confirmPinError) {
-                  setConfirmPinError('');
-                }
-                if (error) {
-                  setError('');
-                }
-              }}
-              className="h-12"
-              aria-invalid={!!pinError}
-            />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="otp" className="text-sm font-semibold text-[#102A56]">Reset code</Label>
+              <Input
+                id="otp"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="Enter 6 digits"
+                value={otp}
+                onChange={event => {
+                  setOtp(event.target.value.replace(/\D/g, '').slice(0, 6));
+                  if (otpError) {
+                    setOtpError('');
+                  }
+                  if (error) {
+                    setError('');
+                  }
+                }}
+                className="h-12 bg-[#F8FAFC] border-none focus-visible:ring-1 focus-visible:ring-[#3B82F6]"
+                aria-invalid={!!otpError}
+              />
+              {otpError && <p className="text-xs text-destructive">{otpError}</p>}
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="confirmPin">Confirm new PIN</Label>
-            <Input
-              id="confirmPin"
-              type="password"
-              inputMode="numeric"
-              maxLength={4}
-              placeholder="Re-enter 4 digits"
-              value={confirmPin}
-              onChange={event => {
-                setConfirmPin(event.target.value.replace(/\D/g, '').slice(0, 4));
-                if (confirmPinError) {
-                  setConfirmPinError('');
-                }
-                if (error) {
-                  setError('');
-                }
-              }}
-              className="h-12"
-              aria-invalid={!!confirmPinError}
-            />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="newPin" className="text-sm font-semibold text-[#102A56]">New PIN</Label>
+              <Input
+                id="newPin"
+                type="password"
+                inputMode="numeric"
+                maxLength={4}
+                placeholder="Enter 4 digits"
+                value={newPin}
+                onChange={event => {
+                  setNewPin(event.target.value.replace(/\D/g, '').slice(0, 4));
+                  if (pinError) {
+                    setPinError('');
+                  }
+                  if (confirmPinError) {
+                    setConfirmPinError('');
+                  }
+                  if (error) {
+                    setError('');
+                  }
+                }}
+                className="h-12 bg-[#F8FAFC] border-none focus-visible:ring-1 focus-visible:ring-[#3B82F6]"
+                aria-invalid={!!pinError}
+              />
+              {pinError && <p className="text-xs text-destructive">{pinError}</p>}
+            </div>
 
-          {identifierError && <p className="text-sm text-destructive">{identifierError}</p>}
-          {otpError && <p className="text-sm text-destructive">{otpError}</p>}
-          {pinError && <p className="text-sm text-destructive">{pinError}</p>}
-          {confirmPinError && <p className="text-sm text-destructive">{confirmPinError}</p>}
-          {error && <p className="text-sm text-destructive">{error}</p>}
+            <div className="space-y-2">
+              <Label htmlFor="confirmPin" className="text-sm font-semibold text-[#102A56]">Confirm new PIN</Label>
+              <Input
+                id="confirmPin"
+                type="password"
+                inputMode="numeric"
+                maxLength={4}
+                placeholder="Re-enter 4 digits"
+                value={confirmPin}
+                onChange={event => {
+                  setConfirmPin(event.target.value.replace(/\D/g, '').slice(0, 4));
+                  if (confirmPinError) {
+                    setConfirmPinError('');
+                  }
+                  if (error) {
+                    setError('');
+                  }
+                }}
+                className="h-12 bg-[#F8FAFC] border-none focus-visible:ring-1 focus-visible:ring-[#3B82F6]"
+                aria-invalid={!!confirmPinError}
+              />
+              {confirmPinError && <p className="text-xs text-destructive">{confirmPinError}</p>}
+            </div>
 
-          <Button type="submit" className="h-12 w-full" disabled={loading}>
-            {loading ? 'Resetting PIN...' : 'Reset PIN'}
-          </Button>
-        </form>
+            {error && <p className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg">{error}</p>}
+
+            <Button 
+              type="submit" 
+              className="h-14 w-full bg-[#102A56] hover:bg-[#1d3a6d] text-white font-black uppercase rounded-full shadow-xl shadow-[#102A56]/20 transition-all hover:scale-105 active:scale-95 disabled:hover:scale-100" 
+              disabled={loading}
+            >
+              {loading ? 'Resetting...' : 'Reset PIN'}
+            </Button>
+          </form>
+        </motion.div>
       </div>
-    </div>
+    </AuthLayout>
   );
 };
 

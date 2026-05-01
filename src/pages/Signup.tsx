@@ -1,22 +1,26 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import PinPad from '@/components/shared/PinPad';
+import Modal from '@/components/shared/Modal';
+import TermsModal from '@/components/shared/TermsModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDefaultAuthenticatedPath } from '@/lib/auth';
 import { getApiErrorMessage, isApiError } from '@/lib/api/http';
 import {
-  validateOptionalEmailAddress,
-  validateOptionalPhoneNumber,
+  validateEmailAddress,
+  validatePhoneNumber,
   validatePersonName,
+  validatePasswordDigits,
+  normalizePhoneNumberInput,
 } from '@/lib/authFormValidation';
+import AuthLayout from '@/components/layout/AuthLayout';
 
-type Step = 'contact' | 'otp' | 'details' | 'password' | 'pin';
+type Step = 'contact' | 'security' | 'pin';
 
 const formatCountdown = (seconds: number) => {
   const safeSeconds = Math.max(seconds, 0);
@@ -29,24 +33,31 @@ const Signup = () => {
   const navigate = useNavigate();
   const { signup, requestOtp, verifyOtp, isAuthenticated, user } = useAuth();
   const [step, setStep] = useState<Step>('contact');
+  const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+  const [tempPin, setTempPin] = useState('');
   const [email, setEmail] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [otp, setOtp] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [referralId, setReferralId] = useState('');
   const [otpHint, setOtpHint] = useState('123456');
   const [otpMessage, setOtpMessage] = useState('');
   const [otpExpiresAt, setOtpExpiresAt] = useState<string | null>(null);
   const [otpSecondsRemaining, setOtpSecondsRemaining] = useState(0);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [passwordPadKey, setPasswordPadKey] = useState(0);
-  const [pinPadKey, setPinPadKey] = useState(0);
   const [emailError, setEmailError] = useState('');
   const [phoneError, setPhoneError] = useState('');
   const [firstNameError, setFirstNameError] = useState('');
   const [lastNameError, setLastNameError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
   const clearError = () => {
     if (error) {
@@ -54,7 +65,7 @@ const Signup = () => {
     }
   };
 
-  const clearContactValidation = (field: 'email' | 'phone') => {
+  const clearContactValidation = (field: 'email' | 'phone' | 'firstName' | 'lastName') => {
     clearError();
 
     if (field === 'email' && emailError) {
@@ -64,10 +75,6 @@ const Signup = () => {
     if (field === 'phone' && phoneError) {
       setPhoneError('');
     }
-  };
-
-  const clearDetailsValidation = (field: 'firstName' | 'lastName') => {
-    clearError();
 
     if (field === 'firstName' && firstNameError) {
       setFirstNameError('');
@@ -80,53 +87,37 @@ const Signup = () => {
 
   const trimmedEmail = email.trim();
   const trimmedPhoneNumber = phoneNumber.trim();
-  const hasContact = !!trimmedEmail || !!trimmedPhoneNumber;
+  const isFormValid = !!firstName.trim() && !!lastName.trim() && !!trimmedEmail && !!trimmedPhoneNumber;
   const contactPayload = {
     email: trimmedEmail || undefined,
     phoneNumber: trimmedPhoneNumber || undefined,
   };
   const contactSummary = [trimmedEmail, trimmedPhoneNumber].filter(Boolean).join(' or ');
   const loginIdentifier = trimmedEmail || trimmedPhoneNumber;
-  const isOtpExpired = step === 'otp' && otpExpiresAt !== null && otpSecondsRemaining <= 0;
-  const showDevelopmentOtpHelper = import.meta.env.DEV;
+  const isOtpExpired = otpExpiresAt !== null && otpSecondsRemaining <= 0;
 
   const validateContactStep = () => {
-    const nextEmailError = validateOptionalEmailAddress(trimmedEmail);
-    const nextPhoneError = validateOptionalPhoneNumber(trimmedPhoneNumber);
+    const nextFirstNameError = validatePersonName(firstName, 'First name');
+    const nextLastNameError = validatePersonName(lastName, 'Last name');
+    const nextEmailError = validateEmailAddress(trimmedEmail);
+    const nextPhoneError = validatePhoneNumber(trimmedPhoneNumber);
 
+    setFirstNameError(nextFirstNameError);
+    setLastNameError(nextLastNameError);
     setEmailError(nextEmailError);
     setPhoneError(nextPhoneError);
     setError('');
 
-    if (!trimmedEmail && !trimmedPhoneNumber) {
-      setError('Enter at least an email address or phone number.');
+    if (nextFirstNameError || nextLastNameError || nextEmailError || nextPhoneError) {
+      setError('Please fill in all required fields correctly.');
       return false;
     }
 
-    if (nextEmailError || nextPhoneError) {
+    if (nextFirstNameError || nextLastNameError || nextEmailError || nextPhoneError) {
       return false;
     }
 
     return true;
-  };
-
-  const validateDetailsStep = () => {
-    const nextFirstNameError = validatePersonName(firstName, 'First name');
-    const nextLastNameError = validatePersonName(lastName, 'Last name');
-
-    setFirstNameError(nextFirstNameError);
-    setLastNameError(nextLastNameError);
-
-    return !nextFirstNameError && !nextLastNameError;
-  };
-
-  const getOtpErrorMessage = (err: unknown) => {
-    if (!isApiError(err)) {
-      return 'Unable to verify OTP.';
-    }
-
-    const otpFieldError = err.fieldErrors?.Otp?.[0] ?? err.fieldErrors?.otp?.[0];
-    return otpFieldError ?? getApiErrorMessage(err, 'Unable to verify OTP.');
   };
 
   const syncOtpCountdown = (expiresAtUtc: string) => {
@@ -150,7 +141,7 @@ const Signup = () => {
   }, [isAuthenticated, navigate, user]);
 
   useEffect(() => {
-    if (step !== 'otp' || !otpExpiresAt) {
+    if (!otpExpiresAt) {
       return;
     }
 
@@ -168,7 +159,7 @@ const Signup = () => {
     const intervalId = window.setInterval(updateCountdown, 1000);
 
     return () => window.clearInterval(intervalId);
-  }, [otpExpiresAt, step]);
+  }, [otpExpiresAt]);
 
   const sendOtpChallenge = async () => {
     if (!validateContactStep()) {
@@ -182,10 +173,9 @@ const Signup = () => {
     try {
       const response = await requestOtp(contactPayload);
       setOtpHint(response.defaultOtp);
-      setOtp('');
       setOtpMessage(response.message);
       syncOtpCountdown(response.expiresAtUtc);
-      setStep('otp');
+      setIsOtpModalOpen(true);
       toast.success(response.message || 'OTP sent. Check your inbox or phone.');
     } catch (err) {
       const message = getApiErrorMessage(err, 'Unable to request OTP.');
@@ -196,17 +186,12 @@ const Signup = () => {
     }
   };
 
-  const handleIdentifierSubmit = async () => {
-    await sendOtpChallenge();
-  };
-
-  const handleOtpSubmit = async () => {
-    const normalizedOtp = otp.replace(/\D/g, '').trim();
+  const handleOtpSubmit = async (submittedOtp: string) => {
+    const normalizedOtp = submittedOtp.replace(/\D/g, '').trim();
 
     if (isOtpExpired) {
       const message = 'OTP expired. Request a new code to continue.';
       setError(message);
-      setOtp('');
       toast.error(message);
       return;
     }
@@ -214,7 +199,6 @@ const Signup = () => {
     if (normalizedOtp.length !== 6) {
       const message = 'OTP must be exactly 6 digits.';
       setError(message);
-      setOtp('');
       toast.error(message);
       return;
     }
@@ -226,18 +210,16 @@ const Signup = () => {
       const response = await verifyOtp(contactPayload, normalizedOtp);
 
       if (!response.verified) {
-        setOtp('');
         setError(response.message || 'OTP verification failed.');
         return;
       }
 
-      setOtp(normalizedOtp);
       setOtpMessage(response.message);
-      setStep('details');
+      setIsOtpModalOpen(false);
+      setStep('security');
       toast.success(response.message || 'OTP verified successfully.');
     } catch (err) {
-      setOtp('');
-      const message = getOtpErrorMessage(err);
+      const message = getApiErrorMessage(err, 'Unable to verify OTP.');
       setError(message);
       toast.error(message);
     } finally {
@@ -245,22 +227,30 @@ const Signup = () => {
     }
   };
 
-  const handleDetailsSubmit = () => {
-    if (!validateDetailsStep()) {
+  const handleSecuritySubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    
+    const nextPasswordError = validatePasswordDigits(password);
+    const nextConfirmPasswordError = password === confirmPassword ? '' : 'Passwords do not match.';
+    
+    setPasswordError(nextPasswordError);
+    setConfirmPasswordError(nextConfirmPasswordError);
+    setError('');
+
+    if (nextPasswordError || nextConfirmPasswordError) {
       return;
     }
 
-    setError('');
-    setStep('password');
+    setIsPinModalOpen(true);
   };
 
-  const handlePasswordComplete = async (nextPassword: string) => {
-    setPassword(nextPassword);
-    setError('');
-    setStep('pin');
+  const handlePinComplete = (pin: string) => {
+    setTempPin(pin);
+    setIsPinModalOpen(false);
+    setIsTermsModalOpen(true);
   };
 
-  const handlePinComplete = async (pin: string) => {
+  const handleTermsAccept = async () => {
     setLoading(true);
     setError('');
 
@@ -271,44 +261,33 @@ const Signup = () => {
         firstName,
         lastName,
         password,
-        pin,
+        pin: tempPin,
+        referralId: referralId.trim() || undefined,
       });
 
+      setIsTermsModalOpen(false);
+      toast.success(`Welcome to AjoVault, ${firstName}! Your account has been created successfully.`);
       navigate('/login', { replace: true, state: { identifier: loginIdentifier, justSignedUp: true } });
     } catch (err) {
       const message = getApiErrorMessage(err, 'Unable to create your account.');
       setError(message);
       toast.error(message);
-      setPinPadKey(current => current + 1);
+      // Re-open PIN modal if there's an error so they can retry? 
+      // Actually, if it's an API error, they might need to go back or retry terms.
+      setIsTermsModalOpen(false);
+      setIsPinModalOpen(true);
     } finally {
       setLoading(false);
     }
   };
 
   const goBack = () => {
-    if (step === 'otp') {
+    clearError();
+
+    if (step === 'security') {
       setStep('contact');
-      setError('');
-      setOtpMessage('');
-      setOtpExpiresAt(null);
-      setOtpSecondsRemaining(0);
-      return;
-    }
-
-    if (step === 'details') {
-      setStep('otp');
-      setError('');
-      return;
-    }
-
-    if (step === 'password') {
-      setStep('details');
-      setError('');
-      return;
-    }
-
-    if (step === 'pin') {
-      setStep('password');
+      setPassword('');
+      setConfirmPassword('');
       setError('');
       return;
     }
@@ -317,237 +296,251 @@ const Signup = () => {
   };
 
   return (
-    <div className="min-h-screen px-6 py-6">
-      <button onClick={goBack} className="mb-6 flex items-center gap-1 text-sm text-muted-foreground">
-        <ArrowLeft className="h-4 w-4" /> Back
-      </button>
-
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={step}
-          initial={{ opacity: 0, x: 30 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -30 }}
-          transition={{ duration: 0.25 }}
+    <AuthLayout>
+      <div className="relative">
+        <button 
+          onClick={goBack} 
+          className="mb-8 mt-20 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors group"
         >
-          {step === 'contact' && (
-            <form
-              className="space-y-6"
-              onSubmit={event => {
-                event.preventDefault();
-                void handleIdentifierSubmit();
-              }}
-            >
-              <div>
-                <h1 className="font-display text-2xl font-bold">Create Account</h1>
-                <p className="mt-1 text-muted-foreground">Enter your email, phone number, or both to get started</p>
-              </div>
+          <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" /> Back
+        </button>
 
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Email Address</Label>
-                  <Input
-                    type="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={event => {
-                      setEmail(event.target.value);
-                      clearContactValidation('email');
-                    }}
-                    onBlur={() => setEmailError(validateOptionalEmailAddress(email))}
-                    className="h-12"
-                    inputMode="email"
-                    aria-invalid={!!emailError}
-                  />
-                  {emailError && <p className="text-sm text-destructive">{emailError}</p>}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={step}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.3 }}
+          >
+            {step === 'contact' && (
+              <div className="space-y-8">
+                <div>
+                  <h1 className="font-display text-3xl font-bold text-[#102A56]">Create Account</h1>
+                  <p className="mt-2 text-muted-foreground">Join AjoVault and start your savings journey today.</p>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Phone Number</Label>
-                  <Input
-                    type="tel"
-                    placeholder="0800 000 0000"
-                    value={phoneNumber}
-                    onChange={event => {
-                      setPhoneNumber(event.target.value);
-                      clearContactValidation('phone');
-                    }}
-                    onBlur={() => setPhoneError(validateOptionalPhoneNumber(phoneNumber))}
-                    className="h-12"
-                    inputMode="tel"
-                    aria-invalid={!!phoneError}
-                  />
-                  {phoneError && <p className="text-sm text-destructive">{phoneError}</p>}
-                </div>
-
-                <p className="text-xs text-muted-foreground">At least one of email or phone number is required.</p>
-              </div>
-
-              {error && <p className="text-sm text-destructive">{error}</p>}
-
-              <Button type="submit" className="h-12 w-full" disabled={!hasContact || loading}>
-                {loading ? 'Sending OTP...' : 'Continue'}
-              </Button>
-            </form>
-          )}
-
-          {step === 'otp' && (
-            <div className="space-y-6">
-              <div>
-                <h1 className="font-display text-2xl font-bold">Verify OTP</h1>
-                <p className="mt-1 text-muted-foreground">Enter the 6-digit code sent to {contactSummary}</p>
-              </div>
-
-              <div className="space-y-2">
-                <Label>OTP Code</Label>
-                <Input
-                  placeholder="123456"
-                  value={otp}
-                  onChange={event => {
-                    setOtp(event.target.value.replace(/\D/g, ''));
-                    clearError();
+                <form
+                  className="space-y-5"
+                  onSubmit={event => {
+                    event.preventDefault();
+                    void sendOtpChallenge();
                   }}
-                  maxLength={6}
-                  inputMode="numeric"
-                  className="h-12 text-center text-xl tracking-[0.5em]"
-                />
-              </div>
+                >
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold text-[#102A56]">First Name</Label>
+                      <Input
+                        placeholder="Adaeze"
+                        value={firstName}
+                        onChange={event => {
+                          setFirstName(event.target.value);
+                          clearContactValidation('firstName');
+                        }}
+                        onBlur={() => setFirstNameError(validatePersonName(firstName, 'First name'))}
+                        className="h-12 bg-[#F8FAFC] border-none focus-visible:ring-1 focus-visible:ring-[#3B82F6]"
+                        aria-invalid={!!firstNameError}
+                      />
+                      {firstNameError && <p className="text-xs text-destructive">{firstNameError}</p>}
+                    </div>
 
-              <div className="space-y-2 text-center">
-                {showDevelopmentOtpHelper && (
-                  <>
-                    {/* Keep the fallback OTP helper limited to development builds. */}
-                    <p className="text-sm text-muted-foreground">For local testing, use OTP {otpHint}</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOtp(otpHint);
-                        clearError();
-                      }}
-                      className="text-sm font-medium text-accent"
-                    >
-                      Use test OTP
-                    </button>
-                  </>
-                )}
-                {otpMessage && <p className="text-xs text-muted-foreground">{otpMessage}</p>}
-                {otpExpiresAt && !isOtpExpired && (
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Code expires in {formatCountdown(otpSecondsRemaining)}
-                  </p>
-                )}
-                {isOtpExpired && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-destructive">OTP expired. Request a new code to continue.</p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-10 w-full"
-                      onClick={sendOtpChallenge}
-                      disabled={loading}
-                    >
-                      {loading ? 'Sending new OTP...' : 'Retry OTP'}
-                    </Button>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold text-[#102A56]">Last Name</Label>
+                      <Input
+                        placeholder="Okafor"
+                        value={lastName}
+                        onChange={event => {
+                          setLastName(event.target.value);
+                          clearContactValidation('lastName');
+                        }}
+                        onBlur={() => setLastNameError(validatePersonName(lastName, 'Last name'))}
+                        className="h-12 bg-[#F8FAFC] border-none focus-visible:ring-1 focus-visible:ring-[#3B82F6]"
+                        aria-invalid={!!lastNameError}
+                      />
+                      {lastNameError && <p className="text-xs text-destructive">{lastNameError}</p>}
+                    </div>
                   </div>
-                )}
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-[#102A56]">Email Address</Label>
+                    <Input
+                      type="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={event => {
+                        setEmail(event.target.value);
+                        clearContactValidation('email');
+                      }}
+                      onBlur={() => setEmailError(validateEmailAddress(email))}
+                      className="h-12 bg-[#F8FAFC] border-none focus-visible:ring-1 focus-visible:ring-[#3B82F6]"
+                      inputMode="email"
+                      aria-invalid={!!emailError}
+                    />
+                    {emailError && <p className="text-xs text-destructive">{emailError}</p>}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-[#102A56]">Phone Number</Label>
+                    <Input
+                      type="tel"
+                      placeholder="0800 000 0000"
+                      maxLength={11}
+                      value={phoneNumber}
+                      onChange={event => {
+                        const digits = normalizePhoneNumberInput(event.target.value).slice(0, 11);
+                        setPhoneNumber(digits);
+                        clearContactValidation('phone');
+                      }}
+                      onBlur={() => setPhoneError(validatePhoneNumber(phoneNumber))}
+                      className="h-12 bg-[#F8FAFC] border-none focus-visible:ring-1 focus-visible:ring-[#3B82F6]"
+                      inputMode="tel"
+                      aria-invalid={!!phoneError}
+                    />
+                    {phoneError && <p className="text-xs text-destructive">{phoneError}</p>}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-[#102A56]">Referral ID (Optional)</Label>
+                    <Input
+                      placeholder="Enter referral code"
+                      value={referralId}
+                      onChange={event => setReferralId(event.target.value)}
+                      className="h-12 bg-[#F8FAFC] border-none focus-visible:ring-1 focus-visible:ring-[#3B82F6]"
+                    />
+                  </div>
+
+                  {/* <p className="text-xs text-muted-foreground italic">All fields are required to create your account.</p> */}
+
+                  {error && <p className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg">{error}</p>}
+
+                  <Button 
+                    type="submit" 
+                    className="h-14 w-full bg-[#102A56] hover:bg-[#1d3a6d] text-white font-black uppercase rounded-full shadow-xl shadow-[#102A56]/20 transition-all hover:scale-105 active:scale-95 disabled:hover:scale-100" 
+                    disabled={!isFormValid || loading}
+                  >
+                    {loading ? 'Sending OTP...' : 'Continue'}
+                  </Button>
+
+                  <p className="text-center text-sm text-muted-foreground">
+                    Already a User?{' '}
+                    <button 
+                      type="button" 
+                      onClick={() => navigate('/login')} 
+                      className="font-black text-[#3B82F6] hover:underline uppercase"
+                    >
+                      Sign In
+                    </button>
+                  </p>
+                </form>
               </div>
+            )}
 
-              {error && <p className="text-sm text-destructive">{error}</p>}
-
-              <Button
-                className="h-12 w-full"
-                onClick={handleOtpSubmit}
-                disabled={otp.replace(/\D/g, '').length < 6 || loading || isOtpExpired}
-              >
-                {loading ? 'Verifying...' : isOtpExpired ? 'OTP Expired' : 'Verify'}
-              </Button>
-            </div>
-          )}
-
-          {step === 'details' && (
-            <div className="space-y-6">
-              <div>
-                <h1 className="font-display text-2xl font-bold">Your Details</h1>
-                <p className="mt-1 text-muted-foreground">Tell us a bit about yourself</p>
-              </div>
-
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>First Name</Label>
-                  <Input
-                    placeholder="Adaeze"
-                    value={firstName}
-                    onChange={event => {
-                      setFirstName(event.target.value);
-                      clearDetailsValidation('firstName');
-                    }}
-                    onBlur={() => setFirstNameError(validatePersonName(firstName, 'First name'))}
-                    className="h-12"
-                    aria-invalid={!!firstNameError}
-                  />
-                  {firstNameError && <p className="text-sm text-destructive">{firstNameError}</p>}
+            {step === 'security' && (
+              <div className="space-y-8">
+                <div>
+                  <h1 className="font-display text-3xl font-bold text-[#102A56]">Security</h1>
+                  <p className="mt-2 text-muted-foreground">Create a secure 6-digit password for your account.</p>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Last Name</Label>
-                  <Input
-                    placeholder="Okafor"
-                    value={lastName}
-                    onChange={event => {
-                      setLastName(event.target.value);
-                      clearDetailsValidation('lastName');
-                    }}
-                    onBlur={() => setLastNameError(validatePersonName(lastName, 'Last name'))}
-                    className="h-12"
-                    aria-invalid={!!lastNameError}
-                  />
-                  {lastNameError && <p className="text-sm text-destructive">{lastNameError}</p>}
-                </div>
+                <form className="space-y-6" onSubmit={handleSecuritySubmit}>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-[#102A56]">Create Password</Label>
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? 'text' : 'password'}
+                        inputMode="numeric"
+                        maxLength={6}
+                        placeholder="Enter 6 digits"
+                        value={password}
+                        onChange={event => {
+                          setPassword(event.target.value.replace(/\D/g, '').slice(0, 6));
+                          if (passwordError) setPasswordError('');
+                        }}
+                        className="h-12 bg-[#F8FAFC] border-none focus-visible:ring-1 focus-visible:ring-[#3B82F6] pr-12"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    {passwordError && <p className="text-xs text-destructive">{passwordError}</p>}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold text-[#102A56]">Confirm Password</Label>
+                    <div className="relative">
+                      <Input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        inputMode="numeric"
+                        maxLength={6}
+                        placeholder="Re-enter 6 digits"
+                        value={confirmPassword}
+                        onChange={event => {
+                          setConfirmPassword(event.target.value.replace(/\D/g, '').slice(0, 6));
+                          if (confirmPasswordError) setConfirmPasswordError('');
+                        }}
+                        className="h-12 bg-[#F8FAFC] border-none focus-visible:ring-1 focus-visible:ring-[#3B82F6] pr-12"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    {confirmPasswordError && <p className="text-xs text-destructive">{confirmPasswordError}</p>}
+                  </div>
+
+                  <Button 
+                    type="submit" 
+                    className="h-14 w-full bg-[#102A56] hover:bg-[#1d3a6d] text-white font-black uppercase rounded-full shadow-xl shadow-[#102A56]/20 transition-all hover:scale-105 active:scale-95"
+                  >
+                    Continue
+                  </Button>
+                </form>
               </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
 
-              {error && <p className="text-sm text-destructive">{error}</p>}
+      <Modal
+        isOpen={isOtpModalOpen}
+        onClose={() => setIsOtpModalOpen(false)}
+        onSubmit={handleOtpSubmit}
+        onResend={sendOtpChallenge}
+        isLoading={loading}
+        error={error}
+        secondsRemaining={otpSecondsRemaining}
+        isExpired={isOtpExpired}
+        title="Verify OTP"
+        description={`Enter the 6-digit code sent to ${contactSummary}`}
+        clearError={clearError}
+      />
 
-              <Button
-                className="h-12 w-full"
-                onClick={handleDetailsSubmit}
-                disabled={!firstName.trim() || !lastName.trim()}
-              >
-                Continue
-              </Button>
-            </div>
-          )}
+      <Modal
+        isOpen={isPinModalOpen}
+        onClose={() => setIsPinModalOpen(false)}
+        onSubmit={handlePinComplete}
+        isLoading={loading}
+        error={error}
+        title="Create PIN"
+        description="Set a 4-digit PIN to secure your transactions and account."
+        length={4}
+        clearError={clearError}
+      />
 
-          {step === 'password' && (
-            <div className="flex flex-col items-center pt-10">
-              <PinPad
-                key={passwordPadKey}
-                length={6}
-                title="Create your password"
-                subtitle="Use a 6-digit number to sign in"
-                error={error}
-                disabled={loading}
-                onInput={clearError}
-                onComplete={handlePasswordComplete}
-              />
-            </div>
-          )}
-
-          {step === 'pin' && (
-            <div className="flex flex-col items-center pt-10">
-              <PinPad
-                key={pinPadKey}
-                title="Create your PIN"
-                subtitle={loading ? 'Creating account...' : 'Use a 4-digit PIN to secure your account'}
-                error={error}
-                disabled={loading}
-                onInput={clearError}
-                onComplete={handlePinComplete}
-              />
-            </div>
-          )}
-        </motion.div>
-      </AnimatePresence>
-    </div>
+      <TermsModal
+        isOpen={isTermsModalOpen}
+        onClose={() => setIsTermsModalOpen(false)}
+        onAccept={handleTermsAccept}
+        isLoading={loading}
+      />
+    </AuthLayout>
   );
 };
 
