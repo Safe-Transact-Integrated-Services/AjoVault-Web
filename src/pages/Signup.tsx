@@ -15,6 +15,7 @@ import {
   validatePhoneNumber,
   validatePersonName,
   validatePasswordDigits,
+  normalizePhoneNumberInput,
 } from '@/lib/authFormValidation';
 import AuthLayout from '@/components/layout/AuthLayout';
 
@@ -370,9 +371,11 @@ const Signup = () => {
                     <Input
                       type="tel"
                       placeholder="0800 000 0000"
+                      maxLength={11}
                       value={phoneNumber}
                       onChange={event => {
-                        setPhoneNumber(event.target.value);
+                        const digits = normalizePhoneNumberInput(event.target.value).slice(0, 11);
+                        setPhoneNumber(digits);
                         clearContactValidation('phone');
                       }}
                       onBlur={() => setPhoneError(validatePhoneNumber(phoneNumber))}
