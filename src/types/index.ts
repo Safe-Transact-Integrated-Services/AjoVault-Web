@@ -9,6 +9,8 @@ export interface User {
   ninLast4?: string | null;
   avatar?: string;
   kycTier: 'none' | 'basic' | 'verified' | 'premium';
+  kycDocumentStatus?: 'none' | 'pending' | 'verified' | 'rejected';
+  kycDocumentsSubmitted?: boolean;
   creditScore: number;
   role: string;
   isActive: boolean;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertCircle,
@@ -8,6 +8,10 @@ import {
   LoaderCircle,
   MailCheck,
   ShieldCheck,
+  Camera,
+  FileText,
+  Eye,
+  Upload,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -25,6 +29,7 @@ import {
   requestEmailKycOtp,
   submitKycBvnVerification,
   submitKycNinVerification,
+  submitKycDocuments,
   verifyEmailKycOtp,
 } from '@/services/authApi';
 import { getPayoutBanks } from '@/services/paymentApi';
@@ -55,10 +60,16 @@ const stepMeta: Array<{ key: KycStepKey; label: string; title: string; descripti
     title: 'BVN verification',
     description: 'Verify your BVN against your bank account after Tier 2.',
   },
+  {
+    key: 'documents',
+    label: 'Tier 4',
+    title: 'Document upload',
+    description: 'Upload your ID and a selfie for final verification after Tier 3.',
+  },
 ];
 
 const getInitialStep = (nextStep: ReturnType<typeof getKycProgress>['nextStep']): KycStepKey =>
-  nextStep === 'complete' ? 'bvn' : nextStep;
+  nextStep === 'complete' ? 'documents' : nextStep;
 
 const KycUpgrade = () => {
   const navigate = useNavigate();
@@ -85,6 +96,16 @@ const KycUpgrade = () => {
   const [bvnError, setBvnError] = useState('');
   const [ninMessage, setNinMessage] = useState('');
   const [bvnMessage, setBvnMessage] = useState('');
+  const [docIdType, setDocIdType] = useState('');
+  const [idDocumentName, setIdDocumentName] = useState('');
+  const [idDocumentDataUrl, setIdDocumentDataUrl] = useState('');
+  const [selfieName, setSelfieName] = useState('');
+  const [selfieDataUrl, setSelfieDataUrl] = useState('');
+  const [docLoading, setDocLoading] = useState(false);
+  const [docError, setDocError] = useState('');
+  const [docMessage, setDocMessage] = useState('');
+  const idInputRef = useRef<HTMLInputElement | null>(null);
+  const selfieInputRef = useRef<HTMLInputElement | null>(null);
 
   const banksQuery = useQuery({
     queryKey: ['payments', 'banks'],
@@ -118,11 +139,16 @@ const KycUpgrade = () => {
       if (currentStep === 'bvn' && kycProgress.emailComplete && kycProgress.ninComplete && !kycProgress.bvnComplete) {
         return currentStep;
       }
+      
+      if (currentStep === 'documents' && kycProgress.emailComplete && kycProgress.ninComplete && kycProgress.bvnComplete && !kycProgress.documentsComplete) {
+        return currentStep;
+      }
 
       return getInitialStep(kycProgress.nextStep);
     });
   }, [
     kycProgress.bvnComplete,
+    kycProgress.documentsComplete,
     kycProgress.emailComplete,
     kycProgress.ninComplete,
     kycProgress.nextStep,
@@ -149,16 +175,18 @@ const KycUpgrade = () => {
     return () => window.clearInterval(intervalId);
   }, [emailExpiresAt]);
 
-  const canSubmitNin = kycProgress.emailComplete && !kycProgress.ninComplete && nin.length === 11 && !ninLoading;
-  const canSubmitBvn =
-    kycProgress.emailComplete &&
-    kycProgress.ninComplete &&
-    !kycProgress.bvnComplete &&
-    bvn.length === 11 &&
-    accountNumber.length === 10 &&
-    !!bankCode &&
     !bvnLoading &&
     !banksQuery.isLoading;
+
+  const canSubmitDocuments =
+    kycProgress.emailComplete &&
+    kycProgress.ninComplete &&
+    kycProgress.bvnComplete &&
+    !kycProgress.documentsComplete &&
+    !!docIdType &&
+    !!idDocumentDataUrl &&
+    !!selfieDataUrl &&
+    !docLoading;
 
   const handleRequestEmailOtp = async () => {
     setEmailRequestLoading(true);
@@ -244,6 +272,107 @@ const KycUpgrade = () => {
     }
   };
 
+  const handleDocumentSelected = async (event: React.ChangeEvent<HTMLInputElement>, type: 'id' | 'selfie') => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.name.toLowerCase().endsWith('.exe')) {
+      const msg = 'Unsupported file format. .exe files are not allowed.';
+      setDocError(msg);
+      toast.error(msg);
+      event.target.value = '';
+      return;
+    }
+
+    if (type === 'id') {
+      if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+        const msg = 'Only image and PDF documents are supported for ID.';
+        setDocError(msg);
+        toast.error(msg);
+        event.target.value = '';
+        return;
+      }
+    } else if (!file.type.startsWith('image/')) {
+      const msg = 'Selfie must be an image file.';
+      setDocError(msg);
+      toast.error(msg);
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      const msg = 'File is too large. Maximum size allowed is 5MB.';
+      setDocError(msg);
+      toast.error(msg);
+      event.target.value = '';
+      return;
+    }
+
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      if (type === 'id') {
+        setIdDocumentName(file.name);
+        setIdDocumentDataUrl(dataUrl);
+      } else {
+        setSelfieName(file.name);
+        setSelfieDataUrl(dataUrl);
+      }
+      setDocError('');
+    } catch {
+      setDocError('Unable to read the selected file.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const handleDocumentsSubmit = async () => {
+    if (user?.kycDocumentStatus === 'pending') {
+      toast.error('Your documents are already under review.');
+      return;
+    }
+
+    if (!idDocumentDataUrl) {
+      setDocError('Please upload your ID document.');
+      return;
+    }
+
+    if (!selfieDataUrl) {
+      setDocError('Please upload a selfie.');
+      return;
+    }
+
+    setDocLoading(true);
+    setDocError('');
+    setDocMessage('');
+
+    try {
+      const response = await submitKycDocuments({
+        idType: docIdType as any,
+        idDocumentName,
+        idDocumentDataUrl,
+        selfieName,
+        selfieDataUrl,
+      });
+
+      setDocMessage(response.message);
+      await refreshProfile();
+      toast.success(response.message);
+    } catch (error: any) {
+      if (error.name === 'AbortError' || error.message?.toLowerCase().includes('timeout')) {
+        const msg = 'The verification provider is taking too long. Your status will remain pending and you will be notified.';
+        setDocError(msg);
+        toast(msg);
+        return;
+      }
+
+      const nextError = getApiErrorMessage(error, 'Unable to submit your documents right now. Please try again.');
+      setDocError(nextError);
+      toast.error(nextError);
+    } finally {
+      setDocLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen space-y-6 px-4 py-6 safe-top">
       <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -253,7 +382,7 @@ const KycUpgrade = () => {
       <div>
         <h1 className="font-display text-2xl font-bold">KYC Verification</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Complete the three tiers in order: email, NIN, then BVN.
+          Complete the four tiers in order: email, NIN, BVN, then Documents.
         </p>
       </div>
 
@@ -261,31 +390,34 @@ const KycUpgrade = () => {
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-4 w-4 text-accent" />
           <h2 className="font-semibold text-foreground">
-            {kycProgress.completedCount === 3
+            {kycProgress.completedCount === 4
               ? 'All KYC tiers completed'
-              : `${kycProgress.completedCount} of 3 tiers completed`}
+              : `${kycProgress.completedCount} of 4 tiers completed`}
           </h2>
         </div>
         <p className="text-sm text-muted-foreground">
           {kycProgress.nextStep === 'complete'
-            ? 'Your account has completed email, NIN, and BVN verification.'
+            ? 'Your account has completed all verification tiers.'
             : `Next step: ${kycProgress.nextStepTitle}.`}
         </p>
       </Card>
 
       <Tabs value={activeStep} onValueChange={value => setActiveStep(value as KycStepKey)} className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl bg-muted p-1">
+        <TabsList className="grid h-auto w-full grid-cols-4 gap-1 rounded-xl bg-muted p-1">
           {stepMeta.map(step => {
             const isComplete =
               step.key === 'email'
                 ? kycProgress.emailComplete
                 : step.key === 'nin'
                   ? kycProgress.ninComplete
-                  : kycProgress.bvnComplete;
+                  : step.key === 'bvn'
+                    ? kycProgress.bvnComplete
+                    : kycProgress.documentsComplete;
 
             const isLocked =
               (step.key === 'nin' && !kycProgress.emailComplete) ||
-              (step.key === 'bvn' && (!kycProgress.emailComplete || !kycProgress.ninComplete));
+              (step.key === 'bvn' && (!kycProgress.emailComplete || !kycProgress.ninComplete)) ||
+              (step.key === 'documents' && (!kycProgress.emailComplete || !kycProgress.ninComplete || !kycProgress.bvnComplete));
 
             return (
               <TabsTrigger
@@ -667,9 +799,140 @@ const KycUpgrade = () => {
             )}
           </Card>
         </TabsContent>
+
+        <TabsContent value="documents" className="mt-0">
+          <Card className="space-y-4 p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Tier 4: Document Verification</p>
+                <p className="text-sm text-muted-foreground">Upload your ID and a selfie for final identity verification.</p>
+              </div>
+              {kycProgress.documentsComplete ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-1 text-xs font-medium text-success">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {user?.kycDocumentStatus === 'pending' ? 'Reviewing' : 'Completed'}
+                </span>
+              ) : null}
+            </div>
+
+            {!kycProgress.bvnComplete ? (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Tier 3 required first</AlertTitle>
+                <AlertDescription>Verify your BVN first. Tier 4 unlocks after Tier 3 is complete.</AlertDescription>
+              </Alert>
+            ) : (
+              <>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>ID Type</Label>
+                    <Select value={docIdType} onValueChange={setDocIdType} disabled={kycProgress.documentsComplete}>
+                      <SelectTrigger className="h-12"><SelectValue placeholder="Select ID type" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="nin">National ID (NIN)</SelectItem>
+                        <SelectItem value="drivers">Driver&apos;s License</SelectItem>
+                        <SelectItem value="voters">Voter&apos;s Card</SelectItem>
+                        <SelectItem value="passport">International Passport</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>ID Document</Label>
+                    <input
+                      ref={idInputRef}
+                      type="file"
+                      accept="image/*,application/pdf"
+                      className="hidden"
+                      onChange={event => void handleDocumentSelected(event, 'id')}
+                    />
+                    <button
+                      type="button"
+                      disabled={kycProgress.documentsComplete}
+                      onClick={() => idInputRef.current?.click()}
+                      className="flex w-full flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border py-6 text-muted-foreground transition-colors hover:border-accent hover:text-foreground disabled:opacity-50"
+                    >
+                      {idDocumentDataUrl ? <FileText className="h-6 w-6 text-accent" /> : <Upload className="h-6 w-6" />}
+                      <span className="text-xs">{idDocumentDataUrl ? 'Replace ID document' : 'Upload ID document'}</span>
+                    </button>
+                    {idDocumentDataUrl && (
+                      <p className="truncate text-[10px] text-muted-foreground text-center">{idDocumentName}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Selfie</Label>
+                    <input
+                      ref={selfieInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={event => void handleDocumentSelected(event, 'selfie')}
+                    />
+                    <button
+                      type="button"
+                      disabled={kycProgress.documentsComplete}
+                      onClick={() => selfieInputRef.current?.click()}
+                      className="flex w-full flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border py-6 text-muted-foreground transition-colors hover:border-accent hover:text-foreground disabled:opacity-50"
+                    >
+                      {selfieDataUrl ? <Camera className="h-6 w-6 text-accent" /> : <Upload className="h-6 w-6" />}
+                      <span className="text-xs">{selfieDataUrl ? 'Replace selfie' : 'Upload selfie'}</span>
+                    </button>
+                    {selfieDataUrl && (
+                      <p className="truncate text-[10px] text-muted-foreground text-center">{selfieName}</p>
+                    )}
+                  </div>
+                </div>
+
+                {docMessage && (
+                  <Alert>
+                    <CheckCircle2 className="h-4 w-4" />
+                    <AlertTitle>Submission successful</AlertTitle>
+                    <AlertDescription>{docMessage}</AlertDescription>
+                  </Alert>
+                )}
+
+                {docError && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Submission failed</AlertTitle>
+                    <AlertDescription>{docError}</AlertDescription>
+                  </Alert>
+                )}
+
+                <Button className="h-12 w-full" onClick={handleDocumentsSubmit} disabled={!canSubmitDocuments}>
+                  {docLoading ? (
+                    <>
+                      <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : kycProgress.documentsComplete ? (
+                    user?.kycDocumentStatus === 'pending' ? 'Under Review' : 'Tier 4 completed'
+                  ) : (
+                    'Submit Documents'
+                  )}
+                </Button>
+              </>
+            )}
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   );
 };
 
 export default KycUpgrade;
+
+const readFileAsDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+        return;
+      }
+      reject(new Error('File could not be read.'));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('File could not be read.'));
+    reader.readAsDataURL(file);
+  });

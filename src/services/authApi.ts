@@ -60,6 +60,14 @@ export interface SubmitKycBvnInput {
   bankCode: string;
 }
 
+export interface SubmitKycDocumentsInput {
+  idType: 'nin' | 'drivers' | 'voters' | 'passport';
+  idDocumentName: string;
+  idDocumentDataUrl: string;
+  selfieName: string;
+  selfieDataUrl: string;
+}
+
 export interface KycVerificationResponse {
   status: 'pending' | 'verified';
   kycTier: User['kycTier'];
@@ -346,6 +354,12 @@ export const submitKycBvnVerification = (input: SubmitKycBvnInput) =>
       accountNumber: input.accountNumber.trim(),
       bankCode: input.bankCode,
     },
+  });
+
+export const submitKycDocuments = (input: SubmitKycDocumentsInput) =>
+  apiRequest<KycVerificationResponse>('/api/identity/me/kyc/documents', {
+    method: 'POST',
+    json: input,
   });
 
 export const logoutUser = async (refreshToken: string) => {
