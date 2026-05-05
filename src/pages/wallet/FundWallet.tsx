@@ -45,7 +45,7 @@ const FundWallet = () => {
   const fundingQuoteQuery = useQuery({
     queryKey: ['payments', 'wallet-funding-quote', amountValue],
     queryFn: () => quoteWalletFunding({ amount: amountValue, currency: 'NGN' }),
-    enabled: Number.isFinite(amountValue) && amountValue >= 100,
+    enabled: Number.isFinite(amountValue) && amountValue >= 500,
     staleTime: 30 * 1000,
   });
   const normalizedEmail = user?.email?.trim() ?? '';
@@ -57,8 +57,8 @@ const FundWallet = () => {
   const virtualAccount = walletQuery.data?.virtualAccount ?? null;
 
   const validateDetails = () => {
-    if (!Number.isFinite(amountValue) || amountValue < 100) {
-      return 'Minimum funding amount is NGN 100.';
+    if (!Number.isFinite(amountValue) || amountValue < 500) {
+      return 'Minimum funding amount is NGN 500.';
     }
 
     if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
@@ -201,7 +201,7 @@ const FundWallet = () => {
               id="wallet-funding-amount"
               type="number"
               inputMode="numeric"
-              min="100"
+              min="500"
               step="100"
               placeholder="0"
               value={amount}
@@ -213,7 +213,7 @@ const FundWallet = () => {
               }}
               className="h-14 text-center text-2xl font-bold"
             />
-            <p className="text-xs text-muted-foreground">Minimum funding amount is NGN 100.</p>
+            <p className="text-xs text-muted-foreground">Minimum funding amount is NGN 500.</p>
           </div>
 
           <div className="flex flex-wrap gap-2">
