@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDefaultUserLoginPath, type RedirectTarget, getRedirectPath } from '@/lib/auth';
 import { getApiErrorMessage, isApiError } from '@/lib/api/http';
-import { validateLoginIdentifier, normalizePhoneNumberInput } from '@/lib/authFormValidation';
+import { validateLoginIdentifier, normalizePhoneNumberInput, validatePasswordDigits } from '@/lib/authFormValidation';
 import AuthLayout from '@/components/layout/AuthLayout';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -63,7 +63,7 @@ const Login = () => {
     
     // Validation
     const idError = validateLoginIdentifier(identifier);
-    const passError = password.length < 1 ? 'Password is required' : '';
+    const passError = validatePasswordDigits(password);
     
     setIdentifierError(idError);
     setPasswordError(passError);
@@ -162,10 +162,12 @@ const Login = () => {
                   <Input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
-                    placeholder="Enter your password"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="Enter 6 digits"
                     value={password}
                     onChange={e => {
-                      setPassword(e.target.value);
+                      setPassword(e.target.value.replace(/\D/g, '').slice(0, 6));
                       setPasswordError('');
                     }}
                     className="h-12 bg-[#F8FAFC] border-none focus-visible:ring-1 focus-visible:ring-[#3B82F6] pr-12"
@@ -190,7 +192,7 @@ const Login = () => {
                   onClick={() => navigate('/forgot-password', { state: { email: loginType === 'email' ? identifier : '' } })} 
                   className="text-sm font-semibold text-[#3B82F6] hover:underline"
                 >
-                  Reset your password
+                  Forgot password
                 </button>
               </div>
 
