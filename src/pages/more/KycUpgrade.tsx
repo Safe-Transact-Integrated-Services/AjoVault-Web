@@ -175,6 +175,14 @@ const KycUpgrade = () => {
     return () => window.clearInterval(intervalId);
   }, [emailExpiresAt]);
 
+  const canSubmitNin = kycProgress.emailComplete && !kycProgress.ninComplete && nin.length === 11 && !ninLoading;
+  const canSubmitBvn =
+    kycProgress.emailComplete &&
+    kycProgress.ninComplete &&
+    !kycProgress.bvnComplete &&
+    bvn.length === 11 &&
+    accountNumber.length === 10 &&
+    !!bankCode &&
     !bvnLoading &&
     !banksQuery.isLoading;
 
@@ -285,19 +293,23 @@ const KycUpgrade = () => {
     }
 
     if (type === 'id') {
-      if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
-        const msg = 'Only image and PDF documents are supported for ID.';
+      const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+      if (!allowedTypes.includes(file.type)) {
+        const msg = 'Unsupported format. Only JPG, PNG, and PDF files are allowed for ID documents.';
         setDocError(msg);
         toast.error(msg);
         event.target.value = '';
         return;
       }
-    } else if (!file.type.startsWith('image/')) {
-      const msg = 'Selfie must be an image file.';
-      setDocError(msg);
-      toast.error(msg);
-      event.target.value = '';
-      return;
+    } else {
+      const allowedTypes = ['image/jpeg', 'image/png'];
+      if (!allowedTypes.includes(file.type)) {
+        const msg = 'Unsupported format. Only JPG and PNG images are allowed for selfies.';
+        setDocError(msg);
+        toast.error(msg);
+        event.target.value = '';
+        return;
+      }
     }
 
     if (file.size > 5 * 1024 * 1024) {
@@ -842,7 +854,7 @@ const KycUpgrade = () => {
                     <input
                       ref={idInputRef}
                       type="file"
-                      accept="image/*,application/pdf"
+                      accept=".jpg,.jpeg,.png,.pdf"
                       className="hidden"
                       onChange={event => void handleDocumentSelected(event, 'id')}
                     />
@@ -865,7 +877,7 @@ const KycUpgrade = () => {
                     <input
                       ref={selfieInputRef}
                       type="file"
-                      accept="image/*"
+                      accept=".jpg,.jpeg,.png"
                       className="hidden"
                       onChange={event => void handleDocumentSelected(event, 'selfie')}
                     />
