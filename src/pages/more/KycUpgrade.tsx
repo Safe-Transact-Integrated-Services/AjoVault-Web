@@ -343,6 +343,11 @@ const KycUpgrade = () => {
       return;
     }
 
+    if (!docIdType) {
+      setDocError('Please select an ID type.');
+      return;
+    }
+
     if (!idDocumentDataUrl) {
       setDocError('Please upload your ID document.');
       return;
