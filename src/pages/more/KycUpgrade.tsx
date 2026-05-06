@@ -6,28 +6,39 @@ import {
   CheckCircle2,
   Landmark,
   LoaderCircle,
-  ShieldCheck,
   Camera,
   FileText,
   Upload,
   Phone,
+  ShieldCheck,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import Modal from '@/components/shared/Modal';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiErrorMessage } from '@/lib/api/http';
 import { getKycProgress, type KycStepKey } from '@/lib/kyc';
 import {
   submitKycBvnVerification,
   submitKycNinVerification,
-  submitKycDocuments,
+  requestOtp,
+  verifyOtp,
+  updateCurrentUser,
 } from '@/services/authApi';
 import { getMyWithdrawalAccounts, withdrawalAccountKeys } from '@/services/withdrawalAccountsApi';
 
@@ -48,8 +59,8 @@ const stepMeta: Array<{ key: KycStepKey; label: string; title: string; descripti
   {
     key: 'bvn',
     label: 'Tier 2',
-    title: 'BVN verification',
-    description: 'Verify your BVN using a saved withdrawal account after Tier 1.',
+    title: 'BVN & Selfie',
+    description: 'Verify your BVN and take a live selfie after Tier 1.',
   },
   {
     key: 'nin',
@@ -57,16 +68,10 @@ const stepMeta: Array<{ key: KycStepKey; label: string; title: string; descripti
     title: 'NIN verification',
     description: 'Submit your NIN for additional verification after Tier 2.',
   },
-  {
-    key: 'documents',
-    label: 'Tier 4',
-    title: 'Document upload',
-    description: 'Upload your ID and a selfie for final verification after Tier 3.',
-  },
 ];
 
 const getInitialStep = (nextStep: ReturnType<typeof getKycProgress>['nextStep']): KycStepKey =>
-  nextStep === 'complete' ? 'documents' : nextStep;
+  nextStep === 'complete' ? 'nin' : nextStep;
 
 const KycUpgrade = () => {
   const navigate = useNavigate();
@@ -87,22 +92,54 @@ const KycUpgrade = () => {
   const [bvnLoading, setBvnLoading] = useState(false);
   const [ninError, setNinError] = useState('');
   const [bvnError, setBvnError] = useState('');
+  const [hasWithdrawalAccount, setHasWithdrawalAccount] = useState(false);
   const [ninMessage, setNinMessage] = useState('');
   const [bvnMessage, setBvnMessage] = useState('');
-  const [docIdType, setDocIdType] = useState('');
-  const [idDocumentName, setIdDocumentName] = useState('');
-  const [idDocumentDataUrl, setIdDocumentDataUrl] = useState('');
   const [selfieName, setSelfieName] = useState('');
   const [selfieDataUrl, setSelfieDataUrl] = useState('');
-  const [docLoading, setDocLoading] = useState(false);
-  const [docError, setDocError] = useState('');
-  const [docMessage, setDocMessage] = useState('');
-  const idInputRef = useRef<HTMLInputElement | null>(null);
-  const selfieInputRef = useRef<HTMLInputElement | null>(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
+  const [kycPhone, setKycPhone] = useState(user?.phone || '');
 
+  useEffect(() => {
+    if (withdrawalAccountsQuery.data && withdrawalAccountsQuery.data.length > 0 && !selectedAccountId) {
+      setSelectedAccountId(withdrawalAccountsQuery.data[0].accountId);
+    }
+  }, [withdrawalAccountsQuery.data, selectedAccountId]);
 
+  const [kycPhoneLoading, setKycPhoneLoading] = useState(false);
+  const [kycPhoneError, setKycPhoneError] = useState('');
+  const [kycPhoneMessage, setKycPhoneMessage] = useState('');
+  const [isKycPhoneVerifying, setIsKycPhoneVerifying] = useState(false);
+  const [kycPhoneOtpExpiresAt, setKycPhoneOtpExpiresAt] = useState<string | null>(null);
+  const [kycPhoneSecondsRemaining, setKycPhoneSecondsRemaining] = useState(0);
 
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (kycPhoneOtpExpiresAt) {
+      interval = setInterval(() => {
+        const expires = new Date(kycPhoneOtpExpiresAt).getTime();
+        const now = new Date().getTime();
+        const diff = Math.floor((expires - now) / 1000);
+        setKycPhoneSecondsRemaining(diff);
+        if (diff <= 0) {
+          clearInterval(interval);
+        }
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [kycPhoneOtpExpiresAt]);
+
+  useEffect(() => {
+    return () => {
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (kycProgress.nextStep === 'complete') {
@@ -122,42 +159,82 @@ const KycUpgrade = () => {
         return currentStep;
       }
 
-      if (
-        currentStep === 'documents' &&
-        kycProgress.phoneComplete &&
-        kycProgress.bvnComplete &&
-        kycProgress.ninComplete &&
-        !kycProgress.documentsComplete
-      ) {
-        return currentStep;
-      }
-
       return getInitialStep(kycProgress.nextStep);
     });
   }, [
     kycProgress.phoneComplete,
     kycProgress.bvnComplete,
     kycProgress.ninComplete,
-    kycProgress.documentsComplete,
     kycProgress.nextStep,
   ]);
 
   const canSubmitNin =
-    kycProgress.phoneComplete && kycProgress.bvnComplete && !kycProgress.ninComplete && nin.length === 11 && !ninLoading;
+    kycProgress.phoneComplete && 
+    kycProgress.bvnComplete && 
+    !kycProgress.ninComplete && 
+    nin.length === 11 && 
+    !ninLoading &&
+    (withdrawalAccountsQuery.data?.length ?? 0) > 0;
 
   const canSubmitBvn =
-    kycProgress.phoneComplete && !kycProgress.bvnComplete && bvn.length === 11 && !!selectedAccountId && !bvnLoading;
-
-  const canSubmitDocuments =
-    kycProgress.phoneComplete &&
-    kycProgress.bvnComplete &&
-    kycProgress.ninComplete &&
-    !kycProgress.documentsComplete &&
-    !!docIdType &&
-    !!idDocumentDataUrl &&
+    !kycProgress.bvnComplete &&
+    bvn.length === 11 &&
     !!selfieDataUrl &&
-    !docLoading;
+    !bvnLoading;
 
+
+
+  const handleRequestPhoneOtp = async () => {
+    setKycPhoneLoading(true);
+    setKycPhoneError('');
+    setKycPhoneMessage('');
+
+    try {
+      const response = await requestOtp({ phoneNumber: kycPhone });
+
+      setKycPhoneMessage(response.message);
+      setKycPhoneOtpExpiresAt(response.expiresAtUtc);
+      setIsKycPhoneVerifying(true);
+      toast.success(response.message);
+    } catch (error) {
+      const nextError = getApiErrorMessage(error, 'Unable to send a phone verification OTP right now.');
+      setKycPhoneError(nextError);
+      toast.error(nextError);
+    } finally {
+      setKycPhoneLoading(false);
+    }
+  };
+
+  const handleVerifyPhoneOtp = async (otp: string) => {
+    setKycPhoneLoading(true);
+    setKycPhoneError('');
+
+    try {
+      const verifyRes = await verifyOtp({ phoneNumber: kycPhone }, otp);
+      if (verifyRes.verified) {
+        // Update user profile with the new verified phone number
+        await updateCurrentUser({
+          firstName: user?.firstName || '',
+          lastName: user?.lastName || '',
+          phone: kycPhone,
+        });
+
+        await refreshProfile();
+        setIsKycPhoneVerifying(false);
+        setKycPhoneMessage('Phone number verified successfully.');
+        toast.success('Phone number verified successfully.');
+      } else {
+        setKycPhoneError(verifyRes.message || 'Invalid OTP. Please try again.');
+        toast.error(verifyRes.message || 'Invalid OTP. Please try again.');
+      }
+    } catch (error) {
+      const nextError = getApiErrorMessage(error, 'Unable to verify OTP right now.');
+      setKycPhoneError(nextError);
+      toast.error(nextError);
+    } finally {
+      setKycPhoneLoading(false);
+    }
+  };
 
   const handleNinSubmit = async () => {
     setNinLoading(true);
@@ -179,10 +256,10 @@ const KycUpgrade = () => {
   };
 
   const handleBvnSubmit = async () => {
-    const selectedAccount = withdrawalAccountsQuery.data?.find(a => a.accountId === selectedAccountId);
-    if (!selectedAccount) {
-      setBvnError('Please select a withdrawal account.');
-      return;
+    let selectedAccount = withdrawalAccountsQuery.data?.find(a => a.accountId === selectedAccountId);
+    
+    if (!selectedAccount && withdrawalAccountsQuery.data && withdrawalAccountsQuery.data.length > 0) {
+      selectedAccount = withdrawalAccountsQuery.data[0];
     }
 
     setBvnLoading(true);
@@ -192,10 +269,8 @@ const KycUpgrade = () => {
     try {
       const response = await submitKycBvnVerification({
         bvn,
-        // Using the accountNumber from the verified withdrawal account.
-        // We use the accountId internally in some systems, but the API expects accountNumber.
-        accountNumber: (selectedAccount as any).accountNumber || selectedAccount.accountNumberMasked,
-        bankCode: selectedAccount.bankCode,
+        accountNumber: selectedAccount ? ((selectedAccount as any).accountNumber || selectedAccount.accountNumberMasked) : undefined,
+        bankCode: selectedAccount?.bankCode,
       });
 
       setBvnMessage(response.message);
@@ -210,122 +285,52 @@ const KycUpgrade = () => {
     }
   };
 
-  const handleDocumentSelected = async (event: React.ChangeEvent<HTMLInputElement>, type: 'id' | 'selfie') => {
-    const file = event.target.files?.[0];
-    if (!file) return;
 
-    if (file.name.toLowerCase().endsWith('.exe')) {
-      const msg = 'Unsupported file format. .exe files are not allowed.';
-      setDocError(msg);
-      toast.error(msg);
-      event.target.value = '';
-      return;
-    }
 
-    if (type === 'id') {
-      const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
-      if (!allowedTypes.includes(file.type)) {
-        const msg = 'Unsupported format. Only JPG, PNG, and PDF files are allowed for ID documents.';
-        setDocError(msg);
-        toast.error(msg);
-        event.target.value = '';
-        return;
-      }
-    } else {
-      const allowedTypes = ['image/jpeg', 'image/png'];
-      if (!allowedTypes.includes(file.type)) {
-        const msg = 'Unsupported format. Only JPG and PNG images are allowed for selfies.';
-        setDocError(msg);
-        toast.error(msg);
-        event.target.value = '';
-        return;
-      }
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      const msg = 'File is too large. Maximum size allowed is 5MB.';
-      setDocError(msg);
-      toast.error(msg);
-      event.target.value = '';
-      return;
-    }
-
+  const startCamera = async () => {
+    setIsCameraOpen(true);
+    setCameraError('');
     try {
-      const dataUrl = await readFileAsDataUrl(file);
-      if (type === 'id') {
-        setIdDocumentName(file.name);
-        setIdDocumentDataUrl(dataUrl);
-      } else {
-        setSelfieName(file.name);
-        setSelfieDataUrl(dataUrl);
-      }
-      setDocError('');
-    } catch {
-      setDocError('Unable to read the selected file.');
-    } finally {
-      event.target.value = '';
-    }
-  };
-
-  const handleDocumentsSubmit = async () => {
-    if (user?.kycDocumentStatus === 'pending') {
-      toast.error('Your documents are already under review.');
-      return;
-    }
-
-    if (!docIdType) {
-      setDocError('Please select an ID type.');
-      return;
-    }
-
-    if (!idDocumentDataUrl) {
-      setDocError('Please upload your ID document.');
-      return;
-    }
-
-    if (!selfieDataUrl) {
-      setDocError('Please upload a selfie.');
-      return;
-    }
-
-    setDocLoading(true);
-    setDocError('');
-    setDocMessage('');
-
-    try {
-      const response = await submitKycDocuments({
-        idType: docIdType as any,
-        idDocumentName,
-        idDocumentDataUrl,
-        selfieName,
-        selfieDataUrl,
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'user' },
+        audio: false 
       });
-
-      setDocMessage(response.message);
-      await refreshProfile();
-      toast.success(response.message);
-    } catch (error: any) {
-      if (error.name === 'AbortError' || error.message?.toLowerCase().includes('timeout')) {
-        const msg = 'The verification provider is taking too long. Your status will remain pending and you will be notified.';
-        setDocError(msg);
-        toast(msg);
-        return;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
       }
-
-      if (!navigator.onLine || error instanceof TypeError || error.message?.toLowerCase().includes('network')) {
-        const msg = 'Network interruption detected. Please check your connection and try again.';
-        setDocError(msg);
-        toast.error(msg);
-        return;
-      }
-
-      const nextError = getApiErrorMessage(error, 'Unable to submit your documents right now. Please try again.');
-      setDocError(nextError);
-      toast.error(nextError);
-    } finally {
-      setDocLoading(false);
+    } catch (err) {
+      console.error('Camera access error:', err);
+      setCameraError('Unable to access camera. Please check permissions.');
     }
   };
+
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraOpen(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current) {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(videoRef.current, 0, 0);
+        const dataUrl = canvas.toDataURL('image/jpeg');
+        setSelfieDataUrl(dataUrl);
+        setSelfieName(`selfie_${Date.now()}.jpg`);
+        stopCamera();
+        setBvnError('');
+      }
+    }
+  };
+
+
 
   return (
     <div className="min-h-screen space-y-6 px-4 py-6 safe-top">
@@ -336,42 +341,36 @@ const KycUpgrade = () => {
       <div>
         <h1 className="font-display text-2xl font-bold">KYC Verification</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Complete the four tiers in order: Phone, BVN, NIN, then Documents.
+          Complete the three tiers in order: Phone, BVN & Selfie, then NIN.
         </p>
       </div>
 
-      <Card className="space-y-3 border-accent/20 bg-accent/5 p-4">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-accent" />
-          <h2 className="font-semibold text-foreground">
-            {kycProgress.completedCount === 4
-              ? 'All KYC tiers completed'
-              : `${kycProgress.completedCount} of 4 tiers completed`}
-          </h2>
+      <div className="flex items-start gap-3 rounded-xl bg-accent/5 p-4 border border-accent/10">
+        <ShieldCheck className="h-5 w-5 text-accent shrink-0 mt-0.5" />
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-accent">Your Privacy Matters</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            We only use these informations for identity verification and to build trust within the AjoVault community. Your data is encrypted and never shared for malicious purposes.
+          </p>
         </div>
-        <p className="text-sm text-muted-foreground">
-          {kycProgress.nextStep === 'complete'
-            ? 'Your account has completed all verification tiers.'
-            : `Next step: ${kycProgress.nextStepTitle}.`}
-        </p>
-      </Card>
+      </div>
+
+
 
       <Tabs value={activeStep} onValueChange={value => setActiveStep(value as KycStepKey)} className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-4 gap-1 rounded-xl bg-muted p-1">
+        <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl bg-muted p-1">
           {stepMeta.map(step => {
             const isComplete =
               step.key === 'phone'
                 ? kycProgress.phoneComplete
                 : step.key === 'bvn'
                   ? kycProgress.bvnComplete
-                  : step.key === 'nin'
-                    ? kycProgress.ninComplete
-                    : kycProgress.documentsComplete;
+                  : kycProgress.ninComplete;
+
 
             const isLocked =
               (step.key === 'bvn' && !kycProgress.phoneComplete) ||
-              (step.key === 'nin' && (!kycProgress.phoneComplete || !kycProgress.bvnComplete)) ||
-              (step.key === 'documents' && (!kycProgress.phoneComplete || !kycProgress.bvnComplete || !kycProgress.ninComplete));
+              (step.key === 'nin' && (!kycProgress.phoneComplete || !kycProgress.bvnComplete));
 
             return (
               <TabsTrigger
@@ -392,31 +391,81 @@ const KycUpgrade = () => {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-foreground">Tier 1: Phone verification</p>
-                <p className="text-sm text-muted-foreground">Your phone number was verified during registration.</p>
+                <p className="text-sm text-muted-foreground">Verify your phone number to complete Tier 1.</p>
               </div>
-              <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-1 text-xs font-medium text-success">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Completed
-              </span>
+              {kycProgress.phoneComplete && kycPhone === user?.phone ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-1 text-xs font-medium text-success">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Completed
+                </span>
+              ) : null}
             </div>
 
-            <Card className="space-y-2 p-4 text-sm">
-              <div className="flex items-start gap-3">
-                <div className="rounded-xl bg-primary/10 p-3 text-primary">
-                  <Phone className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-foreground">Phone number</p>
-                  <p className="mt-1 break-all text-muted-foreground">{user?.phone}</p>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="kyc-phone">Phone Number</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="kyc-phone"
+                    value={kycPhone}
+                    onChange={e => {
+                      setKycPhone(e.target.value.replace(/[^\d]/g, '').slice(0, 11));
+                      setKycPhoneError('');
+                      setKycPhoneMessage('');
+                      setIsKycPhoneVerifying(false);
+                    }}
+                    placeholder="08012345678"
+                    className="h-12"
+                    disabled={kycPhoneLoading || isKycPhoneVerifying}
+                  />
+                  {kycPhone !== user?.phone && !isKycPhoneVerifying && (
+                    <Button 
+                      onClick={handleRequestPhoneOtp} 
+                      disabled={kycPhone.length < 11 || kycPhoneLoading}
+                      className="h-12"
+                    >
+                      {kycPhoneLoading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : 'Verify'}
+                    </Button>
+                  )}
                 </div>
               </div>
-            </Card>
 
-            <Alert>
-              <CheckCircle2 className="h-4 w-4" />
-              <AlertTitle>Phone verified</AlertTitle>
-              <AlertDescription>Your account is already verified for Tier 1 KYC.</AlertDescription>
-            </Alert>
+              {kycPhoneMessage && (
+                <Alert>
+                  <CheckCircle2 className="h-4 w-4" />
+                  <AlertDescription>{kycPhoneMessage}</AlertDescription>
+                </Alert>
+              )}
+
+              {kycPhoneError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{kycPhoneError}</AlertDescription>
+                </Alert>
+              )}
+
+              {kycProgress.phoneComplete && kycPhone === user?.phone && (
+                <Alert>
+                  <CheckCircle2 className="h-4 w-4" />
+                  <AlertTitle>Phone verified</AlertTitle>
+                  <AlertDescription>Your account is already verified for Tier 1 KYC.</AlertDescription>
+                </Alert>
+              )}
+
+              <Modal
+                isOpen={isKycPhoneVerifying}
+                onClose={() => setIsKycPhoneVerifying(false)}
+                onSubmit={handleVerifyPhoneOtp}
+                onResend={handleRequestPhoneOtp}
+                isLoading={kycPhoneLoading}
+                error={kycPhoneError}
+                secondsRemaining={kycPhoneSecondsRemaining}
+                isExpired={kycPhoneOtpExpiresAt !== null && kycPhoneSecondsRemaining <= 0}
+                title="Verify Phone Number"
+                description={`Enter the 6-digit code sent to ${kycPhone}`}
+                clearError={() => setKycPhoneError('')}
+              />
+            </div>
           </Card>
         </TabsContent>
 
@@ -435,49 +484,7 @@ const KycUpgrade = () => {
               ) : null}
             </div>
 
-            {withdrawalAccountsQuery.isLoading ? (
-              <div className="flex items-center justify-center p-8">
-                <LoaderCircle className="h-8 w-8 animate-spin text-accent" />
-              </div>
-            ) : withdrawalAccountsQuery.data?.length === 0 ? (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Withdrawal account required</AlertTitle>
-                <AlertDescription className="space-y-3">
-                  <p>You must have a verified withdrawal account before you can complete BVN verification.</p>
-                  <Button type="button" variant="outline" className="h-10" onClick={() => navigate('/more/withdrawal-accounts')}>
-                    Add Withdrawal Account
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="kyc-bvn-account">Select Withdrawal Account</Label>
-                  <Select
-                    value={selectedAccountId}
-                    onValueChange={value => {
-                      setSelectedAccountId(value);
-                      setBvnError('');
-                    }}
-                    disabled={kycProgress.bvnComplete}
-                  >
-                    <SelectTrigger id="kyc-bvn-account" className="h-12">
-                      <SelectValue placeholder="Choose a verified account" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {withdrawalAccountsQuery.data?.map(account => (
-                        <SelectItem key={account.accountId} value={account.accountId}>
-                          {account.bankName} - {account.accountNumberMasked}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[11px] text-muted-foreground">
-                    Only pre-verified accounts can be used for BVN verification.
-                  </p>
-                </div>
-
+            <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="kyc-bvn">BVN</Label>
                   <Input
@@ -493,25 +500,82 @@ const KycUpgrade = () => {
                     className="h-12"
                     disabled={kycProgress.bvnComplete}
                   />
+                  {user?.bvnLast4 ? (
+                    <p className="text-xs text-muted-foreground text-right">Saved BVN ending in {user.bvnLast4}</p>
+                  ) : null}
                 </div>
 
-                <Card className="space-y-2 p-4 text-sm">
-                  <div className="flex items-start gap-3">
-                    <div className="rounded-xl bg-primary/10 p-3 text-primary">
-                      <Landmark className="h-4 w-4" />
+                <div className="space-y-2">
+                  <Label>Live Selfie</Label>
+                  {isCameraOpen ? (
+                    <div className="relative overflow-hidden rounded-xl bg-black">
+                      <video 
+                        ref={videoRef} 
+                        autoPlay 
+                        playsInline 
+                        className="h-64 w-full object-cover"
+                      />
+                      <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-3 px-4">
+                        <Button 
+                          type="button" 
+                          variant="destructive" 
+                          size="sm" 
+                          onClick={stopCamera}
+                          className="h-10 px-4"
+                        >
+                          Cancel
+                        </Button>
+                        <Button 
+                          type="button" 
+                          size="sm" 
+                          onClick={capturePhoto}
+                          className="h-10 flex-1 max-w-[120px]"
+                        >
+                          Take Photo
+                        </Button>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-foreground">The bank account must belong to you</p>
-                      <p className="mt-1 text-muted-foreground">
-                        Your BVN will be checked against the selected verified bank account.
-                      </p>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={kycProgress.bvnComplete}
+                      onClick={startCamera}
+                      className="flex w-full flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border py-8 text-muted-foreground transition-colors hover:border-accent hover:text-foreground disabled:opacity-50"
+                    >
+                      <Camera className="h-8 w-8" />
+                      <span className="text-sm">Take Live Selfie</span>
+                    </button>
+                  )}
+                  
+                  {cameraError && (
+                    <p className="text-[10px] text-destructive text-center">{cameraError}</p>
+                  )}
+                  
+                  {selfieDataUrl && !isCameraOpen && (
+                    <div className="mt-2 flex flex-col items-center gap-2">
+                      <div className="relative h-24 w-24 overflow-hidden rounded-full border-2 border-accent">
+                        <img src={selfieDataUrl} alt="Captured Selfie" className="h-full w-full object-cover" />
+                      </div>
+                      <p className="truncate text-[10px] text-muted-foreground max-w-full">Selfie captured</p>
                     </div>
-                  </div>
-                </Card>
+                  )}
+                </div>
 
-                {user?.bvnLast4 ? (
-                  <p className="text-xs text-muted-foreground">Saved BVN ending in {user.bvnLast4}</p>
-                ) : null}
+                <div className="flex items-center space-x-2 py-2">
+                  <Checkbox
+                    id="has-withdrawal-account"
+                    checked={hasWithdrawalAccount}
+                    onCheckedChange={checked => setHasWithdrawalAccount(!!checked)}
+                    disabled={kycProgress.bvnComplete}
+                  />
+                  <Label
+                    htmlFor="has-withdrawal-account"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    I have a verified withdrawal account
+                  </Label>
+                </div>
+
 
                 {bvnMessage ? (
                   <Alert>
@@ -541,8 +605,7 @@ const KycUpgrade = () => {
                     'Submit BVN verification'
                   )}
                 </Button>
-              </>
-            )}
+              </div>
           </Card>
         </TabsContent>
 
@@ -572,6 +635,17 @@ const KycUpgrade = () => {
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Tier 2 required first</AlertTitle>
                 <AlertDescription>Complete BVN verification first. Tier 3 unlocks after Tier 2 is complete.</AlertDescription>
+              </Alert>
+            ) : withdrawalAccountsQuery.data?.length === 0 ? (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Withdrawal account required</AlertTitle>
+                <AlertDescription className="space-y-3">
+                  <p>You must have a verified withdrawal account before you can complete NIN verification.</p>
+                  <Button type="button" variant="outline" className="h-10" onClick={() => navigate('/more/withdrawal-accounts')}>
+                    Add Withdrawal Account
+                  </Button>
+                </AlertDescription>
               </Alert>
             ) : (
               <>
@@ -629,122 +703,7 @@ const KycUpgrade = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="documents" className="mt-0">
-          <Card className="space-y-4 p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-foreground">Tier 4: Document Verification</p>
-                <p className="text-sm text-muted-foreground">Upload your ID and a selfie for final identity verification.</p>
-              </div>
-              {kycProgress.documentsComplete ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-1 text-xs font-medium text-success">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  {user?.kycDocumentStatus === 'pending' ? 'Reviewing' : 'Completed'}
-                </span>
-              ) : null}
-            </div>
 
-            {!kycProgress.ninComplete ? (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Tier 3 required first</AlertTitle>
-                <AlertDescription>Verify your NIN first. Tier 4 unlocks after Tier 3 is complete.</AlertDescription>
-              </Alert>
-            ) : (
-              <>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>ID Type</Label>
-                    <Select value={docIdType} onValueChange={setDocIdType} disabled={kycProgress.documentsComplete}>
-                      <SelectTrigger className="h-12"><SelectValue placeholder="Select ID type" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="nin">National ID (NIN)</SelectItem>
-                        <SelectItem value="drivers">Driver&apos;s License</SelectItem>
-                        <SelectItem value="voters">Voter&apos;s Card</SelectItem>
-                        <SelectItem value="passport">International Passport</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>ID Document</Label>
-                    <input
-                      ref={idInputRef}
-                      type="file"
-                      accept=".jpg,.jpeg,.png,.pdf"
-                      className="hidden"
-                      onChange={event => void handleDocumentSelected(event, 'id')}
-                    />
-                    <button
-                      type="button"
-                      disabled={kycProgress.documentsComplete}
-                      onClick={() => idInputRef.current?.click()}
-                      className="flex w-full flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border py-6 text-muted-foreground transition-colors hover:border-accent hover:text-foreground disabled:opacity-50"
-                    >
-                      {idDocumentDataUrl ? <FileText className="h-6 w-6 text-accent" /> : <Upload className="h-6 w-6" />}
-                      <span className="text-xs">{idDocumentDataUrl ? 'Replace ID document' : 'Upload ID document'}</span>
-                    </button>
-                    {idDocumentDataUrl && (
-                      <p className="truncate text-[10px] text-muted-foreground text-center">{idDocumentName}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Selfie</Label>
-                    <input
-                      ref={selfieInputRef}
-                      type="file"
-                      accept=".jpg,.jpeg,.png"
-                      className="hidden"
-                      onChange={event => void handleDocumentSelected(event, 'selfie')}
-                    />
-                    <button
-                      type="button"
-                      disabled={kycProgress.documentsComplete}
-                      onClick={() => selfieInputRef.current?.click()}
-                      className="flex w-full flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border py-6 text-muted-foreground transition-colors hover:border-accent hover:text-foreground disabled:opacity-50"
-                    >
-                      {selfieDataUrl ? <Camera className="h-6 w-6 text-accent" /> : <Upload className="h-6 w-6" />}
-                      <span className="text-xs">{selfieDataUrl ? 'Replace selfie' : 'Upload selfie'}</span>
-                    </button>
-                    {selfieDataUrl && (
-                      <p className="truncate text-[10px] text-muted-foreground text-center">{selfieName}</p>
-                    )}
-                  </div>
-                </div>
-
-                {docMessage && (
-                  <Alert>
-                    <CheckCircle2 className="h-4 w-4" />
-                    <AlertTitle>Submission successful</AlertTitle>
-                    <AlertDescription>{docMessage}</AlertDescription>
-                  </Alert>
-                )}
-
-                {docError && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Submission failed</AlertTitle>
-                    <AlertDescription>{docError}</AlertDescription>
-                  </Alert>
-                )}
-
-                <Button className="h-12 w-full" onClick={handleDocumentsSubmit} disabled={!canSubmitDocuments}>
-                  {docLoading ? (
-                    <>
-                      <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-                      Submitting...
-                    </>
-                  ) : kycProgress.documentsComplete ? (
-                    user?.kycDocumentStatus === 'pending' ? 'Under Review' : 'Tier 4 completed'
-                  ) : (
-                    'Submit Documents'
-                  )}
-                </Button>
-              </>
-            )}
-          </Card>
-        </TabsContent>
       </Tabs>
     </div>
   );

@@ -56,8 +56,8 @@ export interface SubmitKycNinInput {
 
 export interface SubmitKycBvnInput {
   bvn: string;
-  accountNumber: string;
-  bankCode: string;
+  accountNumber?: string;
+  bankCode?: string;
 }
 
 export interface SubmitKycDocumentsInput {
@@ -351,8 +351,8 @@ export const submitKycBvnVerification = (input: SubmitKycBvnInput) =>
     method: 'POST',
     json: {
       bvn: input.bvn.trim(),
-      accountNumber: input.accountNumber.trim(),
-      bankCode: input.bankCode,
+      accountNumber: input.accountNumber?.trim() || '',
+      bankCode: input.bankCode || '',
     },
   });
 
