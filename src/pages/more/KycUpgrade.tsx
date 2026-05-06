@@ -382,6 +382,13 @@ const KycUpgrade = () => {
         return;
       }
 
+      if (!navigator.onLine || error instanceof TypeError || error.message?.toLowerCase().includes('network')) {
+        const msg = 'Network interruption detected. Please check your connection and try again.';
+        setDocError(msg);
+        toast.error(msg);
+        return;
+      }
+
       const nextError = getApiErrorMessage(error, 'Unable to submit your documents right now. Please try again.');
       setDocError(nextError);
       toast.error(nextError);
