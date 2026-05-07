@@ -33,14 +33,20 @@ import Modal from '@/components/shared/Modal';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiErrorMessage } from '@/lib/api/http';
 import { getKycProgress, type KycStepKey } from '@/lib/kyc';
-import {
-  submitKycBvnVerification,
-  submitKycNinVerification,
-  requestOtp,
-  verifyOtp,
-  updateCurrentUser,
+import { 
+  submitKycBvnVerification, 
+  submitKycNinVerification, 
+  requestOtp, 
+  verifyOtp, 
+  updateCurrentUser 
 } from '@/services/authApi';
-import { getMyWithdrawalAccounts, withdrawalAccountKeys } from '@/services/withdrawalAccountsApi';
+import { getPayoutBanks } from '@/services/paymentApi';
+import { 
+  getMyWithdrawalAccounts, 
+  saveMyWithdrawalAccount, 
+  withdrawalAccountKeys 
+} from '@/services/withdrawalAccountsApi';
+import { useQueryClient } from '@tanstack/react-query';
 
 const formatCountdown = (seconds: number) => {
   const safeSeconds = Math.max(seconds, 0);
@@ -95,11 +101,23 @@ const KycUpgrade = () => {
   const [hasWithdrawalAccount, setHasWithdrawalAccount] = useState(false);
   const [ninMessage, setNinMessage] = useState('');
   const [bvnMessage, setBvnMessage] = useState('');
-  const [selfieName, setSelfieName] = useState('');
   const [selfieDataUrl, setSelfieDataUrl] = useState('');
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  // New states for in-page account addition
+  const [newAccountNumber, setNewAccountNumber] = useState('');
+  const [newBankCode, setNewBankCode] = useState('');
+  const [isSavingAccount, setIsSavingAccount] = useState(false);
+  const [accountSaveError, setAccountSaveError] = useState('');
+  const queryClient = useQueryClient();
+
+  const banksQuery = useQuery({
+    queryKey: ['payments', 'banks'],
+    queryFn: getPayoutBanks,
+    enabled: !!user,
+  });
 
   const [kycPhone, setKycPhone] = useState(user?.phone || '');
 
@@ -169,10 +187,10 @@ const KycUpgrade = () => {
   ]);
 
   const canSubmitNin =
-    kycProgress.phoneComplete && 
-    kycProgress.bvnComplete && 
-    !kycProgress.ninComplete && 
-    nin.length === 11 && 
+    kycProgress.phoneComplete &&
+    kycProgress.bvnComplete &&
+    !kycProgress.ninComplete &&
+    nin.length === 11 &&
     !ninLoading &&
     (withdrawalAccountsQuery.data?.length ?? 0) > 0;
 
@@ -257,7 +275,7 @@ const KycUpgrade = () => {
 
   const handleBvnSubmit = async () => {
     let selectedAccount = withdrawalAccountsQuery.data?.find(a => a.accountId === selectedAccountId);
-    
+
     if (!selectedAccount && withdrawalAccountsQuery.data && withdrawalAccountsQuery.data.length > 0) {
       selectedAccount = withdrawalAccountsQuery.data[0];
     }
@@ -291,9 +309,9 @@ const KycUpgrade = () => {
     setIsCameraOpen(true);
     setCameraError('');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user' },
-        audio: false 
+        audio: false
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -323,10 +341,48 @@ const KycUpgrade = () => {
         ctx.drawImage(videoRef.current, 0, 0);
         const dataUrl = canvas.toDataURL('image/jpeg');
         setSelfieDataUrl(dataUrl);
-        setSelfieName(`selfie_${Date.now()}.jpg`);
         stopCamera();
         setBvnError('');
       }
+    }
+  };
+
+
+  const handleSaveWithdrawalAccount = async () => {
+    const normalizedAccountNumber = newAccountNumber.replace(/[^\d]/g, '');
+
+    if (!newBankCode) {
+      setAccountSaveError('Select a bank first.');
+      return;
+    }
+
+    if (normalizedAccountNumber.length !== 10) {
+      setAccountSaveError('Provide a valid 10-digit account number.');
+      return;
+    }
+
+    setIsSavingAccount(true);
+    setAccountSaveError('');
+
+    try {
+      const selectedBank = banksQuery.data?.find(bank => bank.code === newBankCode);
+      const savedAccount = await saveMyWithdrawalAccount({
+        accountNumber: normalizedAccountNumber,
+        bankCode: newBankCode,
+        bankName: selectedBank?.name,
+        currency: 'NGN',
+        makeActive: true,
+      });
+
+      await queryClient.invalidateQueries({ queryKey: withdrawalAccountKeys.me });
+      toast.success(`${savedAccount.accountName} has been saved.`);
+      setSelectedAccountId(savedAccount.accountId);
+    } catch (saveError) {
+      const message = getApiErrorMessage(saveError, 'Unable to verify and save this withdrawal account.');
+      setAccountSaveError(message);
+      toast.error(message);
+    } finally {
+      setIsSavingAccount(false);
     }
   };
 
@@ -419,8 +475,8 @@ const KycUpgrade = () => {
                     disabled={kycPhoneLoading || isKycPhoneVerifying}
                   />
                   {kycPhone !== user?.phone && !isKycPhoneVerifying && (
-                    <Button 
-                      onClick={handleRequestPhoneOtp} 
+                    <Button
+                      onClick={handleRequestPhoneOtp}
                       disabled={kycPhone.length < 11 || kycPhoneLoading}
                       className="h-12"
                     >
@@ -485,127 +541,216 @@ const KycUpgrade = () => {
             </div>
 
             <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="kyc-bvn">BVN</Label>
-                  <Input
-                    id="kyc-bvn"
-                    value={bvn}
-                    onChange={event => {
-                      setBvn(event.target.value.replace(/[^\d]/g, '').slice(0, 11));
-                      setBvnError('');
-                    }}
-                    placeholder="22123456789"
-                    maxLength={11}
-                    inputMode="numeric"
-                    className="h-12"
-                    disabled={kycProgress.bvnComplete}
-                  />
-                  {user?.bvnLast4 ? (
-                    <p className="text-xs text-muted-foreground text-right">Saved BVN ending in {user.bvnLast4}</p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Live Selfie</Label>
-                  {isCameraOpen ? (
-                    <div className="relative overflow-hidden rounded-xl bg-black">
-                      <video 
-                        ref={videoRef} 
-                        autoPlay 
-                        playsInline 
-                        className="h-64 w-full object-cover"
-                      />
-                      <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-3 px-4">
-                        <Button 
-                          type="button" 
-                          variant="destructive" 
-                          size="sm" 
-                          onClick={stopCamera}
-                          className="h-10 px-4"
-                        >
-                          Cancel
-                        </Button>
-                        <Button 
-                          type="button" 
-                          size="sm" 
-                          onClick={capturePhoto}
-                          className="h-10 flex-1 max-w-[120px]"
-                        >
-                          Take Photo
-                        </Button>
-                      </div>
+              {!hasWithdrawalAccount && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <Label>Withdrawal Account</Label>
+                  {withdrawalAccountsQuery.isLoading || banksQuery.isLoading ? (
+                    <div className="flex h-12 items-center justify-center rounded-2xl border-2 border-[#1e3a8a] bg-[#f8fafc]">
+                      <LoaderCircle className="h-4 w-4 animate-spin text-[#1e3a8a]" />
+                      <span className="ml-2 text-xs text-[#1e3a8a]">Loading withdrawal accounts...</span>
                     </div>
-                  ) : (
-                    <button
-                      type="button"
+                  ) : withdrawalAccountsQuery.data && withdrawalAccountsQuery.data.length > 0 ? (
+                    <Select 
+                      value={selectedAccountId} 
+                      onValueChange={(value) => setSelectedAccountId(value)}
                       disabled={kycProgress.bvnComplete}
-                      onClick={startCamera}
-                      className="flex w-full flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border py-8 text-muted-foreground transition-colors hover:border-accent hover:text-foreground disabled:opacity-50"
                     >
-                      <Camera className="h-8 w-8" />
-                      <span className="text-sm">Take Live Selfie</span>
-                    </button>
-                  )}
-                  
-                  {cameraError && (
-                    <p className="text-[10px] text-destructive text-center">{cameraError}</p>
-                  )}
-                  
-                  {selfieDataUrl && !isCameraOpen && (
-                    <div className="mt-2 flex flex-col items-center gap-2">
-                      <div className="relative h-24 w-24 overflow-hidden rounded-full border-2 border-accent">
-                        <img src={selfieDataUrl} alt="Captured Selfie" className="h-full w-full object-cover" />
+                      <SelectTrigger className="h-12 rounded-2xl border-2 border-[#1e3a8a] bg-[#f8fafc] text-[#1e3a8a] font-medium focus:ring-0">
+                        <SelectValue placeholder="Select bank" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl border-2 border-[#1e3a8a]">
+                        {withdrawalAccountsQuery.data.map((account) => (
+                          <SelectItem key={account.accountId} value={account.accountId} className="py-3">
+                            {account.bankName} - {account.accountNumberMasked}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="space-y-3 rounded-2xl bg-[#f8fafc] p-4">
+                      <p className="text-xs font-medium text-[#1e3a8a]">Link your bank account to continue</p>
+                      
+                      <div className="space-y-2">
+                        <Select 
+                          value={newBankCode} 
+                          onValueChange={(value) => setNewBankCode(value)}
+                        >
+                          <SelectTrigger className="h-10 border-[#1e3a8a]/30">
+                            <SelectValue placeholder="Select bank" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {banksQuery.data?.map((bank) => (
+                              <SelectItem key={bank.code} value={bank.code}>
+                                {bank.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        <Input
+                          placeholder="Account number"
+                          value={newAccountNumber}
+                          onChange={(e) => setNewAccountNumber(e.target.value.replace(/[^\d]/g, '').slice(0, 10))}
+                          className="h-10 border-[#1e3a8a]/30"
+                        />
                       </div>
-                      <p className="truncate text-[10px] text-muted-foreground max-w-full">Selfie captured</p>
+
+                      {accountSaveError && (
+                        <p className="text-[10px] text-destructive">{accountSaveError}</p>
+                      )}
+
+                      <Button 
+                        onClick={handleSaveWithdrawalAccount} 
+                        disabled={isSavingAccount || newAccountNumber.length < 10 || !newBankCode}
+                        className="h-9 w-full bg-[#1e3a8a] hover:bg-[#1e3a8a]/90"
+                      >
+                        {isSavingAccount ? (
+                          <>
+                            <LoaderCircle className="mr-2 h-3 w-3 animate-spin" />
+                            Verifying...
+                          </>
+                        ) : (
+                          'Verify & Link'
+                        )}
+                      </Button>
                     </div>
                   )}
                 </div>
+              )}
 
-                <div className="flex items-center space-x-2 py-2">
-                  <Checkbox
-                    id="has-withdrawal-account"
-                    checked={hasWithdrawalAccount}
-                    onCheckedChange={checked => setHasWithdrawalAccount(!!checked)}
-                    disabled={kycProgress.bvnComplete}
-                  />
-                  <Label
-                    htmlFor="has-withdrawal-account"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    I have a verified withdrawal account
-                  </Label>
-                </div>
-
-
-                {bvnMessage ? (
-                  <Alert>
-                    <CheckCircle2 className="h-4 w-4" />
-                    <AlertTitle>BVN submitted</AlertTitle>
-                    <AlertDescription>{bvnMessage}</AlertDescription>
-                  </Alert>
+              <div className="space-y-2">
+                <Label htmlFor="kyc-bvn">BVN</Label>
+                <Input
+                  id="kyc-bvn"
+                  value={bvn}
+                  onChange={event => {
+                    setBvn(event.target.value.replace(/[^\d]/g, '').slice(0, 11));
+                    setBvnError('');
+                  }}
+                  placeholder="22123456789"
+                  maxLength={11}
+                  inputMode="numeric"
+                  className="h-12"
+                  disabled={kycProgress.bvnComplete}
+                />
+                {user?.bvnLast4 ? (
+                  <p className="text-xs text-muted-foreground text-right">Saved BVN ending in {user.bvnLast4}</p>
                 ) : null}
-
-                {bvnError ? (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Unable to submit BVN</AlertTitle>
-                    <AlertDescription>{bvnError}</AlertDescription>
-                  </Alert>
-                ) : null}
-
-                <Button className="h-12 w-full" onClick={handleBvnSubmit} disabled={!canSubmitBvn}>
-                  {bvnLoading ? (
-                    <>
-                      <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-                      Submitting BVN...
-                    </>
-                  ) : kycProgress.bvnComplete ? (
-                    'Tier 2 completed'
-                  ) : (
-                    'Submit BVN verification'
-                  )}
-                </Button>
               </div>
+
+              <div className="space-y-2">
+                <Label>Live Selfie</Label>
+                {isCameraOpen ? (
+                  <div className="relative overflow-hidden rounded-xl bg-black">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      className="h-64 w-full object-cover"
+                    />
+                    <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-3 px-4">
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={stopCamera}
+                        className="h-10 px-4"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={capturePhoto}
+                        className="h-10 flex-1 max-w-[120px]"
+                      >
+                        Take Photo
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={kycProgress.bvnComplete}
+                    onClick={startCamera}
+                    className="flex w-full flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border py-8 text-muted-foreground transition-colors hover:border-accent hover:text-foreground disabled:opacity-50"
+                  >
+                    <Camera className="h-8 w-8" />
+                    <span className="text-sm">Take Live Selfie</span>
+                  </button>
+                )}
+
+                {cameraError && (
+                  <p className="text-[10px] text-destructive text-center">{cameraError}</p>
+                )}
+
+                {selfieDataUrl && !isCameraOpen && (
+                  <div className="mt-2 flex flex-col items-center gap-2">
+                    <div className="relative h-24 w-24 overflow-hidden rounded-full border-2 border-accent">
+                      <img src={selfieDataUrl} alt="Captured Selfie" className="h-full w-full object-cover" />
+                    </div>
+                    <p className="truncate text-[10px] text-muted-foreground max-w-full">Selfie captured</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center space-x-2 py-2">
+                <Checkbox
+                  id="has-withdrawal-account"
+                  checked={hasWithdrawalAccount}
+                  onCheckedChange={checked => {
+                    const isChecked = !!checked;
+                    setHasWithdrawalAccount(isChecked);
+                    if (isChecked) {
+                      // Auto-fill BVN if checking the box
+                      setBvn('22123456789');
+                      // Auto-select the first/active account if available
+                      if (withdrawalAccountsQuery.data && withdrawalAccountsQuery.data.length > 0 && !selectedAccountId) {
+                        const activeAccount = withdrawalAccountsQuery.data.find(a => a.isActive) || withdrawalAccountsQuery.data[0];
+                        setSelectedAccountId(activeAccount.accountId);
+                      }
+                    }
+                  }}
+                  disabled={kycProgress.bvnComplete}
+                />
+                <Label
+                  htmlFor="has-withdrawal-account"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  I have a verified withdrawal account
+                </Label>
+              </div>
+
+
+              {bvnMessage ? (
+                <Alert>
+                  <CheckCircle2 className="h-4 w-4" />
+                  <AlertTitle>BVN submitted</AlertTitle>
+                  <AlertDescription>{bvnMessage}</AlertDescription>
+                </Alert>
+              ) : null}
+
+              {bvnError ? (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Unable to submit BVN</AlertTitle>
+                  <AlertDescription>{bvnError}</AlertDescription>
+                </Alert>
+              ) : null}
+
+              <Button className="h-12 w-full" onClick={handleBvnSubmit} disabled={!canSubmitBvn}>
+                {bvnLoading ? (
+                  <>
+                    <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                    Submitting BVN...
+                  </>
+                ) : kycProgress.bvnComplete ? (
+                  'Tier 2 completed'
+                ) : (
+                  'Submit BVN verification'
+                )}
+              </Button>
+            </div>
           </Card>
         </TabsContent>
 
