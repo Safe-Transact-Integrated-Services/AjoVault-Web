@@ -190,7 +190,7 @@ export const mapIdentityProfileToUser = (profile: IdentityUserProfileResponse): 
     creditScore: 0,
     role: profile.role,
     isActive: profile.isActive,
-    hasWithdrawalAccount: profile.hasWithdrawalAccount ?? true,
+    hasWithdrawalAccount: true,
     createdAt: profile.createdAtUtc,
     lastLoginAt: profile.lastLoginAtUtc ?? null,
   };
