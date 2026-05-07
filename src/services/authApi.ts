@@ -14,6 +14,7 @@ interface IdentityUserProfileResponse {
   bvnLast4?: string | null;
   ninLast4?: string | null;
   isActive: boolean;
+  hasWithdrawalAccount: boolean;
   createdAtUtc: string;
   lastLoginAtUtc?: string | null;
 }
@@ -189,6 +190,7 @@ export const mapIdentityProfileToUser = (profile: IdentityUserProfileResponse): 
     creditScore: 0,
     role: profile.role,
     isActive: profile.isActive,
+    hasWithdrawalAccount: profile.hasWithdrawalAccount ?? true,
     createdAt: profile.createdAtUtc,
     lastLoginAt: profile.lastLoginAtUtc ?? null,
   };

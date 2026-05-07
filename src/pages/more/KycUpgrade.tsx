@@ -11,6 +11,7 @@ import {
   Upload,
   Phone,
   ShieldCheck,
+  ChevronRight,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -58,21 +59,21 @@ const formatCountdown = (seconds: number) => {
 const stepMeta: Array<{ key: KycStepKey; label: string; title: string; description: string }> = [
   {
     key: 'phone',
-    label: 'Tier 1',
-    title: 'Phone verification',
+    label: 'Phone',
+    title: 'Verification',
     description: 'Verified during registration.',
   },
   {
     key: 'bvn',
-    label: 'Tier 2',
-    title: 'BVN & Selfie',
-    description: 'Verify your BVN and take a live selfie after Tier 1.',
+    label: 'BVN',
+    title: 'Verification',
+    description: 'Verify your BVN and take a live selfie after Phone verification.',
   },
   {
     key: 'nin',
-    label: 'Tier 3',
-    title: 'NIN verification',
-    description: 'Submit your NIN for additional verification after Tier 2.',
+    label: 'NIN',
+    title: 'Verification',
+    description: 'Submit your NIN for additional verification after BVN verification.',
   },
 ];
 
@@ -98,7 +99,6 @@ const KycUpgrade = () => {
   const [bvnLoading, setBvnLoading] = useState(false);
   const [ninError, setNinError] = useState('');
   const [bvnError, setBvnError] = useState('');
-  const [hasWithdrawalAccount, setHasWithdrawalAccount] = useState(false);
   const [ninMessage, setNinMessage] = useState('');
   const [bvnMessage, setBvnMessage] = useState('');
   const [selfieDataUrl, setSelfieDataUrl] = useState('');
@@ -111,6 +111,8 @@ const KycUpgrade = () => {
   const [newBankCode, setNewBankCode] = useState('');
   const [isSavingAccount, setIsSavingAccount] = useState(false);
   const [accountSaveError, setAccountSaveError] = useState('');
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [showAddAccountForm, setShowAddAccountForm] = useState(false);
   const queryClient = useQueryClient();
 
   const banksQuery = useQuery({
@@ -149,6 +151,13 @@ const KycUpgrade = () => {
     }
     return () => clearInterval(interval);
   }, [kycPhoneOtpExpiresAt]);
+  
+  useEffect(() => {
+    if (activeStep === 'bvn' && user && !user.hasWithdrawalAccount && !isAccountModalOpen) {
+      setShowAddAccountForm(true);
+      setIsAccountModalOpen(true);
+    }
+  }, [activeStep, user?.hasWithdrawalAccount, isAccountModalOpen]);
 
   useEffect(() => {
     return () => {
@@ -187,15 +196,10 @@ const KycUpgrade = () => {
   ]);
 
   const canSubmitNin =
-    kycProgress.phoneComplete &&
-    kycProgress.bvnComplete &&
-    !kycProgress.ninComplete &&
     nin.length === 11 &&
-    !ninLoading &&
-    (withdrawalAccountsQuery.data?.length ?? 0) > 0;
+    !ninLoading;
 
   const canSubmitBvn =
-    !kycProgress.bvnComplete &&
     bvn.length === 11 &&
     !!selfieDataUrl &&
     !bvnLoading;
@@ -377,6 +381,10 @@ const KycUpgrade = () => {
       await queryClient.invalidateQueries({ queryKey: withdrawalAccountKeys.me });
       toast.success(`${savedAccount.accountName} has been saved.`);
       setSelectedAccountId(savedAccount.accountId);
+      setIsAccountModalOpen(false);
+      setShowAddAccountForm(false);
+      setNewAccountNumber('');
+      setNewBankCode('');
     } catch (saveError) {
       const message = getApiErrorMessage(saveError, 'Unable to verify and save this withdrawal account.');
       setAccountSaveError(message);
@@ -397,7 +405,7 @@ const KycUpgrade = () => {
       <div>
         <h1 className="font-display text-2xl font-bold">KYC Verification</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Complete the three tiers in order: Phone, BVN & Selfie, then NIN.
+          Complete the three steps in order: Phone, BVN & Selfie, then NIN.
         </p>
       </div>
 
@@ -432,7 +440,6 @@ const KycUpgrade = () => {
               <TabsTrigger
                 key={step.key}
                 value={step.key}
-                disabled={isLocked}
                 className="flex h-auto flex-col gap-0.5 rounded-lg px-2 py-2 text-center"
               >
                 <span className="text-[11px] font-semibold">{step.label}</span>
@@ -446,8 +453,8 @@ const KycUpgrade = () => {
           <Card className="space-y-4 p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-foreground">Tier 1: Phone verification</p>
-                <p className="text-sm text-muted-foreground">Verify your phone number to complete Tier 1.</p>
+                <p className="text-sm font-semibold text-foreground">Phone Verification</p>
+                <p className="text-sm text-muted-foreground">Verify your phone number to complete this step.</p>
               </div>
               {kycProgress.phoneComplete && kycPhone === user?.phone ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-1 text-xs font-medium text-success">
@@ -474,13 +481,19 @@ const KycUpgrade = () => {
                     className="h-12"
                     disabled={kycPhoneLoading || isKycPhoneVerifying}
                   />
-                  {kycPhone !== user?.phone && !isKycPhoneVerifying && (
+                  {!isKycPhoneVerifying && (
                     <Button
                       onClick={handleRequestPhoneOtp}
                       disabled={kycPhone.length < 11 || kycPhoneLoading}
                       className="h-12"
                     >
-                      {kycPhoneLoading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : 'Verify'}
+                      {kycPhoneLoading ? (
+                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                      ) : kycPhone === user?.phone ? (
+                        'Verified'
+                      ) : (
+                        'Verify'
+                      )}
                     </Button>
                   )}
                 </div>
@@ -504,7 +517,7 @@ const KycUpgrade = () => {
                 <Alert>
                   <CheckCircle2 className="h-4 w-4" />
                   <AlertTitle>Phone verified</AlertTitle>
-                  <AlertDescription>Your account is already verified for Tier 1 KYC.</AlertDescription>
+                  <AlertDescription>Your account is already verified for Phone KYC.</AlertDescription>
                 </Alert>
               )}
 
@@ -529,8 +542,8 @@ const KycUpgrade = () => {
           <Card className="space-y-4 p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-foreground">Tier 2: BVN verification</p>
-                <p className="text-sm text-muted-foreground">Verify your BVN using a saved withdrawal account after Tier 1 is complete.</p>
+                <p className="text-sm font-semibold text-foreground">BVN Verification</p>
+                <p className="text-sm text-muted-foreground">Verify your BVN using a saved withdrawal account after Phone verification is complete.</p>
               </div>
               {kycProgress.bvnComplete ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-1 text-xs font-medium text-success">
@@ -540,73 +553,114 @@ const KycUpgrade = () => {
               ) : null}
             </div>
 
-            <div className="space-y-4">
-              {!hasWithdrawalAccount && (
-                <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <Label>Withdrawal Account</Label>
-                  {withdrawalAccountsQuery.isLoading || banksQuery.isLoading ? (
-                    <div className="flex h-12 items-center justify-center rounded-2xl border-2 border-[#1e3a8a] bg-[#f8fafc]">
-                      <LoaderCircle className="h-4 w-4 animate-spin text-[#1e3a8a]" />
-                      <span className="ml-2 text-xs text-[#1e3a8a]">Loading withdrawal accounts...</span>
-                    </div>
-                  ) : withdrawalAccountsQuery.data && withdrawalAccountsQuery.data.length > 0 ? (
-                    <Select 
-                      value={selectedAccountId} 
-                      onValueChange={(value) => setSelectedAccountId(value)}
-                      disabled={kycProgress.bvnComplete}
-                    >
-                      <SelectTrigger className="h-12 rounded-2xl border-2 border-[#1e3a8a] bg-[#f8fafc] text-[#1e3a8a] font-medium focus:ring-0">
-                        <SelectValue placeholder="Select bank" />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl border-2 border-[#1e3a8a]">
-                        {withdrawalAccountsQuery.data.map((account) => (
-                          <SelectItem key={account.accountId} value={account.accountId} className="py-3">
-                            {account.bankName} - {account.accountNumberMasked}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <div className="space-y-3 rounded-2xl bg-[#f8fafc] p-4">
-                      <p className="text-xs font-medium text-[#1e3a8a]">Link your bank account to continue</p>
-                      
-                      <div className="space-y-2">
-                        <Select 
-                          value={newBankCode} 
-                          onValueChange={(value) => setNewBankCode(value)}
-                        >
-                          <SelectTrigger className="h-10 border-[#1e3a8a]/30">
-                            <SelectValue placeholder="Select bank" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {banksQuery.data?.map((bank) => (
-                              <SelectItem key={bank.code} value={bank.code}>
-                                {bank.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+            <div className="space-y-4 pt-2">
 
-                        <Input
-                          placeholder="Account number"
-                          value={newAccountNumber}
-                          onChange={(e) => setNewAccountNumber(e.target.value.replace(/[^\d]/g, '').slice(0, 10))}
-                          className="h-10 border-[#1e3a8a]/30"
-                        />
+              <Modal
+                isOpen={isAccountModalOpen}
+                onClose={() => {
+                  setIsAccountModalOpen(false);
+                  setShowAddAccountForm(false);
+                }}
+                title="Withdrawal Account"
+              >
+                <div className="space-y-4 pt-2">
+                  {!showAddAccountForm && withdrawalAccountsQuery.data && withdrawalAccountsQuery.data.length > 0 ? (
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">Choose a verified account for verification</p>
+                      <div className="space-y-2">
+                        {withdrawalAccountsQuery.data.map((account) => (
+                          <button
+                            key={account.accountId}
+                            onClick={() => {
+                              setSelectedAccountId(account.accountId);
+                              setIsAccountModalOpen(false);
+                            }}
+                            className={`flex w-full items-center justify-between rounded-xl border-2 p-4 transition-all ${
+                              selectedAccountId === account.accountId
+                                ? 'border-[#1e3a8a] bg-[#1e3a8a]/5'
+                                : 'border-border hover:border-[#1e3a8a]/30'
+                            }`}
+                          >
+                            <div className="text-left">
+                              <p className="font-semibold text-foreground">{account.bankName}</p>
+                              <p className="text-xs text-muted-foreground">{account.accountNumberMasked}</p>
+                            </div>
+                            {selectedAccountId === account.accountId && (
+                              <CheckCircle2 className="h-5 w-5 text-[#1e3a8a]" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        onClick={() => setShowAddAccountForm(true)}
+                        className="w-full text-[#1e3a8a]"
+                      >
+                        + Link another account
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground">Link your bank account to continue</p>
+                        {withdrawalAccountsQuery.data && withdrawalAccountsQuery.data.length > 0 && (
+                          <Button 
+                            variant="link" 
+                            size="sm" 
+                            onClick={() => setShowAddAccountForm(false)}
+                            className="h-auto p-0 text-[#1e3a8a]"
+                          >
+                            Back to selection
+                          </Button>
+                        )}
+                      </div>
+                      
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <Label>Select Bank</Label>
+                          <Select 
+                            value={newBankCode} 
+                            onValueChange={(value) => setNewBankCode(value)}
+                          >
+                            <SelectTrigger className="h-12 rounded-xl border-2 border-[#1e3a8a]/30 focus:border-[#1e3a8a]">
+                              <SelectValue placeholder="Select bank" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {banksQuery.data?.map((bank) => (
+                                <SelectItem key={bank.code} value={bank.code}>
+                                  {bank.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label>Account Number</Label>
+                          <Input
+                            placeholder="e.g. 0123456789"
+                            value={newAccountNumber}
+                            onChange={(e) => setNewAccountNumber(e.target.value.replace(/[^\d]/g, '').slice(0, 10))}
+                            className="h-12 rounded-xl border-2 border-[#1e3a8a]/30 focus:border-[#1e3a8a]"
+                          />
+                        </div>
                       </div>
 
                       {accountSaveError && (
-                        <p className="text-[10px] text-destructive">{accountSaveError}</p>
+                        <Alert variant="destructive" className="py-2">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription className="text-xs">{accountSaveError}</AlertDescription>
+                        </Alert>
                       )}
 
                       <Button 
                         onClick={handleSaveWithdrawalAccount} 
                         disabled={isSavingAccount || newAccountNumber.length < 10 || !newBankCode}
-                        className="h-9 w-full bg-[#1e3a8a] hover:bg-[#1e3a8a]/90"
+                        className="h-12 w-full rounded-xl bg-[#1e3a8a] text-white hover:bg-[#1e3a8a]/90"
                       >
                         {isSavingAccount ? (
                           <>
-                            <LoaderCircle className="mr-2 h-3 w-3 animate-spin" />
+                            <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
                             Verifying...
                           </>
                         ) : (
@@ -616,7 +670,7 @@ const KycUpgrade = () => {
                     </div>
                   )}
                 </div>
-              )}
+              </Modal>
 
               <div className="space-y-2">
                 <Label htmlFor="kyc-bvn">BVN</Label>
@@ -631,7 +685,6 @@ const KycUpgrade = () => {
                   maxLength={11}
                   inputMode="numeric"
                   className="h-12"
-                  disabled={kycProgress.bvnComplete}
                 />
                 {user?.bvnLast4 ? (
                   <p className="text-xs text-muted-foreground text-right">Saved BVN ending in {user.bvnLast4}</p>
@@ -671,9 +724,8 @@ const KycUpgrade = () => {
                 ) : (
                   <button
                     type="button"
-                    disabled={kycProgress.bvnComplete}
                     onClick={startCamera}
-                    className="flex w-full flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border py-8 text-muted-foreground transition-colors hover:border-accent hover:text-foreground disabled:opacity-50"
+                    className="flex w-full flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border py-8 text-muted-foreground transition-colors hover:border-accent hover:text-foreground"
                   >
                     <Camera className="h-8 w-8" />
                     <span className="text-sm">Take Live Selfie</span>
@@ -693,34 +745,6 @@ const KycUpgrade = () => {
                   </div>
                 )}
               </div>
-
-              <div className="flex items-center space-x-2 py-2">
-                <Checkbox
-                  id="has-withdrawal-account"
-                  checked={hasWithdrawalAccount}
-                  onCheckedChange={checked => {
-                    const isChecked = !!checked;
-                    setHasWithdrawalAccount(isChecked);
-                    if (isChecked) {
-                      // Auto-fill BVN if checking the box
-                      setBvn('22123456789');
-                      // Auto-select the first/active account if available
-                      if (withdrawalAccountsQuery.data && withdrawalAccountsQuery.data.length > 0 && !selectedAccountId) {
-                        const activeAccount = withdrawalAccountsQuery.data.find(a => a.isActive) || withdrawalAccountsQuery.data[0];
-                        setSelectedAccountId(activeAccount.accountId);
-                      }
-                    }
-                  }}
-                  disabled={kycProgress.bvnComplete}
-                />
-                <Label
-                  htmlFor="has-withdrawal-account"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
-                  I have a verified withdrawal account
-                </Label>
-              </div>
-
 
               {bvnMessage ? (
                 <Alert>
@@ -745,7 +769,7 @@ const KycUpgrade = () => {
                     Submitting BVN...
                   </>
                 ) : kycProgress.bvnComplete ? (
-                  'Tier 2 completed'
+                  'BVN verification complete'
                 ) : (
                   'Submit BVN verification'
                 )}
@@ -758,8 +782,8 @@ const KycUpgrade = () => {
           <Card className="space-y-4 p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-foreground">Tier 3: NIN verification</p>
-                <p className="text-sm text-muted-foreground">Submit your NIN for additional verification after Tier 2 is complete.</p>
+                <p className="text-sm font-semibold text-foreground">NIN Verification</p>
+                <p className="text-sm text-muted-foreground">Submit your NIN for additional verification after BVN verification is complete.</p>
               </div>
               {kycProgress.ninComplete ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-1 text-xs font-medium text-success">
@@ -769,19 +793,7 @@ const KycUpgrade = () => {
               ) : null}
             </div>
 
-            {!kycProgress.phoneComplete ? (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Tier 1 required first</AlertTitle>
-                <AlertDescription>Verify your phone first. Tier 3 unlocks after Tiers 1 and 2 are complete.</AlertDescription>
-              </Alert>
-            ) : !kycProgress.bvnComplete ? (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Tier 2 required first</AlertTitle>
-                <AlertDescription>Complete BVN verification first. Tier 3 unlocks after Tier 2 is complete.</AlertDescription>
-              </Alert>
-            ) : withdrawalAccountsQuery.data?.length === 0 ? (
+            {withdrawalAccountsQuery.data?.length === 0 ? (
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Withdrawal account required</AlertTitle>
@@ -807,7 +819,6 @@ const KycUpgrade = () => {
                     maxLength={11}
                     inputMode="numeric"
                     className="h-12"
-                    disabled={kycProgress.ninComplete}
                   />
                 </div>
 
@@ -838,7 +849,7 @@ const KycUpgrade = () => {
                       Submitting NIN...
                     </>
                   ) : kycProgress.ninComplete ? (
-                    'Tier 3 completed'
+                    'NIN verification complete'
                   ) : (
                     'Submit NIN'
                   )}

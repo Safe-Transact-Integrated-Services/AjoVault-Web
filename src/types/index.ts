@@ -14,6 +14,7 @@ export interface User {
   creditScore: number;
   role: string;
   isActive: boolean;
+  hasWithdrawalAccount: boolean;
   createdAt: string;
   lastLoginAt?: string | null;
 }

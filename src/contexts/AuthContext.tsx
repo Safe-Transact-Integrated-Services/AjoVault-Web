@@ -132,6 +132,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = useCallback(async (identifier: string, password: string) => {
     const result = await loginUser(identifier, password);
     persistAuthSession(result.session);
+    console.log(result.session)
     setUser(currentUser => mergeUser(result.user, currentUser));
     return result.user;
   }, []);
@@ -145,6 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signup = useCallback(async (input: SignupInput) => {
     await registerUser(input);
+    
   }, []);
 
   const handleRequestOtp = useCallback((input: AuthContactInput) => requestOtp(input), []);
