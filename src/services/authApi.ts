@@ -190,7 +190,8 @@ export const mapIdentityProfileToUser = (profile: IdentityUserProfileResponse): 
     creditScore: 0,
     role: profile.role,
     isActive: profile.isActive,
-    hasWithdrawalAccount: true,
+    hasWithdrawalAccount: profile.hasWithdrawalAccount,
+    // hasWithdrawalAccount: true,
     createdAt: profile.createdAtUtc,
     lastLoginAt: profile.lastLoginAtUtc ?? null,
   };
@@ -345,6 +346,21 @@ export const verifyEmailKycOtp = (input: VerifyEmailKycOtpInput) =>
     method: 'POST',
     json: {
       otp: input.otp.trim(),
+    },
+  });
+
+export const requestPhoneKycOtp = (input: AuthContactInput) =>
+  apiRequest<OtpChallengeResponse>('/api/identity/me/kyc/phone/request-otp', {
+    method: 'POST',
+    json: normalizeContactPayload(input),
+  });
+
+export const verifyPhoneKycOtp = (input: AuthContactInput, otp: string) =>
+  apiRequest<OtpVerificationResponse>('/api/identity/me/kyc/phone/verify', {
+    method: 'POST',
+    json: {
+      ...normalizeContactPayload(input),
+      otp,
     },
   });
 

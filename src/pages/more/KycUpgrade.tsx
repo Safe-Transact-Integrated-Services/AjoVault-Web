@@ -37,8 +37,8 @@ import { getKycProgress, type KycStepKey } from '@/lib/kyc';
 import { 
   submitKycBvnVerification, 
   submitKycNinVerification, 
-  requestOtp, 
-  verifyOtp, 
+  requestPhoneKycOtp, 
+  verifyPhoneKycOtp, 
   updateCurrentUser 
 } from '@/services/authApi';
 import { getPayoutBanks } from '@/services/paymentApi';
@@ -212,7 +212,7 @@ const KycUpgrade = () => {
     setKycPhoneMessage('');
 
     try {
-      const response = await requestOtp({ phoneNumber: kycPhone });
+      const response = await requestPhoneKycOtp({ phoneNumber: kycPhone });
 
       setKycPhoneMessage(response.message);
       setKycPhoneOtpExpiresAt(response.expiresAtUtc);
@@ -232,7 +232,7 @@ const KycUpgrade = () => {
     setKycPhoneError('');
 
     try {
-      const verifyRes = await verifyOtp({ phoneNumber: kycPhone }, otp);
+      const verifyRes = await verifyPhoneKycOtp({ phoneNumber: kycPhone }, otp);
       if (verifyRes.verified) {
         // Update user profile with the new verified phone number
         await updateCurrentUser({
@@ -647,10 +647,10 @@ const KycUpgrade = () => {
                       </div>
 
                       {accountSaveError && (
-                        <Alert variant="destructive" className="py-2">
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertDescription className="text-xs">{accountSaveError}</AlertDescription>
-                        </Alert>
+                        <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5">
+                          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                          <p className="text-xs leading-snug text-destructive">{accountSaveError}</p>
+                        </div>
                       )}
 
                       <Button 
