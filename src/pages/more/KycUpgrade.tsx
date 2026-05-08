@@ -210,18 +210,17 @@ const KycUpgrade = () => {
     setKycPhoneLoading(true);
     setKycPhoneError('');
     setKycPhoneMessage('');
+    setIsKycPhoneVerifying(true);
 
     try {
       const response = await requestPhoneKycOtp({ phoneNumber: kycPhone });
 
       setKycPhoneMessage(response.message);
       setKycPhoneOtpExpiresAt(response.expiresAtUtc);
-      setIsKycPhoneVerifying(true);
       toast.success(response.message);
     } catch (error) {
       const nextError = getApiErrorMessage(error, 'Unable to send a phone verification OTP right now.');
       setKycPhoneError(nextError);
-      toast.error(nextError);
     } finally {
       setKycPhoneLoading(false);
     }
@@ -379,6 +378,7 @@ const KycUpgrade = () => {
       });
 
       await queryClient.invalidateQueries({ queryKey: withdrawalAccountKeys.me });
+      await refreshProfile();
       toast.success(`${savedAccount.accountName} has been saved.`);
       setSelectedAccountId(savedAccount.accountId);
       setIsAccountModalOpen(false);
