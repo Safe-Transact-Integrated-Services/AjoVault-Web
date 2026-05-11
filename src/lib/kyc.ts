@@ -1,11 +1,11 @@
 import type { User } from '@/types';
 
-export type KycStepKey = 'email' | 'nin' | 'bvn';
+export type KycStepKey = 'phone' | 'bvn' | 'nin';
 
 export interface KycProgress {
-  emailComplete: boolean;
-  ninComplete: boolean;
+  phoneComplete: boolean;
   bvnComplete: boolean;
+  ninComplete: boolean;
   completedCount: number;
   nextStep: KycStepKey | 'complete';
   nextStepTitle: string;
@@ -18,52 +18,57 @@ const hasBasicTier = (kycTier?: User['kycTier']) =>
 const hasVerifiedTier = (kycTier?: User['kycTier']) =>
   kycTier === 'verified' || kycTier === 'premium';
 
+const hasPremiumTier = (kycTier?: User['kycTier']) =>
+  kycTier === 'premium';
+
 export const getKycProgress = (user: User | null | undefined): KycProgress => {
-  const emailComplete = !!user?.emailVerified;
-  const ninComplete = !!user?.ninLast4 || hasBasicTier(user?.kycTier);
+  // Tier 1 is phone verification, which is done at signup
+  const phoneComplete = !!user?.id;
   const bvnComplete = !!user?.bvnLast4 || hasVerifiedTier(user?.kycTier);
-  const completedCount = [emailComplete, ninComplete, bvnComplete].filter(Boolean).length;
+  const ninComplete = !!user?.ninLast4 || hasBasicTier(user?.kycTier);
+  
+  const completedCount = [phoneComplete, bvnComplete, ninComplete].filter(Boolean).length;
 
-  if (!emailComplete) {
+  if (!phoneComplete) {
     return {
-      emailComplete,
-      ninComplete,
+      phoneComplete,
       bvnComplete,
+      ninComplete,
       completedCount,
-      nextStep: 'email',
-      nextStepTitle: 'Verify email',
+      nextStep: 'phone',
+      nextStepTitle: 'Verify phone',
       summary: 'Tier 1 pending',
-    };
-  }
-
-  if (!ninComplete) {
-    return {
-      emailComplete,
-      ninComplete,
-      bvnComplete,
-      completedCount,
-      nextStep: 'nin',
-      nextStepTitle: 'Submit NIN',
-      summary: 'Tier 2 pending',
     };
   }
 
   if (!bvnComplete) {
     return {
-      emailComplete,
-      ninComplete,
+      phoneComplete,
       bvnComplete,
+      ninComplete,
       completedCount,
       nextStep: 'bvn',
       nextStepTitle: 'Verify BVN',
+      summary: 'Tier 2 pending',
+    };
+  }
+
+  if (!ninComplete) {
+    return {
+      phoneComplete,
+      bvnComplete,
+      ninComplete,
+      completedCount,
+      nextStep: 'nin',
+      nextStepTitle: 'Submit NIN',
       summary: 'Tier 3 pending',
     };
   }
 
   return {
-    emailComplete,
-    ninComplete,
+    phoneComplete,
     bvnComplete,
+    ninComplete,
     completedCount,
     nextStep: 'complete',
     nextStepTitle: 'KYC complete',
