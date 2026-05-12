@@ -242,9 +242,8 @@ const Welcome = () => {
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800">
       <header
-        className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
-          isScrolled ? 'bg-[#102A56]/95 py-3 shadow-lg backdrop-blur-md' : 'bg-transparent py-5'
-        }`}
+        className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${isScrolled ? 'bg-[#102A56]/95 py-3 shadow-lg backdrop-blur-md' : 'bg-transparent py-5'
+          }`}
       >
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6">
           <a href="#hero" className="relative z-10 flex items-center gap-2">
@@ -285,6 +284,13 @@ const Welcome = () => {
           <div className="flex items-center gap-4">
             <button
               type="button"
+              onClick={() => goTo('/login')}
+              className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/5 px-7 py-3 text-sm font-black uppercase text-white transition-all hover:bg-white/10 active:scale-95"
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
               onClick={() => goTo('/signup')}
               className="hidden rounded-full bg-[#3B82F6] px-7 py-3 text-[10px] font-black uppercase text-white shadow-lg shadow-blue-500/20 transition-all hover:bg-blue-600 hover:scale-105 active:scale-95 lg:block"
             >
@@ -303,16 +309,14 @@ const Welcome = () => {
       </header>
 
       <div
-        className={`fixed inset-0 z-[60] bg-[#08152b]/80 backdrop-blur-md transition-all duration-300 lg:hidden ${
-          isMobileMenuOpen ? 'visible opacity-100' : 'invisible pointer-events-none opacity-0'
-        }`}
+        className={`fixed inset-0 z-[60] bg-[#08152b]/80 backdrop-blur-md transition-all duration-300 lg:hidden ${isMobileMenuOpen ? 'visible opacity-100' : 'invisible pointer-events-none opacity-0'
+          }`}
         onClick={() => setIsMobileMenuOpen(false)}
       />
 
       <aside
-        className={`fixed right-0 top-0 z-[70] h-screen w-[320px] max-w-[86vw] border-l border-white/10 bg-[#102A56] shadow-2xl transition-transform duration-500 lg:hidden ${
-          isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
+        className={`fixed right-0 top-0 z-[70] h-screen w-[320px] max-w-[86vw] border-l border-white/10 bg-[#102A56] shadow-2xl transition-transform duration-500 lg:hidden ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
       >
         <div className="flex h-full flex-col">
           <div className="flex items-center justify-between border-b border-white/5 p-6">
@@ -351,18 +355,16 @@ const Welcome = () => {
                   <span className="text-lg font-bold text-white/80">{link.name}</span>
                   {link.submenu && (
                     <ChevronDown
-                      className={`h-5 w-5 text-white/50 transition-transform ${
-                        mobileDropdown === link.name ? 'rotate-180 text-[#3B82F6]' : ''
-                      }`}
+                      className={`h-5 w-5 text-white/50 transition-transform ${mobileDropdown === link.name ? 'rotate-180 text-[#3B82F6]' : ''
+                        }`}
                     />
                   )}
                 </button>
 
                 {link.submenu && (
                   <div
-                    className={`flex flex-col gap-3 overflow-hidden border-l-2 border-blue-400/25 pl-4 transition-all duration-300 ${
-                      mobileDropdown === link.name ? 'max-h-72 opacity-100' : 'max-h-0 opacity-0'
-                    }`}
+                    className={`flex flex-col gap-3 overflow-hidden border-l-2 border-blue-400/25 pl-4 transition-all duration-300 ${mobileDropdown === link.name ? 'max-h-72 opacity-100' : 'max-h-0 opacity-0'
+                      }`}
                   >
                     {link.submenu.map(sub => (
                       <a
@@ -380,7 +382,14 @@ const Welcome = () => {
             ))}
           </nav>
 
-          <div className="border-t border-white/5 p-8">
+          <div className="flex flex-col gap-3 border-t border-white/5 p-8">
+            <button
+              type="button"
+              onClick={() => goTo('/login')}
+              className="flex w-full items-center justify-center rounded-full border border-white/20 bg-white/5 py-4 text-sm font-black uppercase text-white transition-all hover:bg-white/10 active:scale-95"
+            >
+              Sign In
+            </button>
             <button
               type="button"
               onClick={() => goTo('/signup')}
