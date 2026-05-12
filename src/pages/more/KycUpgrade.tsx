@@ -34,18 +34,18 @@ import Modal from '@/components/shared/Modal';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiErrorMessage } from '@/lib/api/http';
 import { getKycProgress, type KycStepKey } from '@/lib/kyc';
-import { 
-  submitKycBvnVerification, 
-  submitKycNinVerification, 
-  requestPhoneKycOtp, 
-  verifyPhoneKycOtp, 
-  updateCurrentUser 
+import {
+  submitKycBvnVerification,
+  submitKycNinVerification,
+  requestPhoneKycOtp,
+  verifyPhoneKycOtp,
+  updateCurrentUser
 } from '@/services/authApi';
 import { getPayoutBanks } from '@/services/paymentApi';
-import { 
-  getMyWithdrawalAccounts, 
-  saveMyWithdrawalAccount, 
-  withdrawalAccountKeys 
+import {
+  getMyWithdrawalAccounts,
+  saveMyWithdrawalAccount,
+  withdrawalAccountKeys
 } from '@/services/withdrawalAccountsApi';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -151,7 +151,7 @@ const KycUpgrade = () => {
     }
     return () => clearInterval(interval);
   }, [kycPhoneOtpExpiresAt]);
-  
+
   useEffect(() => {
     if (activeStep === 'bvn' && user && !user.hasWithdrawalAccount && !isAccountModalOpen) {
       setShowAddAccountForm(true);
@@ -575,11 +575,10 @@ const KycUpgrade = () => {
                               setSelectedAccountId(account.accountId);
                               setIsAccountModalOpen(false);
                             }}
-                            className={`flex w-full items-center justify-between rounded-xl border-2 p-4 transition-all ${
-                              selectedAccountId === account.accountId
+                            className={`flex w-full items-center justify-between rounded-xl border-2 p-4 transition-all ${selectedAccountId === account.accountId
                                 ? 'border-[#1e3a8a] bg-[#1e3a8a]/5'
                                 : 'border-border hover:border-[#1e3a8a]/30'
-                            }`}
+                              }`}
                           >
                             <div className="text-left">
                               <p className="font-semibold text-foreground">{account.bankName}</p>
@@ -604,9 +603,9 @@ const KycUpgrade = () => {
                       <div className="flex items-center justify-between">
                         <p className="text-sm text-muted-foreground">Link your bank account to continue</p>
                         {withdrawalAccountsQuery.data && withdrawalAccountsQuery.data.length > 0 && (
-                          <Button 
-                            variant="link" 
-                            size="sm" 
+                          <Button
+                            variant="link"
+                            size="sm"
                             onClick={() => setShowAddAccountForm(false)}
                             className="h-auto p-0 text-[#1e3a8a]"
                           >
@@ -614,12 +613,12 @@ const KycUpgrade = () => {
                           </Button>
                         )}
                       </div>
-                      
+
                       <div className="space-y-3">
                         <div className="space-y-2">
                           <Label>Select Bank</Label>
-                          <Select 
-                            value={newBankCode} 
+                          <Select
+                            value={newBankCode}
                             onValueChange={(value) => setNewBankCode(value)}
                           >
                             <SelectTrigger className="h-12 rounded-xl border-2 border-[#1e3a8a]/30 focus:border-[#1e3a8a]">
@@ -653,8 +652,8 @@ const KycUpgrade = () => {
                         </div>
                       )}
 
-                      <Button 
-                        onClick={handleSaveWithdrawalAccount} 
+                      <Button
+                        onClick={handleSaveWithdrawalAccount}
                         disabled={isSavingAccount || newAccountNumber.length < 10 || !newBankCode}
                         className="h-12 w-full rounded-xl bg-[#1e3a8a] text-white hover:bg-[#1e3a8a]/90"
                       >
