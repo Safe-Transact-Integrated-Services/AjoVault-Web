@@ -3,8 +3,8 @@ import BottomNav from './BottomNav';
 
 const AppLayout = () => {
   return (
-    <div className="mx-auto min-h-screen max-w-lg bg-background">
-      <main className="pb-20">
+    <div className="mx-auto min-h-screen bg-background">
+      <main className="mx-auto w-full max-w-7xl pb-20 lg:px-8 lg:pt-8">
         <Outlet />
       </main>
       <BottomNav />
