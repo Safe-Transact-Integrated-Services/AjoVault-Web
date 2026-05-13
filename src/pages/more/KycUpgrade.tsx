@@ -113,6 +113,7 @@ const KycUpgrade = () => {
   const [accountSaveError, setAccountSaveError] = useState('');
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [showAddAccountForm, setShowAddAccountForm] = useState(false);
+  const [hasDismissedAccountModal, setHasDismissedAccountModal] = useState(false);
   const queryClient = useQueryClient();
 
   const banksQuery = useQuery({
@@ -153,11 +154,11 @@ const KycUpgrade = () => {
   }, [kycPhoneOtpExpiresAt]);
 
   useEffect(() => {
-    if (activeStep === 'bvn' && user && !user.hasWithdrawalAccount && !isAccountModalOpen) {
+    if (activeStep === 'bvn' && user && !user.hasWithdrawalAccount && !isAccountModalOpen && !hasDismissedAccountModal) {
       setShowAddAccountForm(true);
       setIsAccountModalOpen(true);
     }
-  }, [activeStep, user?.hasWithdrawalAccount, isAccountModalOpen]);
+  }, [activeStep, user?.hasWithdrawalAccount, isAccountModalOpen, hasDismissedAccountModal]);
 
   useEffect(() => {
     return () => {
@@ -421,7 +422,36 @@ const KycUpgrade = () => {
 
 
 
-      <Tabs value={activeStep} onValueChange={value => setActiveStep(value as KycStepKey)} className="space-y-4">
+      <Tabs
+        value={activeStep}
+        onValueChange={value => {
+          const step = value as KycStepKey;
+
+          // Logic for BVN lock
+          if (step === 'bvn' && !kycProgress.phoneComplete) {
+            toast.error('Please complete Phone verification first.');
+            return;
+          }
+
+          // Logic for NIN lock
+          if (step === 'nin') {
+            if (!kycProgress.phoneComplete || !kycProgress.bvnComplete) {
+              toast.error('Please complete BVN verification first.');
+              return;
+            }
+
+            if (user && !user.hasWithdrawalAccount) {
+              setShowAddAccountForm(true);
+              setIsAccountModalOpen(true);
+              setHasDismissedAccountModal(false);
+              return;
+            }
+          }
+
+          setActiveStep(step);
+        }}
+        className="space-y-4"
+      >
         <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl bg-muted p-1">
           {stepMeta.map(step => {
             const isComplete =
@@ -434,7 +464,7 @@ const KycUpgrade = () => {
 
             const isLocked =
               (step.key === 'bvn' && !kycProgress.phoneComplete) ||
-              (step.key === 'nin' && (!kycProgress.phoneComplete || !kycProgress.bvnComplete));
+              (step.key === 'nin' && (!kycProgress.phoneComplete || !kycProgress.bvnComplete || !user?.hasWithdrawalAccount));
 
             return (
               <TabsTrigger
@@ -560,6 +590,7 @@ const KycUpgrade = () => {
                 onClose={() => {
                   setIsAccountModalOpen(false);
                   setShowAddAccountForm(false);
+                  setHasDismissedAccountModal(true);
                 }}
                 title="Withdrawal Account"
               >
