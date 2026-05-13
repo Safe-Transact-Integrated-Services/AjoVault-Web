@@ -61,8 +61,8 @@ const Dashboard = () => {
   }, []);
 
   return (
-    <div className="px-4 py-6 safe-top">
-      <div className="mb-6 flex items-center justify-between">
+    <div className="mx-auto max-w-7xl px-4 py-6 safe-top">
+      <div className="my-6 flex items-center justify-between">
         <div>
           <p className="text-sm text-muted-foreground">{greeting}</p>
           <h1 className="font-display text-xl font-bold text-foreground">{user?.firstName ?? 'there'}</h1>
@@ -429,8 +429,6 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
-
-      {/* Mobile grid removed in favor of responsive multi-column grid above */}
     </div>
   );
 };
