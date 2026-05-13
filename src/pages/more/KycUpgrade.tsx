@@ -77,14 +77,13 @@ const stepMeta: Array<{ key: KycStepKey; label: string; title: string; descripti
   },
 ];
 
-const getInitialStep = (nextStep: ReturnType<typeof getKycProgress>['nextStep']): KycStepKey =>
-  nextStep === 'complete' ? 'nin' : nextStep;
+const getInitialStep = (nextStep: ReturnType<typeof getKycProgress>['nextStep']): KycStepKey => 'phone';
 
 const KycUpgrade = () => {
   const navigate = useNavigate();
   const { user, refreshProfile } = useAuth();
   const kycProgress = getKycProgress(user);
-  const [activeStep, setActiveStep] = useState<KycStepKey>(() => getInitialStep(kycProgress.nextStep));
+  const [activeStep, setActiveStep] = useState<KycStepKey>('phone');
 
   const withdrawalAccountsQuery = useQuery({
     queryKey: withdrawalAccountKeys.me,
@@ -114,6 +113,11 @@ const KycUpgrade = () => {
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [showAddAccountForm, setShowAddAccountForm] = useState(false);
   const [hasDismissedAccountModal, setHasDismissedAccountModal] = useState(false);
+  const [isEditingPhone, setIsEditingPhone] = useState(false);
+  const [sessionPhoneVerified, setSessionPhoneVerified] = useState(false);
+  const [kycPhone, setKycPhone] = useState(user?.phone || '');
+  const isVerified = sessionPhoneVerified || (user?.phoneVerified && kycPhone === user?.phone);
+  const phoneInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
   const banksQuery = useQuery({
@@ -121,8 +125,6 @@ const KycUpgrade = () => {
     queryFn: getPayoutBanks,
     enabled: !!user,
   });
-
-  const [kycPhone, setKycPhone] = useState(user?.phone || '');
 
   useEffect(() => {
     if (withdrawalAccountsQuery.data && withdrawalAccountsQuery.data.length > 0 && !selectedAccountId) {
@@ -175,15 +177,15 @@ const KycUpgrade = () => {
     }
 
     setActiveStep(currentStep => {
-      if (currentStep === 'phone' && !kycProgress.phoneComplete) {
+      if (currentStep === 'phone' && !sessionPhoneVerified) {
         return currentStep;
       }
 
-      if (currentStep === 'bvn' && kycProgress.phoneComplete && !kycProgress.bvnComplete) {
+      if (currentStep === 'bvn' && sessionPhoneVerified && !kycProgress.bvnComplete) {
         return currentStep;
       }
 
-      if (currentStep === 'nin' && kycProgress.phoneComplete && kycProgress.bvnComplete && !kycProgress.ninComplete) {
+      if (currentStep === 'nin' && sessionPhoneVerified && kycProgress.bvnComplete && !kycProgress.ninComplete) {
         return currentStep;
       }
 
@@ -243,6 +245,7 @@ const KycUpgrade = () => {
 
         await refreshProfile();
         setIsKycPhoneVerifying(false);
+        setSessionPhoneVerified(true);
         setKycPhoneMessage('Phone number verified successfully.');
         toast.success('Phone number verified successfully.');
       } else {
@@ -278,6 +281,11 @@ const KycUpgrade = () => {
   };
 
   const handleBvnSubmit = async () => {
+    if (!user?.hasWithdrawalAccount) {
+      setIsAccountModalOpen(true);
+      return;
+    }
+
     let selectedAccount = withdrawalAccountsQuery.data?.find(a => a.accountId === selectedAccountId);
 
     if (!selectedAccount && withdrawalAccountsQuery.data && withdrawalAccountsQuery.data.length > 0) {
@@ -428,14 +436,14 @@ const KycUpgrade = () => {
           const step = value as KycStepKey;
 
           // Logic for BVN lock
-          if (step === 'bvn' && !kycProgress.phoneComplete) {
+          if (step === 'bvn' && !isVerified) {
             toast.error('Please complete Phone verification first.');
             return;
           }
 
           // Logic for NIN lock
           if (step === 'nin') {
-            if (!kycProgress.phoneComplete || !kycProgress.bvnComplete) {
+            if (!isVerified || !kycProgress.bvnComplete) {
               toast.error('Please complete BVN verification first.');
               return;
             }
@@ -463,8 +471,8 @@ const KycUpgrade = () => {
 
 
             const isLocked =
-              (step.key === 'bvn' && !kycProgress.phoneComplete) ||
-              (step.key === 'nin' && (!kycProgress.phoneComplete || !kycProgress.bvnComplete || !user?.hasWithdrawalAccount));
+              (step.key === 'bvn' && !isVerified) ||
+              (step.key === 'nin' && (!isVerified || !kycProgress.bvnComplete || !user?.hasWithdrawalAccount));
 
             return (
               <TabsTrigger
@@ -486,7 +494,7 @@ const KycUpgrade = () => {
                 <p className="text-sm font-semibold text-foreground">Phone Verification</p>
                 <p className="text-sm text-muted-foreground">Verify your phone number to complete this step.</p>
               </div>
-              {kycProgress.phoneComplete && kycPhone === user?.phone ? (
+              {isVerified ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-1 text-xs font-medium text-success">
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Completed
@@ -500,6 +508,7 @@ const KycUpgrade = () => {
                 <div className="flex gap-2">
                   <Input
                     id="kyc-phone"
+                    ref={phoneInputRef}
                     value={kycPhone}
                     onChange={e => {
                       setKycPhone(e.target.value.replace(/[^\d]/g, '').slice(0, 11));
@@ -509,22 +518,39 @@ const KycUpgrade = () => {
                     }}
                     placeholder="08012345678"
                     className="h-12"
-                    disabled={kycPhoneLoading || isKycPhoneVerifying}
+                    disabled={kycPhoneLoading || isKycPhoneVerifying || !isEditingPhone}
                   />
                   {!isKycPhoneVerifying && (
-                    <Button
-                      onClick={handleRequestPhoneOtp}
-                      disabled={kycPhone.length < 11 || kycPhoneLoading}
-                      className="h-12"
-                    >
-                      {kycPhoneLoading ? (
-                        <LoaderCircle className="h-4 w-4 animate-spin" />
-                      ) : kycPhone === user?.phone ? (
-                        'Verified'
-                      ) : (
-                        'Verify'
+                    <div className="flex gap-2">
+                      {!sessionPhoneVerified && (
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setIsEditingPhone(!isEditingPhone);
+                            if (!isEditingPhone) {
+                              setTimeout(() => phoneInputRef.current?.focus(), 0);
+                            }
+                          }}
+                          disabled={kycPhoneLoading}
+                          className="h-12"
+                        >
+                          {isEditingPhone ? 'Done' : 'Edit'}
+                        </Button>
                       )}
-                    </Button>
+                      <Button
+                        onClick={handleRequestPhoneOtp}
+                        disabled={kycPhone.length < 11 || kycPhoneLoading || isVerified}
+                        className="h-12"
+                      >
+                        {kycPhoneLoading ? (
+                          <LoaderCircle className="h-4 w-4 animate-spin" />
+                        ) : isVerified ? (
+                          'Verified'
+                        ) : (
+                          'Verify'
+                        )}
+                      </Button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -543,11 +569,11 @@ const KycUpgrade = () => {
                 </Alert>
               )}
 
-              {kycProgress.phoneComplete && kycPhone === user?.phone && (
+              {isVerified && (
                 <Alert>
                   <CheckCircle2 className="h-4 w-4" />
                   <AlertTitle>Phone verified</AlertTitle>
-                  <AlertDescription>Your account is already verified for Phone KYC.</AlertDescription>
+                  <AlertDescription>Your phone number has been verified for this session.</AlertDescription>
                 </Alert>
               )}
 

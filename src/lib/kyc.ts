@@ -23,7 +23,7 @@ const hasPremiumTier = (kycTier?: User['kycTier']) =>
 
 export const getKycProgress = (user: User | null | undefined): KycProgress => {
   // Tier 1 is phone verification, which is done at signup
-  const phoneComplete = !!user?.id;
+  const phoneComplete = !!user?.phoneVerified;
   const bvnComplete = !!user?.bvnLast4 || hasVerifiedTier(user?.kycTier);
   const ninComplete = !!user?.ninLast4 || hasBasicTier(user?.kycTier);
   
