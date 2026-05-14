@@ -11,6 +11,7 @@ interface IdentityUserProfileResponse {
   role: string;
   kycTier: User['kycTier'];
   emailVerified: boolean;
+  phoneVerified: boolean;
   bvnLast4?: string | null;
   ninLast4?: string | null;
   isActive: boolean;
@@ -184,6 +185,7 @@ export const mapIdentityProfileToUser = (profile: IdentityUserProfileResponse): 
     phone: profile.phoneNumber ?? '',
     email: normalizeIdentityEmail(profile.email),
     emailVerified: profile.emailVerified,
+    phoneVerified: profile.phoneVerified,
     bvnLast4: profile.bvnLast4 ?? null,
     ninLast4: profile.ninLast4 ?? null,
     kycTier: profile.kycTier,
