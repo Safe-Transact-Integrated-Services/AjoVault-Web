@@ -5,6 +5,7 @@ export interface User {
   lastName: string;
   email?: string;
   emailVerified: boolean;
+  phoneVerified: boolean;
   bvnLast4?: string | null;
   ninLast4?: string | null;
   avatar?: string;
