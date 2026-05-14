@@ -14,6 +14,7 @@ interface IdentityUserProfileResponse {
   bvnLast4?: string | null;
   ninLast4?: string | null;
   isActive: boolean;
+  hasWithdrawalAccount: boolean;
   createdAtUtc: string;
   lastLoginAtUtc?: string | null;
 }
@@ -56,8 +57,16 @@ export interface SubmitKycNinInput {
 
 export interface SubmitKycBvnInput {
   bvn: string;
-  accountNumber: string;
-  bankCode: string;
+  accountNumber?: string;
+  bankCode?: string;
+}
+
+export interface SubmitKycDocumentsInput {
+  idType: 'nin' | 'drivers' | 'voters' | 'passport';
+  idDocumentName: string;
+  idDocumentDataUrl: string;
+  selfieName: string;
+  selfieDataUrl: string;
 }
 
 export interface KycVerificationResponse {
@@ -181,6 +190,8 @@ export const mapIdentityProfileToUser = (profile: IdentityUserProfileResponse): 
     creditScore: 0,
     role: profile.role,
     isActive: profile.isActive,
+    hasWithdrawalAccount: profile.hasWithdrawalAccount,
+    // hasWithdrawalAccount: true,
     createdAt: profile.createdAtUtc,
     lastLoginAt: profile.lastLoginAtUtc ?? null,
   };
@@ -338,14 +349,35 @@ export const verifyEmailKycOtp = (input: VerifyEmailKycOtpInput) =>
     },
   });
 
+export const requestPhoneKycOtp = (input: AuthContactInput) =>
+  apiRequest<OtpChallengeResponse>('/api/identity/me/kyc/phone/request-otp', {
+    method: 'POST',
+    json: normalizeContactPayload(input),
+  });
+
+export const verifyPhoneKycOtp = (input: AuthContactInput, otp: string) =>
+  apiRequest<OtpVerificationResponse>('/api/identity/me/kyc/phone/verify', {
+    method: 'POST',
+    json: {
+      ...normalizeContactPayload(input),
+      otp,
+    },
+  });
+
 export const submitKycBvnVerification = (input: SubmitKycBvnInput) =>
   apiRequest<KycVerificationResponse>('/api/identity/me/kyc/bvn', {
     method: 'POST',
     json: {
       bvn: input.bvn.trim(),
-      accountNumber: input.accountNumber.trim(),
-      bankCode: input.bankCode,
+      accountNumber: input.accountNumber?.trim() || '',
+      bankCode: input.bankCode || '',
     },
+  });
+
+export const submitKycDocuments = (input: SubmitKycDocumentsInput) =>
+  apiRequest<KycVerificationResponse>('/api/identity/me/kyc/documents', {
+    method: 'POST',
+    json: input,
   });
 
 export const logoutUser = async (refreshToken: string) => {

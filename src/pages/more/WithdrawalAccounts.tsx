@@ -45,6 +45,7 @@ const WithdrawalAccounts = () => {
   const canAddWithdrawalAccount = withdrawalAccounts.length < 2;
   const selectedBank = banksQuery.data?.find(bank => bank.code === bankCode) ?? null;
   const isFirstWithdrawalAccount = withdrawalAccounts.length === 0;
+  const isInitialLoading = (withdrawalAccountsQuery.isFetching && withdrawalAccounts.length === 0) || banksQuery.isLoading;
 
   const resetAddAccountForm = () => {
     setAccountNumber('');
@@ -136,14 +137,15 @@ const WithdrawalAccounts = () => {
         <p className="text-sm text-muted-foreground">Save up to two verified bank accounts.</p>
       </div>
 
-      {(withdrawalAccountsQuery.isLoading || banksQuery.isLoading) && (
+      {isInitialLoading && (
         <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
           <LoaderCircle className="h-4 w-4 animate-spin" />
           Loading withdrawal accounts...
         </div>
       )}
 
-      <Card className="space-y-4 p-4">
+      {!isInitialLoading && (
+        <Card className="space-y-4 p-4">
         <div className="flex items-center gap-2">
           <Landmark className="h-4 w-4 text-accent" />
           <h2 className="font-semibold text-foreground">Saved Accounts</h2>
@@ -314,7 +316,8 @@ const WithdrawalAccounts = () => {
         ) : (
           <p className="text-sm text-muted-foreground">You already have two verified withdrawal accounts. Remove one to add another.</p>
         )}
-      </Card>
+        </Card>
+      )}
     </div>
   );
 };
