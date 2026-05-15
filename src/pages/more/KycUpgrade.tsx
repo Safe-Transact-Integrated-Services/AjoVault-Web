@@ -443,7 +443,7 @@ const KycUpgrade = () => {
 
           // Logic for NIN lock
           if (step === 'nin') {
-            if (!isVerified || (!kycProgress.bvnComplete && !kycProgress.bvnPending)) {
+            if (!isVerified || !user?.bvnLast4) {
               toast.error('Please complete BVN verification first.');
               return;
             }
@@ -472,7 +472,7 @@ const KycUpgrade = () => {
 
             const isLocked =
               (step.key === 'bvn' && !isVerified) ||
-              (step.key === 'nin' && (!isVerified || (!kycProgress.bvnComplete && !kycProgress.bvnPending) || !user?.hasWithdrawalAccount));
+              (step.key === 'nin' && (!isVerified || !user?.bvnLast4 || !user?.hasWithdrawalAccount));
 
             return (
               <TabsTrigger
@@ -969,6 +969,10 @@ const KycUpgrade = () => {
                     </>
                   ) : kycProgress.ninComplete ? (
                     'NIN verification complete'
+                  ) : kycProgress.bvnPending ? (
+                    'Waiting for BVN review'
+                  ) : !kycProgress.bvnComplete ? (
+                    'Complete BVN verification'
                   ) : (
                     'Submit NIN'
                   )}
