@@ -784,8 +784,8 @@ const KycUpgrade = () => {
                   maxLength={11}
                   inputMode="numeric"
                   className="h-12"
-                  readOnly={!user?.hasWithdrawalAccount || kycProgress.bvnComplete}
-                  disabled={kycProgress.bvnComplete}
+                  readOnly={!user?.hasWithdrawalAccount || kycProgress.bvnComplete || kycProgress.bvnPending}
+                  disabled={kycProgress.bvnComplete || kycProgress.bvnPending}
                 />
                 {user?.bvnLast4 ? (
                   <p className="text-xs text-muted-foreground text-right">Saved BVN ending in {user.bvnLast4}</p>
@@ -833,7 +833,7 @@ const KycUpgrade = () => {
                         startCamera();
                       }
                     }}
-                    disabled={kycProgress.bvnComplete}
+                    disabled={kycProgress.bvnComplete || kycProgress.bvnPending}
                     className="flex w-full flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border py-8 text-muted-foreground transition-colors hover:border-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Camera className="h-8 w-8" />
@@ -871,18 +871,20 @@ const KycUpgrade = () => {
                 </Alert>
               ) : null}
 
-              <Button className="h-12 w-full" onClick={handleBvnSubmit} disabled={!canSubmitBvn || kycProgress.bvnComplete}>
-                {bvnLoading ? (
-                  <>
-                    <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-                    Submitting BVN...
-                  </>
-                ) : kycProgress.bvnComplete ? (
-                  'BVN verification complete'
-                ) : (
-                  'Submit BVN verification'
-                )}
-              </Button>
+                <Button className="h-12 w-full" onClick={handleBvnSubmit} disabled={!canSubmitBvn || kycProgress.bvnComplete || kycProgress.bvnPending}>
+                  {bvnLoading ? (
+                    <>
+                      <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                      Submitting BVN...
+                    </>
+                  ) : kycProgress.bvnComplete ? (
+                    'BVN verification complete'
+                  ) : kycProgress.bvnPending ? (
+                    'BVN review in progress'
+                  ) : (
+                    'Submit BVN verification'
+                  )}
+                </Button>
             </div>
           </Card>
         </TabsContent>
