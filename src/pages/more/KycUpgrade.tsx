@@ -933,8 +933,8 @@ const KycUpgrade = () => {
                     maxLength={11}
                     inputMode="numeric"
                     className="h-12"
-                    readOnly={kycProgress.ninComplete || kycProgress.bvnPending}
-                    disabled={kycProgress.ninComplete || kycProgress.bvnPending}
+                    readOnly={kycProgress.ninComplete || !kycProgress.bvnComplete || kycProgress.bvnPending}
+                    disabled={kycProgress.ninComplete || !kycProgress.bvnComplete || kycProgress.bvnPending}
                   />
                 </div>
 
@@ -958,7 +958,7 @@ const KycUpgrade = () => {
                   </Alert>
                 ) : null}
 
-                <Button className="h-12 w-full" onClick={handleNinSubmit} disabled={!canSubmitNin || kycProgress.ninComplete || kycProgress.bvnPending}>
+                <Button className="h-12 w-full" onClick={handleNinSubmit} disabled={!canSubmitNin || kycProgress.ninComplete || !kycProgress.bvnComplete || kycProgress.bvnPending}>
                   {ninLoading ? (
                     <>
                       <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
