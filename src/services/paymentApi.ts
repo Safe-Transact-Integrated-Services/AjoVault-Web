@@ -5,6 +5,7 @@ export interface InitializePaymentCheckoutInput {
   currency?: string;
   email?: string;
   purpose?: string;
+  idempotencyKey?: string;
 }
 
 export interface QuoteWalletFundingInput {
@@ -145,6 +146,7 @@ export const quoteWalletFunding = (input: QuoteWalletFundingInput) =>
 export const initializePaymentCheckout = (input: InitializePaymentCheckoutInput) =>
   apiRequest<InitializePaymentCheckoutResponse>('/api/payments/checkout/initialize', {
     method: 'POST',
+    headers: input.idempotencyKey ? { 'X-Idempotency-Key': input.idempotencyKey } : undefined,
     json: {
       amount: input.amount,
       currency: input.currency ?? 'NGN',
