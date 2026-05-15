@@ -155,12 +155,7 @@ const KycUpgrade = () => {
     return () => clearInterval(interval);
   }, [kycPhoneOtpExpiresAt]);
 
-  useEffect(() => {
-    if (activeStep === 'bvn' && user && !user.hasWithdrawalAccount && !isAccountModalOpen && !hasDismissedAccountModal) {
-      setShowAddAccountForm(true);
-      setIsAccountModalOpen(true);
-    }
-  }, [activeStep, user?.hasWithdrawalAccount, isAccountModalOpen, hasDismissedAccountModal]);
+  // Removed automatic modal trigger effect
 
   useEffect(() => {
     return () => {
@@ -196,6 +191,7 @@ const KycUpgrade = () => {
     kycProgress.bvnComplete,
     kycProgress.ninComplete,
     kycProgress.nextStep,
+    sessionPhoneVerified,
   ]);
 
   const canSubmitNin =
@@ -205,7 +201,8 @@ const KycUpgrade = () => {
   const canSubmitBvn =
     bvn.length === 11 &&
     !!selfieDataUrl &&
-    !bvnLoading;
+    !bvnLoading &&
+    !!user?.hasWithdrawalAccount;
 
 
 
@@ -441,6 +438,8 @@ const KycUpgrade = () => {
             return;
           }
 
+          // Logic for BVN lock removed - modal now triggered by interaction
+
           // Logic for NIN lock
           if (step === 'nin') {
             if (!isVerified || !kycProgress.bvnComplete) {
@@ -472,7 +471,7 @@ const KycUpgrade = () => {
 
             const isLocked =
               (step.key === 'bvn' && !isVerified) ||
-              (step.key === 'nin' && (!isVerified || !kycProgress.bvnComplete || !user?.hasWithdrawalAccount));
+              (step.key === 'nin' && (!isVerified || !kycProgress.bvnComplete || kycProgress.bvnPending || !user?.hasWithdrawalAccount));
 
             return (
               <TabsTrigger
@@ -481,7 +480,17 @@ const KycUpgrade = () => {
                 className="flex h-auto flex-col gap-0.5 rounded-lg px-2 py-2 text-center"
               >
                 <span className="text-[11px] font-semibold">{step.label}</span>
-                <span className="text-[10px] leading-tight">{isComplete ? 'Completed' : step.title}</span>
+                <span className="text-[10px] leading-tight">
+                  {step.key === 'phone' && kycProgress.phoneComplete && 'Completed'}
+                  {step.key === 'bvn' && kycProgress.bvnComplete && 'Completed'}
+                  {step.key === 'bvn' && kycProgress.bvnPending && 'Pending Review'}
+                  {step.key === 'nin' && kycProgress.ninComplete && 'Completed'}
+                  {step.key === 'nin' && kycProgress.ninPending && 'Pending Review'}
+                  {!(step.key === 'phone' && kycProgress.phoneComplete) &&
+                    !(step.key === 'bvn' && (kycProgress.bvnComplete || kycProgress.bvnPending)) &&
+                    !(step.key === 'nin' && (kycProgress.ninComplete || kycProgress.ninPending)) &&
+                    step.title}
+                </span>
               </TabsTrigger>
             );
           })}
@@ -606,8 +615,35 @@ const KycUpgrade = () => {
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Completed
                 </span>
+              ) : kycProgress.bvnPending ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  Pending Review
+                </span>
               ) : null}
             </div>
+
+            {!user?.hasWithdrawalAccount && (
+              <Alert className="border-warning/50 bg-warning/5 py-3">
+                <AlertCircle className="h-4 w-4 text-warning" />
+                <div className="flex flex-col gap-0.5">
+                  <AlertTitle className="text-[13px] font-bold text-warning">Withdrawal Account Required</AlertTitle>
+                  <AlertDescription className="text-xs text-foreground/80">
+                    You must link a verified withdrawal account before you can verify your BVN.
+                    <button
+                      type="button"
+                      className="ml-1 font-bold text-accent hover:underline"
+                      onClick={() => {
+                        setShowAddAccountForm(true);
+                        setIsAccountModalOpen(true);
+                      }}
+                    >
+                      Link Account Now
+                    </button>
+                  </AlertDescription>
+                </div>
+              </Alert>
+            )}
 
             <div className="space-y-4 pt-2">
 
@@ -734,13 +770,22 @@ const KycUpgrade = () => {
                   id="kyc-bvn"
                   value={bvn}
                   onChange={event => {
+                    if (!user?.hasWithdrawalAccount) return;
                     setBvn(event.target.value.replace(/[^\d]/g, '').slice(0, 11));
                     setBvnError('');
                   }}
-                  placeholder="22123456789"
+                  onClick={() => {
+                    if (!user?.hasWithdrawalAccount) {
+                      setShowAddAccountForm(true);
+                      setIsAccountModalOpen(true);
+                    }
+                  }}
+                  placeholder={user?.hasWithdrawalAccount ? "22123456789" : "Link withdrawal account first"}
                   maxLength={11}
                   inputMode="numeric"
                   className="h-12"
+                  readOnly={!user?.hasWithdrawalAccount || kycProgress.bvnComplete}
+                  disabled={kycProgress.bvnComplete}
                 />
                 {user?.bvnLast4 ? (
                   <p className="text-xs text-muted-foreground text-right">Saved BVN ending in {user.bvnLast4}</p>
@@ -780,8 +825,16 @@ const KycUpgrade = () => {
                 ) : (
                   <button
                     type="button"
-                    onClick={startCamera}
-                    className="flex w-full flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border py-8 text-muted-foreground transition-colors hover:border-accent hover:text-foreground"
+                    onClick={() => {
+                      if (!user?.hasWithdrawalAccount) {
+                        setShowAddAccountForm(true);
+                        setIsAccountModalOpen(true);
+                      } else {
+                        startCamera();
+                      }
+                    }}
+                    disabled={kycProgress.bvnComplete}
+                    className="flex w-full flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border py-8 text-muted-foreground transition-colors hover:border-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Camera className="h-8 w-8" />
                     <span className="text-sm">Take Live Selfie</span>
@@ -818,7 +871,7 @@ const KycUpgrade = () => {
                 </Alert>
               ) : null}
 
-              <Button className="h-12 w-full" onClick={handleBvnSubmit} disabled={!canSubmitBvn}>
+              <Button className="h-12 w-full" onClick={handleBvnSubmit} disabled={!canSubmitBvn || kycProgress.bvnComplete}>
                 {bvnLoading ? (
                   <>
                     <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
@@ -845,6 +898,11 @@ const KycUpgrade = () => {
                 <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2.5 py-1 text-xs font-medium text-success">
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Completed
+                </span>
+              ) : kycProgress.ninPending ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  Pending Review
                 </span>
               ) : null}
             </div>
@@ -875,6 +933,8 @@ const KycUpgrade = () => {
                     maxLength={11}
                     inputMode="numeric"
                     className="h-12"
+                    readOnly={kycProgress.ninComplete || kycProgress.bvnPending}
+                    disabled={kycProgress.ninComplete || kycProgress.bvnPending}
                   />
                 </div>
 
@@ -898,7 +958,7 @@ const KycUpgrade = () => {
                   </Alert>
                 ) : null}
 
-                <Button className="h-12 w-full" onClick={handleNinSubmit} disabled={!canSubmitNin}>
+                <Button className="h-12 w-full" onClick={handleNinSubmit} disabled={!canSubmitNin || kycProgress.ninComplete || kycProgress.bvnPending}>
                   {ninLoading ? (
                     <>
                       <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />

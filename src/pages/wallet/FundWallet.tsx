@@ -40,6 +40,7 @@ const FundWallet = () => {
   const [isLaunchingCheckout, setIsLaunchingCheckout] = useState(false);
   const [isProvisioningVirtualAccount, setIsProvisioningVirtualAccount] = useState(false);
   const [receipt, setReceipt] = useState<PaymentCheckoutStatusResponse | null>(null);
+  const [idempotencyKey, setIdempotencyKey] = useState('');
 
   const amountValue = Number(amount || '0');
   const fundingQuoteQuery = useQuery({
@@ -76,6 +77,7 @@ const FundWallet = () => {
     }
 
     setError('');
+    setIdempotencyKey(crypto.randomUUID());
     setStep('provider');
   };
 
@@ -96,6 +98,7 @@ const FundWallet = () => {
         currency: 'NGN',
         email: normalizedEmail,
         purpose: 'wallet_fund',
+        idempotencyKey,
       });
 
       const popupResult = await resumePaystackTransaction(initializedCheckout.accessCode);

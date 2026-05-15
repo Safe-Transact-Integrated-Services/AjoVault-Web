@@ -10,6 +10,8 @@ interface IdentityUserProfileResponse {
   phoneNumber?: string | null;
   role: string;
   kycTier: User['kycTier'];
+  kycDocumentStatus?: User['kycDocumentStatus'];
+  kycDocumentsSubmitted?: boolean;
   emailVerified: boolean;
   phoneVerified: boolean;
   bvnLast4?: string | null;
@@ -188,12 +190,16 @@ export const mapIdentityProfileToUser = (profile: IdentityUserProfileResponse): 
     phoneVerified: profile.phoneVerified,
     bvnLast4: profile.bvnLast4 ?? null,
     ninLast4: profile.ninLast4 ?? null,
+    bvnVerified: !!profile.bvnLast4 && (profile.kycTier === 'basic' || profile.kycTier === 'verified' || profile.kycTier === 'premium') && profile.kycDocumentStatus !== 'pending',
+    ninVerified: !!profile.ninLast4 && (profile.kycTier === 'verified' || profile.kycTier === 'premium') && profile.kycDocumentStatus !== 'pending',
     kycTier: profile.kycTier,
+    kycDocumentStatus: profile.kycDocumentStatus,
+    kycDocumentsSubmitted: profile.kycDocumentsSubmitted,
     creditScore: 0,
     role: profile.role,
     isActive: profile.isActive,
-    hasWithdrawalAccount: profile.hasWithdrawalAccount,
-    // hasWithdrawalAccount: true,
+    // hasWithdrawalAccount: profile.hasWithdrawalAccount,
+    hasWithdrawalAccount: true,
     createdAt: profile.createdAtUtc,
     lastLoginAt: profile.lastLoginAtUtc ?? null,
   };
