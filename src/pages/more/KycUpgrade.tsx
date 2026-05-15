@@ -303,6 +303,7 @@ const KycUpgrade = () => {
       setBvnMessage(response.message);
       await refreshProfile();
       toast.success(response.message);
+      setActiveStep('nin');
     } catch (error) {
       const nextError = getApiErrorMessage(error, 'Unable to submit your BVN right now.');
       setBvnError(nextError);
@@ -442,7 +443,7 @@ const KycUpgrade = () => {
 
           // Logic for NIN lock
           if (step === 'nin') {
-            if (!isVerified || !kycProgress.bvnComplete) {
+            if (!isVerified || (!kycProgress.bvnComplete && !kycProgress.bvnPending)) {
               toast.error('Please complete BVN verification first.');
               return;
             }
@@ -471,7 +472,7 @@ const KycUpgrade = () => {
 
             const isLocked =
               (step.key === 'bvn' && !isVerified) ||
-              (step.key === 'nin' && (!isVerified || !kycProgress.bvnComplete || kycProgress.bvnPending || !user?.hasWithdrawalAccount));
+              (step.key === 'nin' && (!isVerified || (!kycProgress.bvnComplete && !kycProgress.bvnPending) || !user?.hasWithdrawalAccount));
 
             return (
               <TabsTrigger
