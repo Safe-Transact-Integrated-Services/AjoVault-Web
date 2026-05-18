@@ -61,7 +61,7 @@ const Dashboard = () => {
   }, []);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 safe-top">
+    <div className="px-4 py-6 safe-top">
       <div className="my-6 flex items-center justify-between">
         <div>
           <p className="text-sm text-muted-foreground">{greeting}</p>
