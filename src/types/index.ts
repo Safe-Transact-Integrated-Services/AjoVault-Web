@@ -8,6 +8,8 @@ export interface User {
   phoneVerified: boolean;
   bvnLast4?: string | null;
   ninLast4?: string | null;
+  bvnVerified: boolean;
+  ninVerified: boolean;
   avatar?: string;
   kycTier: 'none' | 'basic' | 'verified' | 'premium';
   kycDocumentStatus?: 'none' | 'pending' | 'verified' | 'rejected';
