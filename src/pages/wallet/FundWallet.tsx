@@ -52,6 +52,9 @@ const FundWallet = () => {
   const normalizedEmail = user?.email?.trim() ?? '';
   const displayAmount = formatCurrency(amountValue || 0);
   const fundingQuote = fundingQuoteQuery.data;
+  const displayTotalCharge = fundingQuote
+    ? Math.max(fundingQuote.totalCharge, fundingQuote.fundingAmount + fundingQuote.serviceFee + fundingQuote.processorFeeEstimate)
+    : amountValue;
   const fundingOptions = walletQuery.data?.fundingOptions;
   const providerName = toProviderLabel(fundingOptions?.checkoutProvider);
   const transferAccountProviderName = toProviderLabel(fundingOptions?.transferAccountProvider);
@@ -242,7 +245,7 @@ const FundWallet = () => {
               <SummaryRow label="Wallet credit" value={formatCurrency(fundingQuote.fundingAmount)} />
               <SummaryRow label="Service fee" value={formatCurrency(fundingQuote.serviceFee)} />
               <SummaryRow label="Estimated processor fee" value={formatCurrency(fundingQuote.processorFeeEstimate)} />
-              <SummaryRow label="Total charge" value={formatCurrency(fundingQuote.totalCharge)} />
+              <SummaryRow label="Total charge" value={formatCurrency(displayTotalCharge)} />
             </Card>
           )}
 
@@ -324,7 +327,7 @@ const FundWallet = () => {
               <SummaryRow label="Wallet Credit" value={formatCurrency(fundingQuote?.fundingAmount ?? amountValue)} />
               <SummaryRow label="Service Fee" value={formatCurrency(fundingQuote?.serviceFee ?? 0)} />
               <SummaryRow label="Estimated Processor Fee" value={formatCurrency(fundingQuote?.processorFeeEstimate ?? 0)} />
-              <SummaryRow label="Total Charge" value={formatCurrency(fundingQuote?.totalCharge ?? amountValue)} />
+              <SummaryRow label="Total Charge" value={formatCurrency(displayTotalCharge)} />
               <SummaryRow label="Purpose" value="Wallet funding" />
             </div>
           </Card>
