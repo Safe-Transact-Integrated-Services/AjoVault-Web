@@ -61,10 +61,8 @@ const Dashboard = () => {
   }, []);
 
   return (
-    <div className="px-4 py-6 safe-top">
-      <div className="mb-6 flex items-center justify-between">
-        {/* <div className="mx-auto max-w-7xl px-4 py-6 safe-top">
-      <div className="my-6 flex items-center justify-between"> */}
+    <div className="mx-auto max-w-7xl px-4 py-6 safe-top">
+      <div className="my-6 flex items-center justify-between">
         <div>
           <p className="text-sm text-muted-foreground">{greeting}</p>
           <h1 className="font-display text-xl font-bold text-foreground">{user?.firstName ?? 'there'}</h1>
@@ -232,8 +230,9 @@ const Dashboard = () => {
                         className="flex items-center gap-3 border-b border-border/50 pb-3 last:border-0 last:pb-0"
                       >
                         <div
-                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${transaction.type === "credit" ? "bg-success/10" : "bg-destructive/10"
-                            }`}
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                            transaction.type === "credit" ? "bg-success/10" : "bg-destructive/10"
+                          }`}
                         >
                           {transaction.type === "credit" ? (
                             <ArrowDownLeft className="h-4 w-4 text-success" />
@@ -246,8 +245,9 @@ const Dashboard = () => {
                           <p className="text-[10px] text-muted-foreground">{formatDate(transaction.date)}</p>
                         </div>
                         <p
-                          className={`text-xs font-bold ${transaction.type === "credit" ? "text-success" : "text-destructive"
-                            }`}
+                          className={`text-xs font-bold ${
+                            transaction.type === "credit" ? "text-success" : "text-destructive"
+                          }`}
                         >
                           {transaction.type === "credit" ? "+" : "-"}{formatCurrency(transaction.amount)}
                         </p>
