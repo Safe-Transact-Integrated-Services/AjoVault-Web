@@ -40,25 +40,29 @@ const FundWallet = () => {
   const [isLaunchingCheckout, setIsLaunchingCheckout] = useState(false);
   const [isProvisioningVirtualAccount, setIsProvisioningVirtualAccount] = useState(false);
   const [receipt, setReceipt] = useState<PaymentCheckoutStatusResponse | null>(null);
+  const [idempotencyKey, setIdempotencyKey] = useState('');
 
   const amountValue = Number(amount || '0');
   const fundingQuoteQuery = useQuery({
     queryKey: ['payments', 'wallet-funding-quote', amountValue],
     queryFn: () => quoteWalletFunding({ amount: amountValue, currency: 'NGN' }),
-    enabled: Number.isFinite(amountValue) && amountValue >= 100,
+    enabled: Number.isFinite(amountValue) && amountValue >= 500,
     staleTime: 30 * 1000,
   });
   const normalizedEmail = user?.email?.trim() ?? '';
   const displayAmount = formatCurrency(amountValue || 0);
   const fundingQuote = fundingQuoteQuery.data;
+  const displayTotalCharge = fundingQuote
+    ? Math.max(fundingQuote.totalCharge, fundingQuote.fundingAmount + fundingQuote.serviceFee + fundingQuote.processorFeeEstimate)
+    : amountValue;
   const fundingOptions = walletQuery.data?.fundingOptions;
   const providerName = toProviderLabel(fundingOptions?.checkoutProvider);
   const transferAccountProviderName = toProviderLabel(fundingOptions?.transferAccountProvider);
   const virtualAccount = walletQuery.data?.virtualAccount ?? null;
 
   const validateDetails = () => {
-    if (!Number.isFinite(amountValue) || amountValue < 100) {
-      return 'Minimum funding amount is NGN 100.';
+    if (!Number.isFinite(amountValue) || amountValue < 500) {
+      return 'Minimum funding amount is NGN 500.';
     }
 
     if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
@@ -76,6 +80,7 @@ const FundWallet = () => {
     }
 
     setError('');
+    setIdempotencyKey(crypto.randomUUID());
     setStep('provider');
   };
 
@@ -96,6 +101,7 @@ const FundWallet = () => {
         currency: 'NGN',
         email: normalizedEmail,
         purpose: 'wallet_fund',
+        idempotencyKey,
       });
 
       const popupResult = await resumePaystackTransaction(initializedCheckout.accessCode);
@@ -201,7 +207,7 @@ const FundWallet = () => {
               id="wallet-funding-amount"
               type="number"
               inputMode="numeric"
-              min="100"
+              min="500"
               step="100"
               placeholder="0"
               value={amount}
@@ -213,7 +219,7 @@ const FundWallet = () => {
               }}
               className="h-14 text-center text-2xl font-bold"
             />
-            <p className="text-xs text-muted-foreground">Minimum funding amount is NGN 100.</p>
+            <p className="text-xs text-muted-foreground">Minimum funding amount is NGN 500.</p>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -239,7 +245,7 @@ const FundWallet = () => {
               <SummaryRow label="Wallet credit" value={formatCurrency(fundingQuote.fundingAmount)} />
               <SummaryRow label="Service fee" value={formatCurrency(fundingQuote.serviceFee)} />
               <SummaryRow label="Estimated processor fee" value={formatCurrency(fundingQuote.processorFeeEstimate)} />
-              <SummaryRow label="Total charge" value={formatCurrency(fundingQuote.totalCharge)} />
+              <SummaryRow label="Total charge" value={formatCurrency(displayTotalCharge)} />
             </Card>
           )}
 
@@ -321,7 +327,7 @@ const FundWallet = () => {
               <SummaryRow label="Wallet Credit" value={formatCurrency(fundingQuote?.fundingAmount ?? amountValue)} />
               <SummaryRow label="Service Fee" value={formatCurrency(fundingQuote?.serviceFee ?? 0)} />
               <SummaryRow label="Estimated Processor Fee" value={formatCurrency(fundingQuote?.processorFeeEstimate ?? 0)} />
-              <SummaryRow label="Total Charge" value={formatCurrency(fundingQuote?.totalCharge ?? amountValue)} />
+              <SummaryRow label="Total Charge" value={formatCurrency(displayTotalCharge)} />
               <SummaryRow label="Purpose" value="Wallet funding" />
             </div>
           </Card>
