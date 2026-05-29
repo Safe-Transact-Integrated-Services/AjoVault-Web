@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import FeaturedPartners from '@/components/landing/FeaturedPartners';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowRight,
@@ -46,20 +47,23 @@ type IconCard = {
   icon: LucideIcon;
 };
 
+const featureMenuItems = [
+  { name: 'Rotating group savings', href: '#features' },
+  { name: 'Thrift contributions', href: '#features' },
+  { name: 'Personal savings', href: '#features' },
+  { name: 'Investment clan', href: '#features' },
+];
+
 const navLinks: NavLink[] = [
   {
     name: 'FEATURES',
     href: '#features',
-    submenu: [
-      { name: 'Join Circle', href: '#features' },
-      { name: 'Fundraising', href: '#features' },
-      { name: 'Group Savings', href: '#features' },
-    ],
+    submenu: featureMenuItems,
   },
   {
-    name: 'HOW IT WORKS',
-    href: '#how-it-works',
-    submenu: [{ name: 'Become an Agent', href: '#how-it-works' }],
+    name: 'PLATFORM',
+    href: '#platform',
+    submenu: [{ name: 'Become an Agent', href: '/agent/apply' }],
   },
   { name: 'SERVICES', href: '#services' },
   { name: 'ABOUT US', href: '#about-us' },
@@ -285,7 +289,7 @@ const Welcome = () => {
             <button
               type="button"
               onClick={() => goTo('/login')}
-              className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/5 px-7 py-3 text-sm font-black uppercase text-white transition-all hover:bg-white/10 active:scale-95"
+              className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/5 px-7 py-3 text-[10px] font-black uppercase text-white transition-all hover:bg-white/10 active:scale-95"
             >
               Sign In
             </button>
@@ -497,6 +501,8 @@ const Welcome = () => {
           />
         </section>
 
+        <FeaturedPartners />
+
         <section id="features" className="bg-white py-24 scroll-mt-24">
           <div className="mx-auto max-w-7xl px-6">
             <SectionIntro
@@ -552,11 +558,11 @@ const Welcome = () => {
           </div>
         </section>
 
-        <section id="how-it-works" className="relative overflow-hidden bg-white py-24 scroll-mt-24">
+        <section id="platform" className="relative overflow-hidden bg-white py-24 scroll-mt-24">
           <div className="mx-auto max-w-7xl px-6">
             <SectionIntro
               eyebrow="Process"
-              title="HOW IT WORKS"
+              title="PLATFORM"
               description="Simple steps to digitize your community savings experience."
             />
 
@@ -730,8 +736,8 @@ const Welcome = () => {
             </div>
           </div>
 
-          <div className="mb-12 grid gap-12 border-b border-white/10 pb-12 md:grid-cols-4">
-            <div>
+          <div className="mb-12 flex flex-col gap-12 border-b border-white/10 pb-12 lg:flex-row lg:items-start lg:justify-between lg:gap-16 xl:gap-24">
+            <div className="max-w-sm shrink-0">
               <div className="mb-6 flex items-center gap-2">
                 <span className="rounded-lg bg-[#3B82F6] p-1.5 shadow-lg shadow-blue-500/20">
                   <ShieldCheck className="h-6 w-6 text-white" />
@@ -755,9 +761,11 @@ const Welcome = () => {
               </div>
             </div>
 
-            <FooterLinks title="The Company" links={['About Us', 'Features', 'How It Works', 'Contact Us']} />
-            <FooterLinks title="Product" links={['Features', 'How It Works', 'Security', 'Get Started']} />
-            <FooterLinks title="Resources" links={['Help Center', 'Safety Guide', 'Community Rules', 'Privacy']} />
+            <div className="grid gap-10 sm:grid-cols-2 md:gap-12 lg:grid-cols-3 lg:gap-16 xl:gap-20">
+              <FooterLinks title="The Company" links={['About Us', 'Features', 'Platform', 'Contact Us']} />
+              <FooterLinks title="Features" links={featureMenuItems} />
+              <FooterLinks title="Resources" links={['Help Center', 'Safety Guide', 'Community Rules', 'Privacy']} />
+            </div>
           </div>
 
           <div className="flex flex-col items-center justify-between gap-4 text-[10px] font-bold uppercase text-white/25 md:flex-row">
@@ -847,25 +855,33 @@ const ServiceCard = ({ title, description, icon: Icon }: IconCard) => (
   </div>
 );
 
-const FooterLinks = ({ title, links }: { title: string; links: string[] }) => (
-  <div>
-    <h3 className="mb-6 text-xs font-black uppercase text-[#3B82F6]">{title}</h3>
-    <ul className="space-y-4 text-sm font-bold uppercase text-white/45">
-      {links.map(link => {
-        const href = link === 'Get Started'
-          ? '/signup'
-          : `#${link.toLowerCase().replace(/\s+/g, '-').replace('get-started', 'hero')}`;
+type FooterLinkItem = string | { name: string; href: string };
 
-        return (
-          <li key={link}>
-            <a href={href} className="transition-colors hover:text-white">
-              {link}
-            </a>
-          </li>
-        );
-      })}
-    </ul>
-  </div>
-);
+const FooterLinks = ({ title, links }: { title: string; links: FooterLinkItem[] }) => {
+  return (
+    <div>
+      <h3 className="mb-6 text-xs font-black uppercase text-[#3B82F6]">{title}</h3>
+      <ul className="space-y-4 text-sm font-bold uppercase text-white/45">
+        {links.map(link => {
+          const label = typeof link === 'string' ? link : link.name;
+          const href =
+            typeof link === 'string'
+              ? link === 'Get Started'
+                ? '/signup'
+                : `#${link.toLowerCase().replace(/\s+/g, '-').replace('get-started', 'hero')}`
+              : link.href;
+
+          return (
+            <li key={label}>
+              <a href={href} className="transition-colors hover:text-white">
+                {label}
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+};
 
 export default Welcome;

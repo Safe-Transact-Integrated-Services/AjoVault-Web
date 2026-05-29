@@ -208,7 +208,7 @@ const BecomeAgent = () => {
   }
 
   return (
-    <div className="min-h-screen px-4 py-6 safe-top pb-10">
+    <div className="mx-auto min-h-screen max-w-2xl px-4 py-6 safe-top pb-10">
       {step !== 'submitted' && (
         <button onClick={goBack} className="mb-6 flex items-center gap-1 text-sm text-muted-foreground">
           <ArrowLeft className="h-4 w-4" /> Back
