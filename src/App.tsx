@@ -128,7 +128,6 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Welcome />} />
-
               <Route path="/signup" element={<Signup />} />
               <Route path="/login" element={<Login />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
