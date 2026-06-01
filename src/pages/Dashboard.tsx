@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/carousel';
 import { circlesKeys, getCircles } from '@/services/circlesApi';
 import { dashboardKeys, getDashboardSummary } from '@/services/dashboardApi';
-import { formatCurrency, formatDate } from '@/services/mockData';
+import { formatCurrency, formatDate, formatTime } from '@/services/mockData';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -75,7 +75,42 @@ const Dashboard = () => {
   const wallet = dashboardQuery.data?.wallet;
   const savings = dashboardQuery.data?.savings;
   const circles = dashboardQuery.data?.circles;
-  const recentActivities = dashboardQuery.data?.recentActivities ?? [];
+  const recentActivitiesRaw = dashboardQuery.data?.recentActivities ?? [];
+  const recentActivities = recentActivitiesRaw.length > 0 ? recentActivitiesRaw : [
+    {
+      activityId: 'dummy-1',
+      type: 'credit',
+      category: 'Bank Account (GTBank)',
+      amount: 50000,
+      currency: 'NGN',
+      description: 'Circle Contribution',
+      status: 'completed',
+      date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      reference: 'REF-01'
+    },
+    {
+      activityId: 'dummy-2',
+      type: 'debit',
+      category: 'Bank Account (Access Bank)',
+      amount: 20000,
+      currency: 'NGN',
+      description: 'Withdrawal Request',
+      status: 'completed',
+      date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      reference: 'REF-02'
+    },
+    {
+      activityId: 'dummy-3',
+      type: 'credit',
+      category: 'Wallet Top-up',
+      amount: 10000,
+      currency: 'NGN',
+      description: 'Wallet Funded via Paystack',
+      status: 'completed',
+      date: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+      reference: 'REF-03'
+    }
+  ] as any[];
   const kycProgress = getKycProgress(user);
   
   const fetchedActiveCircles = circlesQuery.data?.filter(c => c.status === 'active') ?? [];
@@ -393,40 +428,56 @@ const Dashboard = () => {
         </div>
       {/* </div> */}
 
-      <div className='pt-8'>
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="font-display text-base font-bold text-foreground">Recent Transactions</h2>
-          <button onClick={() => navigate('/transactions')} className="text-xs font-medium text-accent">See All</button>
-        </div>
-        <div className="space-y-1.5">
-          {dashboardQuery.isLoading && (
-            <div className="rounded-xl border border-border bg-card px-3 py-3 text-sm text-muted-foreground">
-              Loading recent transactions...
-            </div>
-          )}
+      <div className='pt-8 pb-8'>
+        <div className="rounded-[20px] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-border/50 p-4">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-display text-[15px] font-bold text-[#1a2b4c]">Recent Transaction</h2>
+            <button onClick={() => navigate('/transactions')} className="text-[13px] font-medium text-blue-500 hover:text-blue-600">See all</button>
+          </div>
+          
+          <div className="flex flex-col">
+            {dashboardQuery.isLoading && (
+              <div className="py-3 text-sm text-muted-foreground">Loading recent transactions...</div>
+            )}
 
-          {!dashboardQuery.isLoading && recentActivities.length === 0 && (
-            <div className="rounded-xl border border-border bg-card px-3 py-3 text-sm text-muted-foreground">
-              No transactions yet.
-            </div>
-          )}
+            {!dashboardQuery.isLoading && recentActivities.length === 0 && (
+              <div className="py-3 text-sm text-muted-foreground">No transactions yet.</div>
+            )}
 
-          {recentActivities.slice(0, 3).map(transaction => (
-            <div key={transaction.activityId} className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5">
-              <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${transaction.type === 'credit' ? 'bg-success/10' : 'bg-muted'}`}>
-                {transaction.type === 'credit'
-                  ? <ArrowDownLeft className="h-3.5 w-3.5 text-success" />
-                  : <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />}
+            {recentActivities.slice(0, 3).map(transaction => (
+              <div key={transaction.activityId} className="flex items-start justify-between gap-3 border-b border-border/50 py-3 last:border-0 last:pb-0">
+                <div className="flex flex-1 items-start gap-3 min-w-0">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/40 mt-0.5">
+                    {transaction.type === 'credit'
+                      ? <ArrowDownLeft className="h-5 w-5 text-muted-foreground" />
+                      : <ArrowUpRight className="h-5 w-5 text-muted-foreground" />}
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <p className="text-[14px] font-semibold text-[#1a2b4c] truncate">
+                      {transaction.type === 'credit' ? 'Deposited' : 'Withdrawal'}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                      {formatDate(transaction.date)} - {formatTime(transaction.date)}
+                    </p>
+                    
+                    <div className="mt-2 space-y-0.5">
+                      <p className="text-[12px] text-muted-foreground truncate">
+                        <span className="font-medium text-[#1a2b4c]">{transaction.type === 'credit' ? 'From:' : 'To:'}</span> AjoVault {transaction.category.charAt(0).toUpperCase() + transaction.category.slice(1)}
+                      </p>
+                      <p className="text-[12px] text-muted-foreground truncate">
+                        <span className="font-medium text-[#1a2b4c]">Desc:</span> {transaction.description}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right shrink-0 ml-2">
+                  <p className={`text-[14px] font-bold whitespace-nowrap ${transaction.type === 'credit' ? 'text-success' : 'text-destructive'}`}>
+                    {transaction.type === 'credit' ? '+' : '-'}{formatCurrency(transaction.amount)}
+                  </p>
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-medium text-foreground">{transaction.description}</p>
-                <p className="text-[11px] text-muted-foreground">{formatDate(transaction.date)}</p>
-              </div>
-              <p className={`text-[13px] font-semibold ${transaction.type === 'credit' ? 'text-success' : 'text-foreground'}`}>
-                {transaction.type === 'credit' ? '+' : '-'}{formatCurrency(transaction.amount)}
-              </p>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
     </div>
