@@ -8,6 +8,7 @@ import {
   ArrowUpRight,
   Bell,
   ChevronRight,
+  CreditCard,
   Eye,
   EyeOff,
   Heart,
@@ -332,7 +333,67 @@ const Dashboard = () => {
         </Badge>
       </button>
 
-      <div>
+      {/* <div className="mb-6 rounded-[20px] bg-white p-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-border/50"> */}
+        <h2 className="mb-4 font-display text-sm font-bold text-[#1a2b4c]">Upcoming Activities</h2>
+        <div className="space-y-3">
+          {/* Circle Payment */}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate('/circles/payments')}
+            className="flex items-center justify-between rounded-[14px] border border-border/50 bg-white p-3 shadow-sm transition-all hover:border-blue-100 hover:shadow-md cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-500">
+                <CreditCard className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-[#1a2b4c]">Circle Payment</p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">14 - 16 December 2026 - 5:30 PM</p>
+              </div>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </div>
+
+          {/* Savings Payment */}
+          <div
+            role="button"
+            tabIndex={0}
+            className="flex items-center justify-between rounded-[14px] border border-border/50 bg-white p-3 shadow-sm transition-all hover:border-blue-100 hover:shadow-md cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-500">
+                <CreditCard className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-[#1a2b4c]">Savings Payment</p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">14 - 16 December 2026 - 5:30 PM</p>
+              </div>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </div>
+
+          {/* Goals Payment */}
+          <div
+            role="button"
+            tabIndex={0}
+            className="flex items-center justify-between rounded-[14px] border border-border/50 bg-white p-3 shadow-sm transition-all hover:border-blue-100 hover:shadow-md cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-500">
+                <CreditCard className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-[#1a2b4c]">Goals Payment</p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">14 - 16 December 2026 - 5:30 PM</p>
+              </div>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </div>
+        </div>
+      {/* </div> */}
+
+      <div className='pt-8'>
         <div className="mb-2 flex items-center justify-between">
           <h2 className="font-display text-base font-bold text-foreground">Recent Transactions</h2>
           <button onClick={() => navigate('/transactions')} className="text-xs font-medium text-accent">See All</button>
