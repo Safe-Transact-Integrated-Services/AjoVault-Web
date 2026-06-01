@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
+  AlertCircle,
   ArrowDownLeft,
+  ArrowRight,
   ArrowUpRight,
   Bell,
   ChevronRight,
@@ -204,7 +206,6 @@ const Dashboard = () => {
                 {sortedActiveCircles.map(circle => (
                   <CarouselItem key={circle.id} className="basis-[90%] pl-3 sm:basis-[80%] md:basis-1/2 lg:basis-1/3">
                     <div className="flex h-full flex-col justify-end rounded-2xl border border-white/10 bg-white/20 p-4 backdrop-blur-md transition-colors hover:bg-white/30">
-                      
                       <div className="mt-1">
                         <p className="font-display text-[15px] font-bold text-white mb-0.5 truncate">{circle.name}</p>
                         <p className="text-2xl font-bold tracking-tight text-white mb-3">{formatCurrency(circle.amount, circle.currency)}</p>
@@ -231,217 +232,90 @@ const Dashboard = () => {
         ) : null}
       </motion.div>
 
-      {kycProgress.nextStep !== 'complete' && (
-        <motion.button
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.25 }}
-        onClick={() => navigate('/more/kyc')}
-        className="mb-3 flex w-full items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-left"
-      >
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
-            <ShieldCheck className="h-4 w-4" />
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-amber-950">KYC Status</p>
-            <p className="text-[11px] text-amber-800">
-              {kycProgress.summary} · {kycProgress.completedCount}/3 complete · {kycProgress.nextStepTitle}
-            </p>
-          </div>
-        </div>
-          <ChevronRight className="h-3.5 w-3.5 text-amber-700" />
-      </motion.button>
-      )}
-
-      <motion.button
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.35 }}
-        onClick={() => navigate('/more/agent-access')}
-        className="mb-6 flex w-full items-center justify-between rounded-2xl border border-primary/15 bg-primary/5 p-4 text-left"
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <ShieldCheck className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-foreground">Agent Access Code</p>
-            <p className="text-xs text-muted-foreground">Generate a one-time code for agent-assisted transactions</p>
-          </div>
-        </div>
-        <Badge className="border-primary/20 bg-primary/10 text-primary">Open</Badge>
-      </motion.button>
-
-      <div className="mb-6 grid grid-cols-2 gap-3">
+      {/* Quick Actions Row */}
+      <div className="mb-6 grid grid-cols-3 gap-3">
+        {/* Circles */}
         <div
           role="button"
           tabIndex={0}
           onClick={() => navigate('/circles')}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              navigate('/circles');
-            }
-          }}
-          className="cursor-pointer rounded-xl border border-border bg-card p-3 text-left transition-colors hover:bg-muted/30"
+          className="cursor-pointer rounded-[14px] border border-blue-200 bg-white p-3 text-left transition-all hover:border-blue-300 hover:shadow-md"
         >
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
-                <Users className="h-4 w-4" />
-              </div>
-              <span className="text-xs font-medium text-blue-700">Circles (Ajo)</span>
-            </div>
-            <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-700" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700 mb-6">
+            <Users className="h-4 w-4" />
           </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">Circles you currently belong to.</p>
-          <p className="mt-1 text-base font-bold text-foreground">{circles?.activeCount ?? 0} circles</p>
-          <div className="mt-3 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                navigate('/circles/join');
-              }}
-              className="inline-flex flex-1 items-center justify-center rounded-full border border-blue-200 px-3 py-1.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-50"
-            >
-              Join Circle
-            </button>
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                navigate('/circles/create');
-              }}
-              className="inline-flex flex-1 items-center justify-center rounded-full bg-blue-100 px-3 py-1.5 text-[11px] font-semibold text-blue-700 transition-colors hover:bg-blue-200"
-            >
-              Create Circle
-            </button>
+          <div className="flex items-center justify-between mt-auto">
+            <div className="min-w-0 pr-1">
+              <p className="text-xs font-semibold text-blue-700 truncate">Circles (Ajo)</p>
+              <p className="text-[9px] text-muted-foreground truncate mt-0.5">Manage community Groups</p>
+            </div>
+            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-blue-700" />
           </div>
         </div>
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => navigate('/savings')}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              navigate('/savings');
-            }
-          }}
-          className="cursor-pointer rounded-xl border border-border bg-card p-3 text-left transition-colors hover:bg-muted/30"
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/10 text-success">
-                <PiggyBank className="h-4 w-4" />
-              </div>
-              <span className="text-xs font-medium text-success">Active Savings</span>
-            </div>
-            <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" />
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">Savings plans currently running.</p>
-          <p className="mt-1 text-base font-bold text-foreground">
-            {formatCurrency(savings?.totalSavedAmount ?? 0)} <span className="font-bold">saved</span>
-          </p>
-          <div className="mt-3 flex items-center">
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                navigate('/savings/create');
-              }}
-              className="inline-flex w-full items-center justify-center rounded-full bg-success/10 px-3 py-1.5 text-[11px] font-semibold text-success transition-colors hover:bg-success/20"
-            >
-              Create Savings
-            </button>
-          </div>
-        </div>
-      </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3">
+        {/* Set Goals */}
         <div
           role="button"
           tabIndex={0}
           onClick={() => navigate('/group-goals')}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              navigate('/group-goals');
-            }
-          }}
-          className="cursor-pointer rounded-xl border border-border bg-card p-3 text-left transition-colors hover:bg-muted/30"
+          className="cursor-pointer rounded-[14px] border border-accent/30 bg-white p-3 text-left transition-all hover:border-accent/50 hover:shadow-md"
         >
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 text-accent">
-                <Target className="h-4 w-4" />
-              </div>
-              <span className="text-xs font-medium text-accent">Group Goals</span>
-            </div>
-            <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 text-accent mb-6">
+            <Target className="h-4 w-4" />
           </div>
-          <p className="mt-1 text-[13px] font-semibold leading-tight text-foreground">Save together towards a shared goal</p>
-          <div className="mt-3 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                navigate('/group-goals/join');
-              }}
-              className="inline-flex flex-1 items-center justify-center rounded-full border border-accent/30 px-3 py-1.5 text-[11px] font-medium text-accent transition-colors hover:bg-accent/5"
-            >
-              Join Goal
-            </button>
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                navigate('/group-goals/create');
-              }}
-              className="inline-flex flex-1 items-center justify-center rounded-full bg-accent/10 px-3 py-1.5 text-[11px] font-semibold text-accent transition-colors hover:bg-accent/20"
-            >
-              Create Goal
-            </button>
+          <div className="flex items-center justify-between mt-auto">
+            <div className="min-w-0 pr-1">
+              <p className="text-xs font-semibold text-accent truncate">Set Goals</p>
+              <p className="text-[9px] text-muted-foreground truncate mt-0.5">Shared objectives</p>
+            </div>
+            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-accent" />
           </div>
         </div>
+
+        {/* Fundraising */}
         <div
           role="button"
           tabIndex={0}
           onClick={() => navigate('/fundraising')}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              navigate('/fundraising');
-            }
-          }}
-          className="cursor-pointer rounded-xl border border-border bg-card p-3 text-left transition-colors hover:bg-muted/30"
+          className="cursor-pointer rounded-[14px] border border-violet-200 bg-white p-3 text-left transition-all hover:border-violet-300 hover:shadow-md"
         >
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-800">
-                <Heart className="h-4 w-4" />
-              </div>
-              <span className="text-xs font-medium text-violet-800">Fundraising</span>
-            </div>
-            <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-800" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-800 mb-6">
+            <Heart className="h-4 w-4" />
           </div>
-          <p className="mt-1 text-[13px] font-semibold leading-tight text-foreground">Raise funds for events and projects</p>
-          <div className="mt-3 flex items-center">
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                navigate('/fundraising/create');
-              }}
-              className="inline-flex w-full items-center justify-center rounded-full bg-violet-100 px-3 py-1.5 text-[11px] font-semibold text-violet-800 transition-colors hover:bg-violet-200"
-            >
-              Create Fundraiser
-            </button>
+          <div className="flex items-center justify-between mt-auto">
+            <div className="min-w-0 pr-1">
+              <p className="text-xs font-semibold text-violet-800 truncate">Fundraising</p>
+              <p className="text-[9px] text-muted-foreground truncate mt-0.5">Social fundraising</p>
+            </div>
+            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-violet-800" />
           </div>
         </div>
       </div>
+
+      {kycProgress.nextStep !== 'complete' && (
+        <motion.button
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          onClick={() => navigate('/more/kyc')}
+          className="mb-6 flex w-full items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-left transition-colors hover:bg-amber-100"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
+              <ShieldCheck className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-amber-950">KYC Incomplete</p>
+              <p className="text-[11px] text-amber-800/80 mt-0.5">
+                {kycProgress.nextStep === 'phone' ? 'Phone Verification Pending' : 
+                 kycProgress.nextStep === 'bvn' ? 'BVN Verification Pending' : 
+                 kycProgress.nextStep === 'nin' ? 'NIN Verification Pending' : ''}
+              </p>
+            </div>
+          </div>
+          <AlertCircle className="h-4 w-4 text-destructive" />
+        </motion.button>
+      )}
 
       <button onClick={() => navigate('/credit-passport')} className="mb-6 flex w-full items-center justify-between rounded-xl border border-border bg-card p-4">
         <div className="flex items-center gap-3">
