@@ -81,42 +81,7 @@ const Dashboard = () => {
   const wallet = dashboardQuery.data?.wallet;
   const savings = dashboardQuery.data?.savings;
   const circles = dashboardQuery.data?.circles;
-  const recentActivitiesRaw = dashboardQuery.data?.recentActivities ?? [];
-  const recentActivities = recentActivitiesRaw.length > 0 ? recentActivitiesRaw : [
-    {
-      activityId: 'dummy-1',
-      type: 'credit',
-      category: 'Bank Account (GTBank)',
-      amount: 50000,
-      currency: 'NGN',
-      description: 'Circle Contribution',
-      status: 'completed',
-      date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      reference: 'REF-01'
-    },
-    {
-      activityId: 'dummy-2',
-      type: 'debit',
-      category: 'Bank Account (Access Bank)',
-      amount: 20000,
-      currency: 'NGN',
-      description: 'Withdrawal Request',
-      status: 'completed',
-      date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-      reference: 'REF-02'
-    },
-    {
-      activityId: 'dummy-3',
-      type: 'credit',
-      category: 'Wallet Top-up',
-      amount: 10000,
-      currency: 'NGN',
-      description: 'Wallet Funded via Paystack',
-      status: 'completed',
-      date: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-      reference: 'REF-03'
-    }
-  ] as any[];
+  const recentActivities = dashboardQuery.data?.recentActivities ?? [];
   const kycProgress = getKycProgress(user);
   const upcomingActivities = upcomingContributionsQuery.data?.items ?? [];
 
@@ -212,7 +177,7 @@ const Dashboard = () => {
             <div className="h-[90px] w-[85%] shrink-0 animate-pulse rounded-2xl bg-white/20 md:w-1/2 lg:w-1/3"></div>
             <div className="h-[90px] w-[85%] shrink-0 animate-pulse rounded-2xl bg-white/20 md:w-1/2 lg:w-1/3"></div>
           </div>
-        ) : sortedUpcomingActivities.length > 0 ? (
+        ) : (
           <div>
             <div className="mb-3 flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
@@ -226,6 +191,7 @@ const Dashboard = () => {
                 View all 
               </button>
             </div>
+            {sortedUpcomingActivities.length > 0 ? (
               <Carousel
                 setApi={setCarouselApi}
                 opts={{ align: "start" }}
@@ -245,7 +211,7 @@ const Dashboard = () => {
                           <p className="font-display text-[12px] font-bold text-white mb-0.5 truncate">{activity.name}</p>
                           <p className="text-lg font-bold tracking-tight text-white mb-2">{formatCurrency(activity.contributionAmount, 'NGN')}</p>
                           <div className={`flex items-center gap-1.5 text-[9px] font-medium w-fit px-2 py-0.5 rounded-full backdrop-blur-sm ${activity.status?.toLowerCase() === 'missed' || activity.status?.toLowerCase() === 'overdue' ? 'bg-red-500/40 text-white' : 'bg-yellow-500/40 text-white'}`}>
-                            <span className="capitalize">{activity.status} {formatDate(activity.date)}</span>
+                            <span className="capitalize">{activity.status?.toLowerCase() === 'upcoming' ? 'Due' : activity.status} {formatDate(activity.date)}</span>
                           </div>
                         </div>
                       </div>
@@ -265,8 +231,13 @@ const Dashboard = () => {
                   </div>
                 )}
               </Carousel>
+            ) : (
+              <div className="flex h-[90px] w-full items-center justify-center rounded-xl border border-white/10 bg-white/10 backdrop-blur-md">
+                <p className="text-sm text-white/80">No upcoming contributions</p>
+              </div>
+            )}
             </div>
-        ) : null}
+        )}
       </motion.div>
 
       {/* Quick Actions Row */}
