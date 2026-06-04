@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
+  AlertCircle,
   ArrowDownLeft,
+  ArrowRight,
   ArrowUpRight,
   Bell,
   ChevronRight,
+  CreditCard,
   Eye,
   EyeOff,
   Heart,
@@ -14,20 +17,45 @@ import {
   Target,
   TrendingUp,
   Users,
+  Briefcase,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { getKycProgress } from '@/lib/kyc';
 import { creditPassportKeys, getCreditPassportScore } from '@/services/creditPassportApi';
-import { dashboardKeys, getDashboardSummary } from '@/services/dashboardApi';
-import { formatCurrency, formatDate } from '@/services/mockData';
+import {
+  Carousel,
+  CarouselApi,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from '@/components/ui/carousel';
+import { circlesKeys, getCircles } from '@/services/circlesApi';
+import { dashboardKeys, getDashboardSummary, getUpcomingContributions } from '@/services/dashboardApi';
+import { formatCurrency, formatDate, formatTime } from '@/services/mockData';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [showBalance, setShowBalance] = useState(true);
   const [currentTime, setCurrentTime] = useState(() => new Date());
+  const [carouselApi, setCarouselApi] = useState<CarouselApi>();
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  useEffect(() => {
+    if (!carouselApi) {
+      return;
+    }
+    
+    setCurrentSlide(carouselApi.selectedScrollSnap());
+    
+    carouselApi.on("select", () => {
+      setCurrentSlide(carouselApi.selectedScrollSnap());
+    });
+  }, [carouselApi]);
+
   const dashboardQuery = useQuery({
     queryKey: dashboardKeys.summary,
     queryFn: getDashboardSummary,
@@ -38,12 +66,67 @@ const Dashboard = () => {
     queryFn: getCreditPassportScore,
     enabled: !!user,
   });
+  const circlesQuery = useQuery({
+    queryKey: circlesKeys.all,
+    queryFn: getCircles,
+    enabled: !!user,
+  });
+  const upcomingContributionsQuery = useQuery({
+    queryKey: dashboardKeys.upcomingContributions,
+    queryFn: getUpcomingContributions,
+    enabled: !!user,
+  });
+
   const unreadCount = dashboardQuery.data?.unreadNotificationCount ?? 0;
   const wallet = dashboardQuery.data?.wallet;
   const savings = dashboardQuery.data?.savings;
   const circles = dashboardQuery.data?.circles;
-  const recentActivities = dashboardQuery.data?.recentActivities ?? [];
+  const recentActivitiesRaw = dashboardQuery.data?.recentActivities ?? [];
+  const recentActivities = recentActivitiesRaw.length > 0 ? recentActivitiesRaw : [
+    {
+      activityId: 'dummy-1',
+      type: 'credit',
+      category: 'Bank Account (GTBank)',
+      amount: 50000,
+      currency: 'NGN',
+      description: 'Circle Contribution',
+      status: 'completed',
+      date: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      reference: 'REF-01'
+    },
+    {
+      activityId: 'dummy-2',
+      type: 'debit',
+      category: 'Bank Account (Access Bank)',
+      amount: 20000,
+      currency: 'NGN',
+      description: 'Withdrawal Request',
+      status: 'completed',
+      date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      reference: 'REF-02'
+    },
+    {
+      activityId: 'dummy-3',
+      type: 'credit',
+      category: 'Wallet Top-up',
+      amount: 10000,
+      currency: 'NGN',
+      description: 'Wallet Funded via Paystack',
+      status: 'completed',
+      date: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+      reference: 'REF-03'
+    }
+  ] as any[];
   const kycProgress = getKycProgress(user);
+  const upcomingActivities = upcomingContributionsQuery.data?.items ?? [];
+
+  let sortedUpcomingActivities = [...upcomingActivities].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  
+  // Cap at exactly 4 items
+  if (sortedUpcomingActivities.length > 4) {
+    sortedUpcomingActivities = sortedUpcomingActivities.slice(0, 4);
+  }
+
   const currentHour = currentTime.getHours();
   const greeting =
     currentHour < 12
@@ -62,282 +145,214 @@ const Dashboard = () => {
 
   return (
     <div className="px-4 py-6 safe-top">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">{greeting}</p>
-          <h1 className="font-display text-xl font-bold text-foreground">{user?.firstName ?? 'there'}</h1>
-        </div>
-        <button onClick={() => navigate('/notifications')} className="relative p-2">
-          <Bell className="h-6 w-6 text-foreground" />
-          {unreadCount > 0 && (
-            <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
-              {unreadCount}
-            </span>
-          )}
-        </button>
-      </div>
-
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-6 rounded-2xl bg-primary px-3.5 py-2 text-primary-foreground"
+        className="mb-6 overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-[#1a2b4c] to-[#126989] p-5 text-white shadow-xl"
       >
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[11px] opacity-80">Wallet Balance</p>
-          <button onClick={() => setShowBalance(!showBalance)} className="shrink-0">
-            {showBalance ? <EyeOff className="h-3.5 w-3.5 opacity-80" /> : <Eye className="h-3.5 w-3.5 opacity-80" />}
+        {/* Header: User Profile & Notifications */}
+        <div className="mb-5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 overflow-hidden rounded-full border-2 border-white/20 bg-white/10">
+              <img src={user?.avatarUrl || "https://i.pravatar.cc/150?u=a042581f4e29026704d"} alt="User" className="h-full w-full object-cover" />
+            </div>
+            <div>
+              <p className="text-xs text-white/80">Hello,</p>
+              <p className="font-display text-base font-bold text-white">{user?.firstName ?? 'Akinkunmi'}</p>
+            </div>
+          </div>
+          <button onClick={() => navigate('/notifications')} className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/20 transition-colors hover:bg-white/30">
+            <Bell className="h-5 w-5 text-white" />
+            {unreadCount > 0 && (
+              <span className="absolute right-2.5 top-2.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-red-500 ring-2 ring-[#1a2b4c]"></span>
+            )}
           </button>
         </div>
-        <div className="mt-0.5 flex items-center justify-between gap-3">
-          <p className="text-[1.38rem] font-bold leading-tight">
-            {showBalance
-              ? dashboardQuery.isLoading
-                ? 'Loading...'
-                : formatCurrency(wallet?.availableBalance ?? 0, wallet?.currency ?? 'NGN')
-              : '********'}
-          </p>
-        </div>
-        <div className="mt-0.5 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            {(wallet?.pendingBalance ?? 0) > 0 && showBalance && (
-              <p className="text-[10px] opacity-70">Pending: {formatCurrency(wallet?.pendingBalance ?? 0, wallet?.currency ?? 'NGN')}</p>
-            )}
-            {dashboardQuery.isError && (
-              <p className="text-[10px] opacity-80">Unable to load the latest dashboard summary.</p>
-            )}
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={() => navigate('/wallet/fund')}
-              className="inline-flex w-[108px] items-center justify-center gap-1 whitespace-nowrap rounded-full bg-white/15 px-2 py-1 text-xs font-semibold text-primary-foreground transition-colors hover:bg-white/20"
-            >
-              <ArrowDownLeft className="h-3 w-3" />
-              <span>Add Money</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/wallet/transfer')}
-              className="inline-flex w-[108px] items-center justify-center gap-1 whitespace-nowrap rounded-full border border-white/25 bg-white/10 px-2 py-1 text-xs font-semibold text-primary-foreground transition-colors hover:bg-white/15"
-            >
-              <ArrowUpRight className="h-3 w-3" />
-              <span>Withdraw</span>
+
+        {/* Wallet Balance */}
+        <div className="mb-6 text-center">
+          <p className="mb-1 text-sm text-white/80">Your Wallet Balance</p>
+          <div className="flex items-center justify-center gap-2">
+            <h2 className="text-[2.5rem] font-bold tracking-tight">
+              {showBalance
+                ? dashboardQuery.isLoading
+                  ? '...'
+                  : formatCurrency(wallet?.availableBalance ?? 0, wallet?.currency ?? 'NGN')
+                : '********'}
+            </h2>
+            <button onClick={() => setShowBalance(!showBalance)} className="shrink-0 p-1">
+              {showBalance ? <EyeOff className="h-5 w-5 text-white/80" /> : <Eye className="h-5 w-5 text-white/80" />}
             </button>
           </div>
         </div>
+
+        {/* Action Buttons */}
+        <div className="mb-6 flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => navigate('/wallet/fund')}
+            className="flex h-11 w-[130px] items-center justify-center gap-2 rounded-xl bg-white text-sm font-bold text-[#1a2b4c] transition-colors hover:bg-gray-100"
+          >
+            <ArrowDownLeft className="h-4 w-4" />
+            <span>Add Money</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/wallet/transfer')}
+            className="flex h-11 w-[130px] items-center justify-center gap-2 rounded-xl bg-white text-sm font-bold text-[#1a2b4c] transition-colors hover:bg-gray-100"
+          >
+            <ArrowUpRight className="h-4 w-4" />
+            <span>Withdraw</span>
+          </button>
+        </div>
+
+        {/* Upcoming Activities Carousel */}
+        {circlesQuery.isLoading ? (
+          <div className="flex gap-4 overflow-hidden opacity-50">
+            <div className="h-[90px] w-[85%] shrink-0 animate-pulse rounded-2xl bg-white/20 md:w-1/2 lg:w-1/3"></div>
+            <div className="h-[90px] w-[85%] shrink-0 animate-pulse rounded-2xl bg-white/20 md:w-1/2 lg:w-1/3"></div>
+          </div>
+        ) : sortedUpcomingActivities.length > 0 ? (
+          <div>
+            <div className="mb-3 flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-white/90" />
+                <h3 className="font-display text-base font-bold text-white">Upcoming Contributions</h3>
+              </div>
+              <button 
+                onClick={() => navigate('/circles')} 
+                className="flex items-center gap-1 text-[13px] font-medium text-white/80 hover:text-white"
+              >
+                View all 
+              </button>
+            </div>
+              <Carousel
+                setApi={setCarouselApi}
+                opts={{ align: "start" }}
+                className="w-full"
+              >
+                <CarouselContent className="-ml-2">
+                  {sortedUpcomingActivities.map(activity => (
+                    <CarouselItem key={activity.id} className={`${sortedUpcomingActivities.length === 1 ? 'basis-full' : 'basis-1/2'} pl-2`}>
+                      <div 
+                        onClick={() => activity.paymentUrl ? (window.location.href = activity.paymentUrl) : navigate(`/circles/${activity.id}`)}
+                        className="cursor-pointer flex h-full flex-col justify-end rounded-xl border border-white/10 bg-white/20 p-3 backdrop-blur-md transition-colors hover:bg-white/30"
+                      >
+                        <div className="mt-1">
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-white/70 mb-0.5">
+                            {activity.type ? `${activity.type} ` : ''}
+                          </p>
+                          <p className="font-display text-[12px] font-bold text-white mb-0.5 truncate">{activity.name}</p>
+                          <p className="text-lg font-bold tracking-tight text-white mb-2">{formatCurrency(activity.contributionAmount, 'NGN')}</p>
+                          <div className={`flex items-center gap-1.5 text-[9px] font-medium w-fit px-2 py-0.5 rounded-full backdrop-blur-sm ${activity.status?.toLowerCase() === 'missed' || activity.status?.toLowerCase() === 'overdue' ? 'bg-red-500/40 text-white' : 'bg-yellow-500/40 text-white'}`}>
+                            <span className="capitalize">{activity.status} {formatDate(activity.date)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+                {sortedUpcomingActivities.length > 1 && (
+                  <div className="mt-4 flex justify-center gap-1.5">
+                    {Array.from({ length: Math.ceil(sortedUpcomingActivities.length / 2) }).map((_, index) => (
+                      <button
+                        key={index}
+                        onClick={() => carouselApi?.scrollTo(index * 2)}
+                        className={`h-1.5 rounded-full transition-all ${currentSlide === index ? 'w-4 bg-white' : 'w-1.5 bg-white/40'}`}
+                        aria-label={`Go to slide ${index + 1}`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </Carousel>
+            </div>
+        ) : null}
       </motion.div>
 
-      {kycProgress.nextStep !== 'complete' && (
-        <motion.button
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.25 }}
-        onClick={() => navigate('/more/kyc')}
-        className="mb-3 flex w-full items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-left"
-      >
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
-            <ShieldCheck className="h-4 w-4" />
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-amber-950">KYC Status</p>
-            <p className="text-[11px] text-amber-800">
-              {kycProgress.summary} · {kycProgress.completedCount}/3 complete · {kycProgress.nextStepTitle}
-            </p>
-          </div>
-        </div>
-          <ChevronRight className="h-3.5 w-3.5 text-amber-700" />
-      </motion.button>
-      )}
-
-      <motion.button
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.35 }}
-        onClick={() => navigate('/more/agent-access')}
-        className="mb-6 flex w-full items-center justify-between rounded-2xl border border-primary/15 bg-primary/5 p-4 text-left"
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <ShieldCheck className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-foreground">Agent Access Code</p>
-            <p className="text-xs text-muted-foreground">Generate a one-time code for agent-assisted transactions</p>
-          </div>
-        </div>
-        <Badge className="border-primary/20 bg-primary/10 text-primary">Open</Badge>
-      </motion.button>
-
-      <div className="mb-6 grid grid-cols-2 gap-3">
+      {/* Quick Actions Row */}
+      <div className="mb-6 grid grid-cols-3 gap-3">
+        {/* Circles */}
         <div
           role="button"
           tabIndex={0}
           onClick={() => navigate('/circles')}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              navigate('/circles');
-            }
-          }}
-          className="cursor-pointer rounded-xl border border-border bg-card p-3 text-left transition-colors hover:bg-muted/30"
+          className="cursor-pointer rounded-[14px] border border-blue-200 bg-white p-3 text-left transition-all hover:border-blue-300 hover:shadow-md"
         >
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
-                <Users className="h-4 w-4" />
-              </div>
-              <span className="text-xs font-medium text-blue-700">Circles (Ajo)</span>
-            </div>
-            <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-700" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700 mb-6">
+            <Users className="h-4 w-4" />
           </div>
-          <p className="mt-1 text-[11px] text-muted-foreground">Circles you currently belong to.</p>
-          <p className="mt-1 text-base font-bold text-foreground">{circles?.activeCount ?? 0} circles</p>
-          <div className="mt-3 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                navigate('/circles/join');
-              }}
-              className="inline-flex flex-1 items-center justify-center rounded-full border border-blue-200 px-3 py-1.5 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-50"
-            >
-              Join Circle
-            </button>
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                navigate('/circles/create');
-              }}
-              className="inline-flex flex-1 items-center justify-center rounded-full bg-blue-100 px-3 py-1.5 text-[11px] font-semibold text-blue-700 transition-colors hover:bg-blue-200"
-            >
-              Create Circle
-            </button>
+          <div className="flex items-center justify-between mt-auto">
+            <div className="min-w-0 pr-1">
+              <p className="text-xs font-semibold text-blue-700 truncate">Circles (Ajo)</p>
+              <p className="text-[9px] text-muted-foreground truncate mt-0.5">Manage community Groups</p>
+            </div>
+            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-blue-700" />
           </div>
         </div>
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => navigate('/savings')}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              navigate('/savings');
-            }
-          }}
-          className="cursor-pointer rounded-xl border border-border bg-card p-3 text-left transition-colors hover:bg-muted/30"
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/10 text-success">
-                <PiggyBank className="h-4 w-4" />
-              </div>
-              <span className="text-xs font-medium text-success">Active Savings</span>
-            </div>
-            <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" />
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">Savings plans currently running.</p>
-          <p className="mt-1 text-base font-bold text-foreground">
-            {formatCurrency(savings?.totalSavedAmount ?? 0)} <span className="font-bold">saved</span>
-          </p>
-          <div className="mt-3 flex items-center">
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                navigate('/savings/create');
-              }}
-              className="inline-flex w-full items-center justify-center rounded-full bg-success/10 px-3 py-1.5 text-[11px] font-semibold text-success transition-colors hover:bg-success/20"
-            >
-              Create Savings
-            </button>
-          </div>
-        </div>
-      </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3">
+        {/* Set Goals */}
         <div
           role="button"
           tabIndex={0}
           onClick={() => navigate('/group-goals')}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              navigate('/group-goals');
-            }
-          }}
-          className="cursor-pointer rounded-xl border border-border bg-card p-3 text-left transition-colors hover:bg-muted/30"
+          className="cursor-pointer rounded-[14px] border border-accent/30 bg-white p-3 text-left transition-all hover:border-accent/50 hover:shadow-md"
         >
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 text-accent">
-                <Target className="h-4 w-4" />
-              </div>
-              <span className="text-xs font-medium text-accent">Group Goals</span>
-            </div>
-            <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 text-accent mb-6">
+            <Target className="h-4 w-4" />
           </div>
-          <p className="mt-1 text-[13px] font-semibold leading-tight text-foreground">Save together towards a shared goal</p>
-          <div className="mt-3 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                navigate('/group-goals/join');
-              }}
-              className="inline-flex flex-1 items-center justify-center rounded-full border border-accent/30 px-3 py-1.5 text-[11px] font-medium text-accent transition-colors hover:bg-accent/5"
-            >
-              Join Goal
-            </button>
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                navigate('/group-goals/create');
-              }}
-              className="inline-flex flex-1 items-center justify-center rounded-full bg-accent/10 px-3 py-1.5 text-[11px] font-semibold text-accent transition-colors hover:bg-accent/20"
-            >
-              Create Goal
-            </button>
+          <div className="flex items-center justify-between mt-auto">
+            <div className="min-w-0 pr-1">
+              <p className="text-xs font-semibold text-accent truncate">Set Goals</p>
+              <p className="text-[9px] text-muted-foreground truncate mt-0.5">Shared objectives</p>
+            </div>
+            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-accent" />
           </div>
         </div>
+
+        {/* Fundraising */}
         <div
           role="button"
           tabIndex={0}
           onClick={() => navigate('/fundraising')}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              navigate('/fundraising');
-            }
-          }}
-          className="cursor-pointer rounded-xl border border-border bg-card p-3 text-left transition-colors hover:bg-muted/30"
+          className="cursor-pointer rounded-[14px] border border-violet-200 bg-white p-3 text-left transition-all hover:border-violet-300 hover:shadow-md"
         >
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-800">
-                <Heart className="h-4 w-4" />
-              </div>
-              <span className="text-xs font-medium text-violet-800">Fundraising</span>
-            </div>
-            <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-800" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-800 mb-6">
+            <Heart className="h-4 w-4" />
           </div>
-          <p className="mt-1 text-[13px] font-semibold leading-tight text-foreground">Raise funds for events and projects</p>
-          <div className="mt-3 flex items-center">
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                navigate('/fundraising/create');
-              }}
-              className="inline-flex w-full items-center justify-center rounded-full bg-violet-100 px-3 py-1.5 text-[11px] font-semibold text-violet-800 transition-colors hover:bg-violet-200"
-            >
-              Create Fundraiser
-            </button>
+          <div className="flex items-center justify-between mt-auto">
+            <div className="min-w-0 pr-1">
+              <p className="text-xs font-semibold text-violet-800 truncate">Fundraising</p>
+              <p className="text-[9px] text-muted-foreground truncate mt-0.5">Social fundraising</p>
+            </div>
+            <ArrowRight className="h-3.5 w-3.5 shrink-0 text-violet-800" />
           </div>
         </div>
       </div>
+
+      {kycProgress.nextStep !== 'complete' && (
+        <motion.button
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          onClick={() => navigate('/more/kyc')}
+          className="mb-6 flex w-full items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-left transition-colors hover:bg-amber-100"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
+              <ShieldCheck className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold text-amber-950">KYC Incomplete</p>
+              <p className="text-[11px] text-amber-800/80 mt-0.5">
+                {kycProgress.nextStep === 'phone' ? 'Phone Verification Pending' : 
+                 kycProgress.nextStep === 'bvn' ? 'BVN Verification Pending' : 
+                 kycProgress.nextStep === 'nin' ? 'NIN Verification Pending' : ''}
+              </p>
+            </div>
+          </div>
+          <AlertCircle className="h-4 w-4 text-destructive" />
+        </motion.button>
+      )}
 
       <button onClick={() => navigate('/credit-passport')} className="mb-6 flex w-full items-center justify-between rounded-xl border border-border bg-card p-4">
         <div className="flex items-center gap-3">
@@ -354,40 +369,131 @@ const Dashboard = () => {
         </Badge>
       </button>
 
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="font-display text-base font-bold text-foreground">Recent Transactions</h2>
-          <button onClick={() => navigate('/transactions')} className="text-xs font-medium text-accent">See All</button>
+      <button onClick={() => navigate('/agent/apply')} className="mb-6 flex w-full items-center justify-between rounded-xl border border-border bg-card p-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100/50">
+            <Briefcase className="h-5 w-5 text-blue-600" />
+          </div>
+          <div className="text-left">
+            <p className="text-sm font-semibold text-foreground">Become an Agent</p>
+            <p className="text-xs text-muted-foreground">Earn commissions easily</p>
+          </div>
         </div>
-        <div className="space-y-1.5">
-          {dashboardQuery.isLoading && (
-            <div className="rounded-xl border border-border bg-card px-3 py-3 text-sm text-muted-foreground">
-              Loading recent transactions...
-            </div>
-          )}
+        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+      </button>
 
-          {!dashboardQuery.isLoading && recentActivities.length === 0 && (
-            <div className="rounded-xl border border-border bg-card px-3 py-3 text-sm text-muted-foreground">
-              No transactions yet.
+      {/* <div className="mb-6 rounded-[20px] bg-white p-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-border/50"> */}
+        <h2 className="mb-4 font-display text-sm font-bold text-[#1a2b4c]">Upcoming Payments</h2>
+        <div className="space-y-3">
+          {/* Circle Payment */}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate('/circles/payments')}
+            className="flex items-center justify-between rounded-[14px] border border-border/50 bg-white p-3 shadow-sm transition-all hover:border-blue-100 hover:shadow-md cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-500">
+                <CreditCard className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-[#1a2b4c]">Circle Payment</p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">14 - 16 December 2026 - 5:30 PM</p>
+              </div>
             </div>
-          )}
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </div>
 
-          {recentActivities.slice(0, 3).map(transaction => (
-            <div key={transaction.activityId} className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5">
-              <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${transaction.type === 'credit' ? 'bg-success/10' : 'bg-muted'}`}>
-                {transaction.type === 'credit'
-                  ? <ArrowDownLeft className="h-3.5 w-3.5 text-success" />
-                  : <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />}
+          {/* Savings Payment */}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate('/circles/payments')}
+            className="flex items-center justify-between rounded-[14px] border border-border/50 bg-white p-3 shadow-sm transition-all hover:border-blue-100 hover:shadow-md cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-500">
+                <CreditCard className="h-5 w-5" />
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-medium text-foreground">{transaction.description}</p>
-                <p className="text-[11px] text-muted-foreground">{formatDate(transaction.date)}</p>
+              <div>
+                <p className="text-xs font-semibold text-[#1a2b4c]">Savings Payment</p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">14 - 16 December 2026 - 5:30 PM</p>
               </div>
-              <p className={`text-[13px] font-semibold ${transaction.type === 'credit' ? 'text-success' : 'text-foreground'}`}>
-                {transaction.type === 'credit' ? '+' : '-'}{formatCurrency(transaction.amount)}
-              </p>
             </div>
-          ))}
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </div>
+
+          {/* Goals Payment */}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate('/circles/payments')}
+            className="flex items-center justify-between rounded-[14px] border border-border/50 bg-white p-3 shadow-sm transition-all hover:border-blue-100 hover:shadow-md cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-500">
+                <CreditCard className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-[#1a2b4c]">Goals Payment</p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">14 - 16 December 2026 - 5:30 PM</p>
+              </div>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </div>
+        </div>
+      {/* </div> */}
+
+      <div className='pt-8 pb-8'>
+        <div className="rounded-[20px] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-border/50 p-4">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-display text-[15px] font-bold text-[#1a2b4c]">Recent Transaction</h2>
+            <button onClick={() => navigate('/transactions')} className="text-[13px] font-medium text-blue-500 hover:text-blue-600">See all</button>
+          </div>
+          
+          <div className="flex flex-col">
+            {dashboardQuery.isLoading && (
+              <div className="py-3 text-sm text-muted-foreground">Loading recent transactions...</div>
+            )}
+
+            {!dashboardQuery.isLoading && recentActivities.length === 0 && (
+              <div className="py-3 text-sm text-muted-foreground">No transactions yet.</div>
+            )}
+
+            {recentActivities.slice(0, 3).map(transaction => (
+              <div key={transaction.activityId} className="flex items-start justify-between gap-3 border-b border-border/50 py-3 last:border-0 last:pb-0">
+                <div className="flex flex-1 items-start gap-3 min-w-0">
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full mt-0.5 ${transaction.type === 'credit' ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
+                    {transaction.type === 'credit'
+                      ? <ArrowDownLeft className="h-5 w-5" />
+                      : <ArrowUpRight className="h-5 w-5" />}
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <p className={`text-[14px] font-semibold truncate ${transaction.type === 'credit' ? 'text-success' : 'text-destructive'}`}>
+                      {transaction.type === 'credit' ? 'Deposited' : 'Withdrawal'}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                      {formatDate(transaction.date)} - {formatTime(transaction.date)}
+                    </p>
+                    
+                    <div className="mt-2 space-y-0.5">
+                      <p className="text-[12px] text-muted-foreground truncate">
+                        <span className="font-medium text-[#1a2b4c]">{transaction.type === 'credit' ? 'From:' : 'To:'}</span> AjoVault {transaction.category.charAt(0).toUpperCase() + transaction.category.slice(1)}
+                      </p>
+                      <p className="text-[12px] text-muted-foreground truncate">
+                        <span className="font-medium text-[#1a2b4c]">Desc:</span> {transaction.description}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right shrink-0 ml-2">
+                  <p className={`text-[14px] font-bold whitespace-nowrap ${transaction.type === 'credit' ? 'text-success' : 'text-destructive'}`}>
+                    {transaction.type === 'credit' ? '+' : '-'}{formatCurrency(transaction.amount)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -7,6 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { circlesKeys, getCircles } from '@/services/circlesApi';
 import { formatCurrency, formatDate } from '@/services/mockData';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 
 const CirclesHome = () => {
   const navigate = useNavigate();
@@ -16,6 +24,14 @@ const CirclesHome = () => {
   });
 
   const circles = circlesQuery.data ?? [];
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+  const totalPages = Math.ceil(circles.length / itemsPerPage);
+  
+  const currentCircles = circles.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   return (
     <div className="px-4 py-6 safe-top">
@@ -49,7 +65,7 @@ const CirclesHome = () => {
           />
         )}
 
-        {circles.map((circle, index) => (
+        {currentCircles.map((circle, index) => (
           <motion.button
             key={circle.id}
             initial={{ opacity: 0, y: 10 }}
@@ -94,6 +110,32 @@ const CirclesHome = () => {
           </motion.button>
         ))}
       </div>
+
+      {totalPages > 1 && (
+        <div className="mt-6">
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious 
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                />
+              </PaginationItem>
+              <PaginationItem>
+                <span className="text-sm font-medium mx-4">
+                  Page {currentPage} of {totalPages}
+                </span>
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationNext 
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      )}
     </div>
   );
 };

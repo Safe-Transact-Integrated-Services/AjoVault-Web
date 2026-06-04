@@ -33,7 +33,28 @@ export interface DashboardActivity {
 
 export const dashboardKeys = {
   summary: ['dashboard', 'summary'] as const,
+  upcomingContributions: ['dashboard', 'upcomingContributions'] as const,
 };
+
+export interface UpcomingContributionItem {
+  id: string;
+  date: string;
+  name: string;
+  type: string;
+  contributionAmount: number;
+  status: string;
+  paymentUrl?: string | null;
+}
+
+export interface UpcomingContributionsResponse {
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  items: UpcomingContributionItem[];
+}
 
 export const getDashboardSummary = () =>
   apiRequest<DashboardSummaryResponse>('/api/dashboard/me');
+
+export const getUpcomingContributions = () =>
+  apiRequest<UpcomingContributionsResponse>('/api/dashboard/me/upcoming-contributions?page=1&pageSize=10');

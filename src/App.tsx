@@ -43,6 +43,7 @@ import CircleContribute from '@/pages/circles/CircleContribute';
 import CircleInvite from '@/pages/circles/CircleInvite';
 import CircleJoinInvite from '@/pages/circles/CircleJoinInvite';
 import CirclePayout from '@/pages/circles/CirclePayout';
+import CirclePayments from '@/pages/circles/CirclePayments';
 import Notifications from '@/pages/Notifications';
 import MorePage from '@/pages/more/MorePage';
 import Profile from '@/pages/more/Profile';
@@ -155,6 +156,7 @@ const App = () => (
                   <Route path="/circles" element={<CirclesHome />} />
                   <Route path="/circles/create" element={<CreateCircle />} />
                   <Route path="/circles/join" element={<JoinCircle />} />
+                  <Route path="/circles/payments" element={<CirclePayments />} />
                   <Route path="/circles/:id" element={<CircleDetail />} />
                   <Route path="/circles/:id/contribute" element={<CircleContribute />} />
                   <Route path="/circles/:id/invite" element={<CircleInvite />} />
