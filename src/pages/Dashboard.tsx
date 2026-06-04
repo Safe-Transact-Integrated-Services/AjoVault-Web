@@ -17,6 +17,7 @@ import {
   Target,
   TrendingUp,
   Users,
+  Briefcase,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
@@ -32,7 +33,7 @@ import {
   CarouselPrevious,
 } from '@/components/ui/carousel';
 import { circlesKeys, getCircles } from '@/services/circlesApi';
-import { dashboardKeys, getDashboardSummary } from '@/services/dashboardApi';
+import { dashboardKeys, getDashboardSummary, getUpcomingContributions } from '@/services/dashboardApi';
 import { formatCurrency, formatDate, formatTime } from '@/services/mockData';
 
 const Dashboard = () => {
@@ -68,6 +69,11 @@ const Dashboard = () => {
   const circlesQuery = useQuery({
     queryKey: circlesKeys.all,
     queryFn: getCircles,
+    enabled: !!user,
+  });
+  const upcomingContributionsQuery = useQuery({
+    queryKey: dashboardKeys.upcomingContributions,
+    queryFn: getUpcomingContributions,
     enabled: !!user,
   });
 
@@ -112,36 +118,15 @@ const Dashboard = () => {
     }
   ] as any[];
   const kycProgress = getKycProgress(user);
+  const upcomingActivities = upcomingContributionsQuery.data?.items ?? [];
+
+  let sortedUpcomingActivities = [...upcomingActivities].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   
-  const fetchedActiveCircles = circlesQuery.data?.filter(c => c.status === 'active') ?? [];
-  const displayCircles = fetchedActiveCircles.length > 0 ? fetchedActiveCircles : [
-    {
-      id: 'dummy-1',
-      name: 'December Savings Group',
-      amount: 50000,
-      currency: 'NGN',
-      nextContributionDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-      status: 'active'
-    },
-    {
-      id: 'dummy-2',
-      name: 'Family Contribution',
-      amount: 15000,
-      currency: 'NGN',
-      nextContributionDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
-      status: 'active'
-    },
-    {
-      id: 'dummy-3',
-      name: 'Business Setup Ajo',
-      amount: 100000,
-      currency: 'NGN',
-      nextContributionDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
-      status: 'active'
-    }
-  ] as any[];
-  
-  const sortedActiveCircles = [...displayCircles].sort((a, b) => new Date(a.nextContributionDate).getTime() - new Date(b.nextContributionDate).getTime());
+  // Cap at exactly 4 items
+  if (sortedUpcomingActivities.length > 4) {
+    sortedUpcomingActivities = sortedUpcomingActivities.slice(0, 4);
+  }
+
   const currentHour = currentTime.getHours();
   const greeting =
     currentHour < 12
@@ -221,50 +206,66 @@ const Dashboard = () => {
           </button>
         </div>
 
-        {/* Active Circles Carousel */}
+        {/* Upcoming Activities Carousel */}
         {circlesQuery.isLoading ? (
           <div className="flex gap-4 overflow-hidden opacity-50">
             <div className="h-[90px] w-[85%] shrink-0 animate-pulse rounded-2xl bg-white/20 md:w-1/2 lg:w-1/3"></div>
             <div className="h-[90px] w-[85%] shrink-0 animate-pulse rounded-2xl bg-white/20 md:w-1/2 lg:w-1/3"></div>
           </div>
-        ) : sortedActiveCircles.length > 0 ? (
+        ) : sortedUpcomingActivities.length > 0 ? (
           <div>
-            <div className="mb-3 flex items-center gap-2 px-1">
-              <Users className="h-5 w-5 text-white/90" />
-              <h3 className="font-display text-base font-bold text-white">Active Circles</h3>
+            <div className="mb-3 flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-white/90" />
+                <h3 className="font-display text-base font-bold text-white">Upcoming Contributions</h3>
+              </div>
+              <button 
+                onClick={() => navigate('/circles')} 
+                className="flex items-center gap-1 text-[13px] font-medium text-white/80 hover:text-white"
+              >
+                View all 
+              </button>
             </div>
-            <Carousel
-              setApi={setCarouselApi}
-              opts={{ align: "start" }}
-              className="w-full"
-            >
-              <CarouselContent className="-ml-3">
-                {sortedActiveCircles.map(circle => (
-                  <CarouselItem key={circle.id} className="basis-[90%] pl-3 sm:basis-[80%] md:basis-1/2 lg:basis-1/3">
-                    <div className="flex h-full flex-col justify-end rounded-2xl border border-white/10 bg-white/20 p-4 backdrop-blur-md transition-colors hover:bg-white/30">
-                      <div className="mt-1">
-                        <p className="font-display text-[15px] font-bold text-white mb-0.5 truncate">{circle.name}</p>
-                        <p className="text-2xl font-bold tracking-tight text-white mb-3">{formatCurrency(circle.amount, circle.currency)}</p>
-                        <div className="flex items-center gap-2 text-[11px] font-medium text-white/90 bg-black/20 w-fit px-2.5 py-1 rounded-full backdrop-blur-sm">
-                          <span>Due {formatDate(circle.nextContributionDate)}</span>
+              <Carousel
+                setApi={setCarouselApi}
+                opts={{ align: "start" }}
+                className="w-full"
+              >
+                <CarouselContent className="-ml-2">
+                  {sortedUpcomingActivities.map(activity => (
+                    <CarouselItem key={activity.id} className={`${sortedUpcomingActivities.length === 1 ? 'basis-full' : 'basis-1/2'} pl-2`}>
+                      <div 
+                        onClick={() => activity.paymentUrl ? (window.location.href = activity.paymentUrl) : navigate(`/circles/${activity.id}`)}
+                        className="cursor-pointer flex h-full flex-col justify-end rounded-xl border border-white/10 bg-white/20 p-3 backdrop-blur-md transition-colors hover:bg-white/30"
+                      >
+                        <div className="mt-1">
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-white/70 mb-0.5">
+                            {activity.type ? `${activity.type} ` : ''}
+                          </p>
+                          <p className="font-display text-[12px] font-bold text-white mb-0.5 truncate">{activity.name}</p>
+                          <p className="text-lg font-bold tracking-tight text-white mb-2">{formatCurrency(activity.contributionAmount, 'NGN')}</p>
+                          <div className={`flex items-center gap-1.5 text-[9px] font-medium w-fit px-2 py-0.5 rounded-full backdrop-blur-sm ${activity.status?.toLowerCase() === 'missed' || activity.status?.toLowerCase() === 'overdue' ? 'bg-red-500/40 text-white' : 'bg-yellow-500/40 text-white'}`}>
+                            <span className="capitalize">{activity.status} {formatDate(activity.date)}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </CarouselItem>
-                ))}
-              </CarouselContent>
-              <div className="mt-4 flex justify-center gap-1.5">
-                {sortedActiveCircles.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => carouselApi?.scrollTo(index)}
-                    className={`h-1.5 rounded-full transition-all ${currentSlide === index ? 'w-4 bg-white' : 'w-1.5 bg-white/40'}`}
-                    aria-label={`Go to slide ${index + 1}`}
-                  />
-                ))}
-              </div>
-            </Carousel>
-          </div>
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+                {sortedUpcomingActivities.length > 1 && (
+                  <div className="mt-4 flex justify-center gap-1.5">
+                    {Array.from({ length: Math.ceil(sortedUpcomingActivities.length / 2) }).map((_, index) => (
+                      <button
+                        key={index}
+                        onClick={() => carouselApi?.scrollTo(index * 2)}
+                        className={`h-1.5 rounded-full transition-all ${currentSlide === index ? 'w-4 bg-white' : 'w-1.5 bg-white/40'}`}
+                        aria-label={`Go to slide ${index + 1}`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </Carousel>
+            </div>
         ) : null}
       </motion.div>
 
@@ -368,8 +369,21 @@ const Dashboard = () => {
         </Badge>
       </button>
 
+      <button onClick={() => navigate('/agent/apply')} className="mb-6 flex w-full items-center justify-between rounded-xl border border-border bg-card p-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100/50">
+            <Briefcase className="h-5 w-5 text-blue-600" />
+          </div>
+          <div className="text-left">
+            <p className="text-sm font-semibold text-foreground">Become an Agent</p>
+            <p className="text-xs text-muted-foreground">Earn commissions easily</p>
+          </div>
+        </div>
+        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+      </button>
+
       {/* <div className="mb-6 rounded-[20px] bg-white p-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-border/50"> */}
-        <h2 className="mb-4 font-display text-sm font-bold text-[#1a2b4c]">Upcoming Activities</h2>
+        <h2 className="mb-4 font-display text-sm font-bold text-[#1a2b4c]">Upcoming Payments</h2>
         <div className="space-y-3">
           {/* Circle Payment */}
           <div
@@ -394,6 +408,7 @@ const Dashboard = () => {
           <div
             role="button"
             tabIndex={0}
+            onClick={() => navigate('/circles/payments')}
             className="flex items-center justify-between rounded-[14px] border border-border/50 bg-white p-3 shadow-sm transition-all hover:border-blue-100 hover:shadow-md cursor-pointer"
           >
             <div className="flex items-center gap-3">
@@ -412,6 +427,7 @@ const Dashboard = () => {
           <div
             role="button"
             tabIndex={0}
+            onClick={() => navigate('/circles/payments')}
             className="flex items-center justify-between rounded-[14px] border border-border/50 bg-white p-3 shadow-sm transition-all hover:border-blue-100 hover:shadow-md cursor-pointer"
           >
             <div className="flex items-center gap-3">
@@ -447,13 +463,13 @@ const Dashboard = () => {
             {recentActivities.slice(0, 3).map(transaction => (
               <div key={transaction.activityId} className="flex items-start justify-between gap-3 border-b border-border/50 py-3 last:border-0 last:pb-0">
                 <div className="flex flex-1 items-start gap-3 min-w-0">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/40 mt-0.5">
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full mt-0.5 ${transaction.type === 'credit' ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
                     {transaction.type === 'credit'
-                      ? <ArrowDownLeft className="h-5 w-5 text-muted-foreground" />
-                      : <ArrowUpRight className="h-5 w-5 text-muted-foreground" />}
+                      ? <ArrowDownLeft className="h-5 w-5" />
+                      : <ArrowUpRight className="h-5 w-5" />}
                   </div>
                   <div className="flex flex-col min-w-0">
-                    <p className="text-[14px] font-semibold text-[#1a2b4c] truncate">
+                    <p className={`text-[14px] font-semibold truncate ${transaction.type === 'credit' ? 'text-success' : 'text-destructive'}`}>
                       {transaction.type === 'credit' ? 'Deposited' : 'Withdrawal'}
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-0.5 truncate">

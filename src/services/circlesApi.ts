@@ -16,6 +16,7 @@ interface GroupSummaryResponse {
   nextPayoutDate: string;
   status: 'active' | 'pending' | 'completed';
   payoutType: 'rotation' | 'random' | 'bidding';
+  hasPaidCurrentCycle?: boolean;
 }
 
 interface GroupMemberResponse {
@@ -146,6 +147,7 @@ export interface CircleSummary {
   nextPayoutDate: string;
   status: 'active' | 'pending' | 'completed';
   payoutType: 'rotation' | 'random' | 'bidding';
+  hasPaidCurrentCycle?: boolean;
 }
 
 export interface CircleMember {
@@ -425,12 +427,12 @@ const mapCircleSummary = (circle: GroupSummaryResponse): CircleSummary => ({
   nextPayoutDate: circle.nextPayoutDate,
   status: circle.status,
   payoutType: circle.payoutType,
+  hasPaidCurrentCycle: circle.hasPaidCurrentCycle,
 });
 
 const mapCircleDetail = (circle: GroupDetailResponse): CircleDetail => ({
   ...mapCircleSummary(circle),
   inviteCode: circle.inviteCode,
-  hasPaidCurrentCycle: circle.hasPaidCurrentCycle,
   canPayout: circle.canPayout,
   payoutAmount: circle.payoutAmount,
   members: circle.members.map(member => ({
