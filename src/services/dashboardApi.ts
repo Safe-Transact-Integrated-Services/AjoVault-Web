@@ -34,6 +34,7 @@ export interface DashboardActivity {
 export const dashboardKeys = {
   summary: ['dashboard', 'summary'] as const,
   upcomingContributionsPreview: ['dashboard', 'upcomingContributions', 'preview'] as const,
+  upcomingContributionsAll: ['dashboard', 'upcomingContributions', 'all'] as const,
   upcomingContributions: (page: number, pageSize: number) =>
     ['dashboard', 'upcomingContributions', page, pageSize] as const,
 };
@@ -62,6 +63,32 @@ export const getUpcomingContributions = (page = 1, pageSize = 10) =>
   apiRequest<UpcomingContributionsResponse>(
     `/api/dashboard/me/upcoming-contributions?page=${page}&pageSize=${pageSize}`,
   );
+
+export const compareUpcomingContributionsByDate = (
+  a: UpcomingContributionItem,
+  b: UpcomingContributionItem,
+) => new Date(b.date).getTime() - new Date(a.date).getTime();
+
+export const sortUpcomingContributionsByDate = (items: UpcomingContributionItem[]) =>
+  [...items].sort(compareUpcomingContributionsByDate);
+
+export const getAllUpcomingContributions = async () => {
+  const firstPage = await getUpcomingContributions(1, 100);
+
+  if (firstPage.totalCount <= firstPage.items.length) {
+    return {
+      ...firstPage,
+      items: sortUpcomingContributionsByDate(firstPage.items),
+    };
+  }
+
+  const fullPage = await getUpcomingContributions(1, firstPage.totalCount);
+
+  return {
+    ...fullPage,
+    items: sortUpcomingContributionsByDate(fullPage.items),
+  };
+};
 
 export const resolveUpcomingContributionPath = (item: UpcomingContributionItem) => {
   if (item.paymentUrl?.startsWith('/')) {
