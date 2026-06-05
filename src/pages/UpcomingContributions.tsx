@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Users } from 'lucide-react';
@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/pagination';
 import {
   dashboardKeys,
-  getUpcomingContributions,
+  getAllUpcomingContributions,
   openUpcomingContribution,
 } from '@/services/dashboardApi';
 import { formatCurrency, formatDate } from '@/services/mockData';
@@ -26,13 +26,18 @@ const UpcomingContributions = () => {
   const [currentPage, setCurrentPage] = useState(1);
 
   const contributionsQuery = useQuery({
-    queryKey: dashboardKeys.upcomingContributions(currentPage, PAGE_SIZE),
-    queryFn: () => getUpcomingContributions(currentPage, PAGE_SIZE),
+    queryKey: dashboardKeys.upcomingContributionsAll,
+    queryFn: getAllUpcomingContributions,
   });
 
-  const contributions = contributionsQuery.data?.items ?? [];
-  const totalCount = contributionsQuery.data?.totalCount ?? 0;
+  const sortedContributions = contributionsQuery.data?.items ?? [];
+  const totalCount = sortedContributions.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+
+  const contributions = useMemo(
+    () => sortedContributions.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [sortedContributions, currentPage],
+  );
 
   const getStatusLabel = (status: string) => {
     const normalized = status?.toLowerCase();
