@@ -38,6 +38,7 @@ import {
   getDashboardSummary,
   getUpcomingContributions,
   openUpcomingContribution,
+  sortUpcomingContributionsByDate,
 } from '@/services/dashboardApi';
 import { formatCurrency, formatDate, formatTime } from '@/services/mockData';
 
@@ -90,7 +91,7 @@ const Dashboard = () => {
   const kycProgress = getKycProgress(user);
   const upcomingActivities = upcomingContributionsQuery.data?.items ?? [];
 
-  let sortedUpcomingActivities = [...upcomingActivities].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  let sortedUpcomingActivities = sortUpcomingContributionsByDate(upcomingActivities);
   
   // Cap at exactly 4 items
   if (sortedUpcomingActivities.length > 4) {
