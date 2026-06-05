@@ -33,7 +33,12 @@ import {
   CarouselPrevious,
 } from '@/components/ui/carousel';
 import { circlesKeys, getCircles } from '@/services/circlesApi';
-import { dashboardKeys, getDashboardSummary, getUpcomingContributions } from '@/services/dashboardApi';
+import {
+  dashboardKeys,
+  getDashboardSummary,
+  getUpcomingContributions,
+  openUpcomingContribution,
+} from '@/services/dashboardApi';
 import { formatCurrency, formatDate, formatTime } from '@/services/mockData';
 
 const Dashboard = () => {
@@ -72,8 +77,8 @@ const Dashboard = () => {
     enabled: !!user,
   });
   const upcomingContributionsQuery = useQuery({
-    queryKey: dashboardKeys.upcomingContributions,
-    queryFn: getUpcomingContributions,
+    queryKey: dashboardKeys.upcomingContributionsPreview,
+    queryFn: () => getUpcomingContributions(1, 10),
     enabled: !!user,
   });
 
@@ -184,11 +189,11 @@ const Dashboard = () => {
                 <Users className="h-5 w-5 text-white/90" />
                 <h3 className="font-display text-base font-bold text-white">Upcoming Contributions</h3>
               </div>
-              <button 
-                onClick={() => navigate('/circles')} 
+              <button
+                onClick={() => navigate('/upcoming-contributions')}
                 className="flex items-center gap-1 text-[13px] font-medium text-white/80 hover:text-white"
               >
-                View all 
+                View all
               </button>
             </div>
             {sortedUpcomingActivities.length > 0 ? (
@@ -201,7 +206,7 @@ const Dashboard = () => {
                   {sortedUpcomingActivities.map(activity => (
                     <CarouselItem key={activity.id} className={`${sortedUpcomingActivities.length === 1 ? 'basis-full' : 'basis-1/2'} pl-2`}>
                       <div 
-                        onClick={() => activity.paymentUrl ? (window.location.href = activity.paymentUrl) : navigate(`/circles/${activity.id}`)}
+                        onClick={() => openUpcomingContribution(activity, navigate)}
                         className="cursor-pointer flex h-full flex-col justify-end rounded-xl border border-white/10 bg-white/20 p-3 backdrop-blur-md transition-colors hover:bg-white/30"
                       >
                         <div className="mt-1">
