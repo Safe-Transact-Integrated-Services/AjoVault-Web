@@ -33,7 +33,9 @@ export interface DashboardActivity {
 
 export const dashboardKeys = {
   summary: ['dashboard', 'summary'] as const,
-  upcomingContributions: ['dashboard', 'upcomingContributions'] as const,
+  upcomingContributionsPreview: ['dashboard', 'upcomingContributions', 'preview'] as const,
+  upcomingContributions: (page: number, pageSize: number) =>
+    ['dashboard', 'upcomingContributions', page, pageSize] as const,
 };
 
 export interface UpcomingContributionItem {
@@ -56,5 +58,50 @@ export interface UpcomingContributionsResponse {
 export const getDashboardSummary = () =>
   apiRequest<DashboardSummaryResponse>('/api/dashboard/me');
 
-export const getUpcomingContributions = () =>
-  apiRequest<UpcomingContributionsResponse>('/api/dashboard/me/upcoming-contributions?page=1&pageSize=10');
+export const getUpcomingContributions = (page = 1, pageSize = 10) =>
+  apiRequest<UpcomingContributionsResponse>(
+    `/api/dashboard/me/upcoming-contributions?page=${page}&pageSize=${pageSize}`,
+  );
+
+export const resolveUpcomingContributionPath = (item: UpcomingContributionItem) => {
+  if (item.paymentUrl?.startsWith('/')) {
+    return item.paymentUrl;
+  }
+
+  const type = item.type?.toLowerCase().trim() ?? '';
+  const { id } = item;
+
+  if (type.includes('circle') || type.includes('ajo')) {
+    return `/circles/${id}`;
+  }
+
+  if (type.includes('saving') || type.includes('thrift')) {
+    return `/savings/${id}`;
+  }
+
+  if (type.includes('group') && type.includes('goal')) {
+    return `/group-goals/${id}`;
+  }
+
+  if (type.includes('cooperative')) {
+    return '/cooperative';
+  }
+
+  if (type.includes('fundraising') || type.includes('fundraiser')) {
+    return `/fundraising/${id}`;
+  }
+
+  return `/circles/${id}`;
+};
+
+export const openUpcomingContribution = (
+  item: UpcomingContributionItem,
+  navigate: (path: string) => void,
+) => {
+  if (item.paymentUrl && !item.paymentUrl.startsWith('/')) {
+    window.location.href = item.paymentUrl;
+    return;
+  }
+
+  navigate(resolveUpcomingContributionPath(item));
+};

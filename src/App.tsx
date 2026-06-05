@@ -25,6 +25,7 @@ import ResetPassword from '@/pages/ResetPassword';
 import ForgotPin from '@/pages/ForgotPin';
 import ResetPin from '@/pages/ResetPin';
 import Dashboard from '@/pages/Dashboard';
+import UpcomingContributions from '@/pages/UpcomingContributions';
 import FundWallet from '@/pages/wallet/FundWallet';
 import Transfer from '@/pages/wallet/Transfer';
 import BillPayment from '@/pages/wallet/BillPayment';
@@ -147,6 +148,7 @@ const App = () => (
               <Route element={<AuthRouteGuard />}>
                 <Route element={<AppLayout />}>
                   <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/upcoming-contributions" element={<UpcomingContributions />} />
                   <Route path="/savings" element={<SavingsHome />} />
                   <Route path="/savings/create" element={<CreateSavings />} />
                   <Route path="/savings/invite" element={<SavingsInvite />} />
