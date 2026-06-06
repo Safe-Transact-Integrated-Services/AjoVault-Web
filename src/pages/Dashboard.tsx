@@ -91,7 +91,7 @@ const Dashboard = () => {
   const kycProgress = getKycProgress(user);
   const upcomingActivities = upcomingContributionsQuery.data?.items ?? [];
 
-  let sortedUpcomingActivities = sortUpcomingContributionsByDate(upcomingActivities);
+  let sortedUpcomingActivities = upcomingActivities;
   
   // Cap at exactly 4 items
   if (sortedUpcomingActivities.length > 4) {
