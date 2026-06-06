@@ -204,25 +204,34 @@ const Dashboard = () => {
                 className="w-full"
               >
                 <CarouselContent className="-ml-2">
-                  {sortedUpcomingActivities.map(activity => (
-                    <CarouselItem key={activity.id} className={`${sortedUpcomingActivities.length === 1 ? 'basis-full' : 'basis-1/2'} pl-2`}>
-                      <div 
-                        onClick={() => openUpcomingContribution(activity, navigate)}
-                        className="cursor-pointer flex h-full flex-col justify-end rounded-xl border border-white/10 bg-white/20 p-3 backdrop-blur-md transition-colors hover:bg-white/30"
-                      >
-                        <div className="mt-1">
-                          <p className="text-[9px] font-bold uppercase tracking-widest text-white/70 mb-0.5">
-                            {activity.type ? `${activity.type} ` : ''}
-                          </p>
-                          <p className="font-display text-[12px] font-bold text-white mb-0.5 truncate">{activity.name}</p>
-                          <p className="text-lg font-bold tracking-tight text-white mb-2">{formatCurrency(activity.contributionAmount, 'NGN')}</p>
-                          <div className={`flex items-center gap-1.5 text-[9px] font-medium w-fit px-2 py-0.5 rounded-full backdrop-blur-sm ${activity.status?.toLowerCase() === 'missed' || activity.status?.toLowerCase() === 'overdue' ? 'bg-red-500/40 text-white' : 'bg-yellow-500/40 text-white'}`}>
-                            <span className="capitalize">{activity.status?.toLowerCase() === 'upcoming' ? 'Due' : activity.status} {formatDate(activity.date)}</span>
+                  {sortedUpcomingActivities.map(activity => {
+                    const contributionStatus = activity.status?.toLowerCase();
+                    const isOverdueContribution = contributionStatus === 'missed' || contributionStatus === 'overdue';
+                    const contributionStatusClass = isOverdueContribution
+                      ? 'bg-red-50 text-red-700 ring-1 ring-red-200'
+                      : 'bg-amber-50 text-amber-800 ring-1 ring-amber-200';
+                    const contributionStatusLabel = contributionStatus === 'upcoming' ? 'Due' : activity.status;
+
+                    return (
+                      <CarouselItem key={activity.id} className={`${sortedUpcomingActivities.length === 1 ? 'basis-full' : 'basis-1/2'} pl-2`}>
+                        <div
+                          onClick={() => openUpcomingContribution(activity, navigate)}
+                          className="cursor-pointer flex h-full flex-col justify-end rounded-xl border border-white/10 bg-white/20 p-3 backdrop-blur-md transition-colors hover:bg-white/30"
+                        >
+                          <div className="mt-1">
+                            <p className="text-[9px] font-bold uppercase tracking-widest text-white/70 mb-0.5">
+                              {activity.type ? `${activity.type} ` : ''}
+                            </p>
+                            <p className="font-display text-[12px] font-bold text-white mb-0.5 truncate">{activity.name}</p>
+                            <p className="text-lg font-bold tracking-tight text-white mb-2">{formatCurrency(activity.contributionAmount, 'NGN')}</p>
+                            <div className={`flex items-center gap-1.5 text-[9px] font-semibold w-fit px-2 py-0.5 rounded-full shadow-sm ${contributionStatusClass}`}>
+                              <span className="capitalize">{contributionStatusLabel} {formatDate(activity.date)}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </CarouselItem>
-                  ))}
+                      </CarouselItem>
+                    );
+                  })}
                 </CarouselContent>
                 {sortedUpcomingActivities.length > 1 && (
                   <div className="mt-4 flex justify-center gap-1.5">
