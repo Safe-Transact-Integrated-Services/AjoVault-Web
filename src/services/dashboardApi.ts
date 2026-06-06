@@ -69,16 +69,15 @@ export const compareUpcomingContributionsByDate = (
   b: UpcomingContributionItem,
 ) => new Date(b.date).getTime() - new Date(a.date).getTime();
 
-export const sortUpcomingContributionsByDate = (items: UpcomingContributionItem[]) =>
-  [...items].sort(compareUpcomingContributionsByDate);
+
 
 export const getAllUpcomingContributions = async () => {
-  const firstPage = await getUpcomingContributions(1, 100);
+  const firstPage = await getUpcomingContributions(1, 10);
 
   if (firstPage.totalCount <= firstPage.items.length) {
     return {
       ...firstPage,
-      items: sortUpcomingContributionsByDate(firstPage.items),
+      items: firstPage.items,
     };
   }
 
@@ -86,7 +85,7 @@ export const getAllUpcomingContributions = async () => {
 
   return {
     ...fullPage,
-    items: sortUpcomingContributionsByDate(fullPage.items),
+    items: fullPage.items,
   };
 };
 
