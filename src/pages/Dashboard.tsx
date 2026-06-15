@@ -41,6 +41,7 @@ import {
   sortUpcomingContributionsByDate,
 } from '@/services/dashboardApi';
 import { formatCurrency, formatDate, formatTime } from '@/services/mockData';
+import { mockUpcomingPayments, getStatusClassName, getStatusLabel } from '@/pages/UpcomingPayments';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -369,64 +370,62 @@ const Dashboard = () => {
       </button>
 
       {/* <div className="mb-6 rounded-[20px] bg-white p-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-border/50"> */}
-        <h2 className="mb-4 font-display text-sm font-bold text-[#1a2b4c]">Upcoming Payments</h2>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-display text-sm font-bold text-[#1a2b4c]">Upcoming Payments</h2>
+          <button onClick={() => navigate('/upcoming-payments')} className="text-[13px] font-medium text-blue-500 hover:text-blue-600">View all</button>
+        </div>
         <div className="space-y-3">
-          {/* Circle Payment */}
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => navigate('/circles/payments')}
-            className="flex items-center justify-between rounded-[14px] border border-border/50 bg-white p-3 shadow-sm transition-all hover:border-blue-100 hover:shadow-md cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-500">
-                <CreditCard className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-[#1a2b4c]">Circle Payment</p>
-                <p className="mt-0.5 text-[10px] text-muted-foreground">14 - 16 December 2026 - 5:30 PM</p>
-              </div>
-            </div>
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          </div>
+          {mockUpcomingPayments.slice(0, 3).map(payment => {
+            const t = payment.type.toLowerCase();
+            let Icon = CreditCard;
+            if (t.includes('circle') || t.includes('ajo')) Icon = Users;
+            else if (t.includes('goal')) Icon = Target;
+            else if (t.includes('saving') || t.includes('thrift')) Icon = PiggyBank;
 
-          {/* Savings Payment */}
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => navigate('/circles/payments')}
-            className="flex items-center justify-between rounded-[14px] border border-border/50 bg-white p-3 shadow-sm transition-all hover:border-blue-100 hover:shadow-md cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-500">
-                <CreditCard className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-[#1a2b4c]">Savings Payment</p>
-                <p className="mt-0.5 text-[10px] text-muted-foreground">14 - 16 December 2026 - 5:30 PM</p>
-              </div>
-            </div>
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          </div>
+            return (
+              <motion.button
+                key={payment.id}
+                type="button"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                onClick={() => {
+                  const pt = payment.type.toLowerCase();
+                  if (pt.includes('circle') || pt.includes('ajo')) {
+                    navigate(`/circles/${payment.referenceId}`);
+                  } else if (pt.includes('goal')) {
+                    navigate(`/group-goals/${payment.referenceId}`);
+                  } else {
+                    navigate(`/savings/${payment.referenceId}`);
+                  }
+                }}
+                className="w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/30"
+              >
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                      <Icon className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-foreground">{payment.title}</p>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                        {payment.type}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className={getStatusClassName(payment.status)}>
+                    {getStatusLabel(payment.status)}
+                  </Badge>
+                </div>
 
-          {/* Goals Payment */}
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => navigate('/circles/payments')}
-            className="flex items-center justify-between rounded-[14px] border border-border/50 bg-white p-3 shadow-sm transition-all hover:border-blue-100 hover:shadow-md cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-500">
-                <CreditCard className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-[#1a2b4c]">Goals Payment</p>
-                <p className="mt-0.5 text-[10px] text-muted-foreground">14 - 16 December 2026 - 5:30 PM</p>
-              </div>
-            </div>
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Due date</span>
+                    <span className="font-medium text-foreground">{payment.date}</span>
+                  </div>
+                </div>
+              </motion.button>
+            );
+          })}
         </div>
       {/* </div> */}
 

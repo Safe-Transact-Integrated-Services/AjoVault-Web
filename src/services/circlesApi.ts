@@ -1,4 +1,5 @@
 import { apiRequest } from '@/lib/api/http';
+import { mockCircles } from '@/services/mockData';
 
 interface GroupSummaryResponse {
   groupId: string;
@@ -315,6 +316,16 @@ export const getCircles = async (): Promise<CircleSummary[]> => {
 };
 
 export const getCircle = async (circleId: string): Promise<CircleDetail> => {
+  const mockCircle = mockCircles.find(c => c.id === circleId);
+  if (mockCircle) {
+    return new Promise(resolve => setTimeout(() => resolve({
+      ...mockCircle,
+      inviteCode: 'MOCK123',
+      hasPaidCurrentCycle: true,
+      canPayout: mockCircle.role === 'admin',
+      payoutAmount: mockCircle.amount * mockCircle.memberCount,
+    }), 500));
+  }
   const response = await apiRequest<GroupDetailResponse>(`/api/groups/${encodeURIComponent(circleId)}`);
   return mapCircleDetail(response);
 };

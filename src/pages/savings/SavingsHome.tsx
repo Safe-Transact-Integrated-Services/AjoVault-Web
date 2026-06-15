@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, PiggyBank, UserPlus } from 'lucide-react';
+import { Plus, Target, UserPlus } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -26,7 +26,7 @@ const SavingsHome = () => {
   return (
     <div className="px-4 py-6 safe-top">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="font-display text-xl font-bold text-foreground">Savings</h1>
+        <h1 className="font-display text-xl font-bold text-foreground">Goals</h1>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => navigate('/savings/invite')} className="gap-1">
             <UserPlus className="h-4 w-4" /> Invite
@@ -42,26 +42,26 @@ const SavingsHome = () => {
         <p className="mt-1 text-2xl font-bold">
           {plansQuery.isLoading ? 'Loading...' : formatCurrency(totalSaved)}
         </p>
-        <p className="mt-1 text-xs opacity-70">{activeCount} active plans</p>
+        <p className="mt-1 text-xs opacity-70">{activeCount} active goals</p>
       </motion.div>
 
       <div className="space-y-3">
         {plansQuery.isLoading && (
           <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
-            Loading savings plans...
+            Loading goals...
           </div>
         )}
 
         {plansQuery.isError && (
           <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
-            Unable to load savings plans right now.
+            Unable to load goals right now.
           </div>
         )}
 
         {!plansQuery.isLoading && !plansQuery.isError && plans.length === 0 && (
           <EmptyTableState
-            title="No savings plans yet"
-            description="Create one to start saving from your wallet."
+            title="No goals yet"
+            description="Create one to start saving towards your goals."
           />
         )}
 
@@ -78,7 +78,7 @@ const SavingsHome = () => {
             >
               <div className="mb-3 flex items-start justify-between">
                 <div className="flex items-center gap-2">
-                  {plan.goalImage ? <span className="text-2xl">{plan.goalImage}</span> : <PiggyBank className="h-5 w-5 text-accent" />}
+                  {plan.goalImage ? <span className="text-2xl">{plan.goalImage}</span> : <Target className="h-5 w-5 text-accent" />}
                   <div>
                     <p className="font-semibold text-foreground">{plan.name}</p>
                     <p className="text-xs text-muted-foreground">{plan.interestRate}% p.a.</p>

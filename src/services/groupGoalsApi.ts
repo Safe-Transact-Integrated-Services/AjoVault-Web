@@ -208,6 +208,34 @@ export const getGroupGoals = async (): Promise<GroupGoalSummary[]> => {
 };
 
 export const getGroupGoal = async (goalId: string): Promise<GroupGoalDetail> => {
+  if (goalId === 'sav_001' || goalId === 'sav_002' || goalId === 'sav_003' || goalId.startsWith('sav_')) {
+    return new Promise(resolve => setTimeout(() => resolve({
+      id: goalId,
+      name: 'Sample Group Goal',
+      description: 'A mock group goal for demonstration.',
+      category: 'other',
+      targetAmount: 500000,
+      currentBalance: 150000,
+      contributionAmount: 10000,
+      currency: 'NGN',
+      frequency: 'weekly',
+      deadline: '2026-12-31',
+      status: 'active',
+      creatorName: 'Adaeze Okafor',
+      memberCount: 3,
+      role: 'admin',
+      progressPercent: 30,
+      createdAt: '2026-01-01',
+      inviteCode: 'GOAL123',
+      canInvite: true,
+      canContribute: true,
+      members: [
+        { id: 'm1', name: 'Adaeze Okafor', role: 'admin', totalContributed: 50000, lastContributionAt: '2026-06-01' },
+        { id: 'm2', name: 'Chidi N.', role: 'member', totalContributed: 50000, lastContributionAt: '2026-06-01' },
+        { id: 'm3', name: 'Funke A.', role: 'member', totalContributed: 50000, lastContributionAt: '2026-06-01' },
+      ],
+    }), 500));
+  }
   const response = await apiRequest<GroupGoalDetailResponse>(`/api/group-goals/${encodeURIComponent(goalId)}`);
   return mapDetail(response);
 };
