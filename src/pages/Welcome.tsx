@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FeaturedPartners from '@/components/landing/FeaturedPartners';
+import ContactModal from '@/components/ContactModal';
+import { useAuth } from '@/contexts/AuthContext';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowRight,
@@ -48,10 +50,10 @@ type IconCard = {
 };
 
 const featureMenuItems = [
-  { name: 'Rotating group savings', href: '#features' },
-  { name: 'Thrift contributions', href: '#features' },
-  { name: 'Personal savings', href: '#features' },
-  { name: 'Investment clan', href: '#features' },
+  { name: 'Rotating group contributions', href: '#features' },
+  { name: 'Personal goals', href: '#features' },
+  { name: 'Group goals', href: '#features' },
+  { name: 'Fundraising', href: '#features' },
 ];
 
 const navLinks: NavLink[] = [
@@ -62,11 +64,10 @@ const navLinks: NavLink[] = [
   },
   {
     name: 'PLATFORM',
-    href: '#platform',
-    submenu: [{ name: 'Become an Agent', href: '/agent/apply' }],
+    href: '/agent/apply',
   },
   { name: 'SERVICES', href: '#services' },
-  { name: 'ABOUT US', href: '#about-us' },
+  { name: 'ABOUT US', href: 'https://www.safetransact.ng/' },
   { name: 'CONTACT US', href: '#contact-us' },
 ];
 
@@ -224,6 +225,8 @@ const Welcome = () => {
   const [mobileDropdown, setMobileDropdown] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [waitlistMessage, setWaitlistMessage] = useState('');
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 48);
@@ -262,6 +265,20 @@ const Welcome = () => {
               <div key={link.name} className="group relative">
                 <a
                   href={link.href}
+                  onClick={(e) => {
+                    if (link.name === 'CONTACT US') {
+                      e.preventDefault();
+                      setIsContactModalOpen(true);
+                    }
+                    if (link.name === 'PLATFORM') {
+                      e.preventDefault();
+                      if (isAuthenticated) {
+                        navigate('/agent/apply');
+                      } else {
+                        navigate('/login', { state: { from: { pathname: '/agent/apply' } } });
+                      }
+                    }
+                  }}
                   className="flex items-center gap-1 text-[10px] font-black text-white/75 transition-colors hover:text-[#3B82F6]"
                 >
                   {link.name}
@@ -349,6 +366,20 @@ const Welcome = () => {
                   onClick={() => {
                     if (link.submenu) {
                       setMobileDropdown(mobileDropdown === link.name ? null : link.name);
+                      return;
+                    }
+                    if (link.name === 'CONTACT US') {
+                      setIsMobileMenuOpen(false);
+                      setIsContactModalOpen(true);
+                      return;
+                    }
+                    if (link.name === 'PLATFORM') {
+                      setIsMobileMenuOpen(false);
+                      if (isAuthenticated) {
+                        navigate('/agent/apply');
+                      } else {
+                        navigate('/login', { state: { from: { pathname: '/agent/apply' } } });
+                      }
                       return;
                     }
 
@@ -501,8 +532,6 @@ const Welcome = () => {
           />
         </section>
 
-        <FeaturedPartners />
-
         <section id="features" className="bg-white py-24 scroll-mt-24">
           <div className="mx-auto max-w-7xl px-6">
             <SectionIntro
@@ -603,6 +632,8 @@ const Welcome = () => {
           </div>
         </section>
 
+        <FeaturedPartners />
+
         <section id="about-us" className="bg-white py-24 scroll-mt-24">
           <div className="mx-auto max-w-4xl px-6 text-center">
             <h2 className="mb-6 font-display text-4xl font-black text-[#102A56]">ABOUT US</h2>
@@ -698,11 +729,12 @@ const Welcome = () => {
               Have questions or want to partner with us? Reach out and our team will get back to you shortly.
             </p>
             <a
-              href="mailto:hello@ajovault.ng"
+              href="#"
+              onClick={(e) => { e.preventDefault(); setIsContactModalOpen(true); }}
               className="inline-flex items-center rounded-full bg-[#102A56] px-8 py-4 text-sm font-black uppercase text-white transition-all hover:bg-[#3B82F6]"
             >
               <Mail className="mr-2 h-4 w-4" />
-              hello@ajovault.ng
+              Get In Touch
             </a>
           </div>
         </section>
@@ -748,23 +780,43 @@ const Welcome = () => {
                 Digitizing community savings and empowering financial freedom for every circle.
               </p>
               <div className="flex gap-3">
-                {[Twitter, Instagram, Linkedin, Mail].map((Icon, index) => (
-                  <a
-                    key={index}
-                    href={index === 3 ? 'mailto:hello@ajovault.ng' : '#'}
-                    aria-label={index === 3 ? 'Email AjoVault' : 'AjoVault social link'}
-                    className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/10 bg-white/5 transition-all hover:bg-[#3B82F6]"
-                  >
-                    <Icon className="h-5 w-5" />
-                  </a>
-                ))}
+                {/* 
+                <a href="#" className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/10 bg-white/5 transition-all hover:bg-[#3B82F6]">
+                  <Twitter className="h-5 w-5" />
+                </a>
+                <a href="#" className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/10 bg-white/5 transition-all hover:bg-[#3B82F6]">
+                  <Instagram className="h-5 w-5" />
+                </a> 
+                */}
+                <a
+                  href="https://www.linkedin.com/company/safe-transact-ltd"
+                  aria-label="LinkedIn"
+                  className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/10 bg-white/5 transition-all hover:bg-[#3B82F6]"
+                >
+                  <Linkedin className="h-5 w-5" />
+                </a>
+                <a
+                  href="mailto:hello@ajovault.ng"
+                  aria-label="Email AjoVault"
+                  className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/10 bg-white/5 transition-all hover:bg-[#3B82F6]"
+                >
+                  <Mail className="h-5 w-5" />
+                </a>
               </div>
             </div>
 
             <div className="grid gap-10 sm:grid-cols-2 md:gap-12 lg:grid-cols-3 lg:gap-16 xl:gap-20">
-              <FooterLinks title="The Company" links={['About Us', 'Features', 'Platform', 'Contact Us']} />
+              <FooterLinks 
+                title="The Company" 
+                links={[{ name: 'About Us', href: 'https://www.safetransact.ng/' }, 'Platform', 'Contact Us']} 
+                onContactClick={() => setIsContactModalOpen(true)} 
+                onPlatformClick={() => {
+                  if (isAuthenticated) navigate('/agent/apply');
+                  else navigate('/login', { state: { from: { pathname: '/agent/apply' } } });
+                }}
+              />
               <FooterLinks title="Features" links={featureMenuItems} />
-              <FooterLinks title="Resources" links={['Help Center', 'Safety Guide', 'Community Rules', 'Privacy']} />
+              <FooterLinks title="Resources" links={['FAQ', 'Privacy']} />
             </div>
           </div>
 
@@ -774,6 +826,7 @@ const Welcome = () => {
           </div>
         </div>
       </footer>
+      <ContactModal isOpen={isContactModalOpen} onClose={() => setIsContactModalOpen(false)} />
     </div>
   );
 };
@@ -857,11 +910,11 @@ const ServiceCard = ({ title, description, icon: Icon }: IconCard) => (
 
 type FooterLinkItem = string | { name: string; href: string };
 
-const FooterLinks = ({ title, links }: { title: string; links: FooterLinkItem[] }) => {
+const FooterLinks = ({ title, links, onContactClick, onPlatformClick }: { title: string; links: FooterLinkItem[], onContactClick?: () => void, onPlatformClick?: () => void }) => {
   return (
     <div>
       <h3 className="mb-6 text-xs font-black uppercase text-[#3B82F6]">{title}</h3>
-      <ul className="space-y-4 text-sm font-bold uppercase text-white/45">
+      <ul className="space-y-4 text-xs font-bold uppercase text-white/45">
         {links.map(link => {
           const label = typeof link === 'string' ? link : link.name;
           const href =
@@ -873,7 +926,20 @@ const FooterLinks = ({ title, links }: { title: string; links: FooterLinkItem[] 
 
           return (
             <li key={label}>
-              <a href={href} className="transition-colors hover:text-white">
+              <a 
+                href={href} 
+                className="transition-colors hover:text-white"
+                onClick={(e) => {
+                  if (label === 'Contact Us' && onContactClick) {
+                    e.preventDefault();
+                    onContactClick();
+                  }
+                  if (label === 'Platform' && onPlatformClick) {
+                    e.preventDefault();
+                    onPlatformClick();
+                  }
+                }}
+              >
                 {label}
               </a>
             </li>

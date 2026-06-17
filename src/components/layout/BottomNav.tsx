@@ -1,11 +1,11 @@
-import { Heart, Home, PiggyBank, Users, MoreHorizontal } from 'lucide-react';
+import { Heart, Home, Target, Users, MoreHorizontal } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
 const tabs = [
   { path: '/dashboard', icon: Home, label: 'Home' },
   { path: '/circles', icon: Users, label: 'Circles' },
-  { path: '/savings', icon: PiggyBank, label: 'Savings' },
+  { path: '/group-goals', icon: Target, label: 'Goals' },
   { path: '/fundraising', icon: Heart, label: 'Fundraising' },
   { path: '/more', icon: MoreHorizontal, label: 'More' },
 ];

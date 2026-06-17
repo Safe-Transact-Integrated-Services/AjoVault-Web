@@ -1,5 +1,6 @@
 import { apiRequest } from '@/lib/api/http';
 import type { SavingsPlan } from '@/types';
+import { mockSavingsPlans } from '@/services/mockData';
 
 interface SavingsPlanResponse {
   planId: string;
@@ -145,6 +146,17 @@ export const getSavingsPlans = async (): Promise<SavingsPlan[]> => {
 };
 
 export const getSavingsPlan = async (planId: string): Promise<SavingsPlanDetail> => {
+  const mockPlan = mockSavingsPlans.find(p => p.id === planId);
+  if (mockPlan) {
+    return new Promise(resolve => setTimeout(() => resolve({
+      ...mockPlan,
+      fundingSource: 'wallet',
+      nextContributionDate: '2026-07-01',
+      progressPercent: (mockPlan.savedAmount / mockPlan.targetAmount) * 100,
+      hasSavedCardAuthorization: false,
+      contributions: [],
+    }), 500));
+  }
   const response = await apiRequest<SavingsPlanDetailResponse>(`/api/savings/plans/${encodeURIComponent(planId)}`);
   return mapSavingsPlanDetail(response);
 };

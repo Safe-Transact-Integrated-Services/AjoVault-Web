@@ -4,7 +4,7 @@ import opayLogo from '@/assets/opay.png';
 const FeaturedPartners = () => {
   return (
     <section
-      className="border-y border-slate-100 bg-trannsparent py-8 sm:py-10"
+      className="border-y border-slate-100 bg-white py-8 sm:py-10"
       aria-labelledby="featured-partners-heading"
     >
       <div className="mx-auto max-w-5xl px-6 text-center">
@@ -12,7 +12,7 @@ const FeaturedPartners = () => {
           id="featured-partners-heading"
           className="mb-6 text-[11px] font-bold uppercase tracking-[0.25em] text-slate-400 sm:mb-8 sm:text-xs"
         >
-          Trusted Payment Partners
+          OUR PARTNERS
         </h2>
         <div className="flex flex-wrap items-center justify-center gap-12 sm:gap-16 md:gap-24">
           <a
