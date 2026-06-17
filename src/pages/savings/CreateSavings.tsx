@@ -30,7 +30,7 @@ const CreateSavings = () => {
   const queryClient = useQueryClient();
   const walletQuery = useQuery({
     queryKey: walletKeys.me,
-    queryFn: getMyWallet,
+    queryFn: getMyWallet,   
   });
 
   const [step, setStep] = useState<Step>('type');
