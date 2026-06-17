@@ -275,7 +275,7 @@ const Welcome = () => {
                       if (isAuthenticated) {
                         navigate('/agent/apply');
                       } else {
-                        navigate('/login');
+                        navigate('/login', { state: { from: { pathname: '/agent/apply' } } });
                       }
                     }
                   }}
@@ -378,7 +378,7 @@ const Welcome = () => {
                       if (isAuthenticated) {
                         navigate('/agent/apply');
                       } else {
-                        navigate('/login');
+                        navigate('/login', { state: { from: { pathname: '/agent/apply' } } });
                       }
                       return;
                     }
@@ -812,7 +812,7 @@ const Welcome = () => {
                 onContactClick={() => setIsContactModalOpen(true)} 
                 onPlatformClick={() => {
                   if (isAuthenticated) navigate('/agent/apply');
-                  else navigate('/login');
+                  else navigate('/login', { state: { from: { pathname: '/agent/apply' } } });
                 }}
               />
               <FooterLinks title="Features" links={featureMenuItems} />

@@ -15,18 +15,18 @@ const PAGE_SIZE = 10;
 
 // Mock data since there's no endpoint
 export const mockUpcomingPayments = [
-  { id: 'p1', referenceId: 'sav_001', type: 'Savings', title: 'Hiroko Oneill', date: '08 Jun 2026', amount: 15000, status: 'missed' },
-  { id: 'p2', referenceId: 'sav_002', type: 'Savings', title: 'Emily Alexander', date: '12 Jun 2026', amount: 25000, status: 'paid' },
+  { id: 'p1', referenceId: 'sav_001', type: 'Goal', title: 'Hiroko', date: '08 Jun 2026', amount: 15000, status: 'missed' },
+  { id: 'p2', referenceId: 'sav_002', type: 'Goal', title: 'Emily', date: '12 Jun 2026', amount: 25000, status: 'paid' },
   { id: 'p3', referenceId: 'sav_003', type: 'Goal', title: 'New Macbook', date: '14 Jun 2026', amount: 20000, status: 'paid' },
   { id: 'p4', referenceId: 'cir_001', type: 'Circle', title: 'Constance Boyer', date: '15 Jun 2026', amount: 50000, status: 'due' },
   { id: 'p5', referenceId: 'cir_002', type: 'Circle', title: 'Weekend Ajo', date: '16 Jun 2026', amount: 10000, status: 'due' },
-  { id: 'p6', referenceId: 'sav_001', type: 'Savings', title: 'Emergency Fund', date: '20 Jun 2026', amount: 5000, status: 'upcoming' },
+  { id: 'p6', referenceId: 'sav_001', type: 'Goal', title: 'Emergency Fund', date: '20 Jun 2026', amount: 5000, status: 'upcoming' },
   { id: 'p7', referenceId: 'cir_001', type: 'Circle', title: 'Family Thrift', date: '25 Jun 2026', amount: 12000, status: 'upcoming' },
   { id: 'p8', referenceId: 'sav_002', type: 'Goal', title: 'Vacation', date: '01 Jul 2026', amount: 30000, status: 'upcoming' },
-  { id: 'p9', referenceId: 'sav_003', type: 'Savings', title: 'Rent', date: '15 Jul 2026', amount: 45000, status: 'upcoming' },
+  { id: 'p9', referenceId: 'sav_003', type: 'Goal', title: 'Rent', date: '15 Jul 2026', amount: 45000, status: 'upcoming' },
   { id: 'p10', referenceId: 'cir_002', type: 'Circle', title: 'Colleagues Ajo', date: '30 Jul 2026', amount: 20000, status: 'upcoming' },
   { id: 'p11', referenceId: 'sav_001', type: 'Goal', title: 'Car Downpayment', date: '15 Aug 2026', amount: 100000, status: 'upcoming' },
-  { id: 'p12', referenceId: 'sav_002', type: 'Savings', title: 'School Fees', date: '01 Sep 2026', amount: 35000, status: 'upcoming' },
+  { id: 'p12', referenceId: 'sav_002', type: 'Goal', title: 'School Fees', date: '01 Sep 2026', amount: 35000, status: 'upcoming' },
 ];
 
 export const getStatusClassName = (status: string) => {
