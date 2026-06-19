@@ -115,16 +115,12 @@ const UpcomingPayments = () => {
                     </p>
                   </div>
                 </div>
-                <Badge variant="secondary" className={getStatusClassName(payment.status)}>
-                  {getStatusLabel(payment.status)}
-                </Badge>
               </div>
 
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">Due date</span>
-                  <span className="font-medium text-foreground">{payment.date}</span>
-                </div>
+              <div className="text-sm text-right">
+                <p className="text-muted-foreground">
+                  Due date - <span className="font-medium text-foreground">{payment.date}</span>
+                </p>
               </div>
             </motion.button>
           );

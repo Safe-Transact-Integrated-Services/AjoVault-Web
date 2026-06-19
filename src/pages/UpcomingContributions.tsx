@@ -31,7 +31,12 @@ const UpcomingContributions = () => {
     queryFn: getAllUpcomingContributions,
   });
 
-  const sortedContributions = [...(contributionsQuery.data?.items ?? [])].sort(compareUpcomingContributionsByDate);
+  const sortedContributions = [...(contributionsQuery.data?.items ?? [])]
+    .filter(c => {
+      const status = c.status?.toLowerCase();
+      return status !== 'paid' && status !== 'completed';
+    })
+    .sort(compareUpcomingContributionsByDate);
   const totalCount = sortedContributions.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
@@ -40,8 +45,21 @@ const UpcomingContributions = () => {
     [sortedContributions, currentPage],
   );
 
-  const getStatusLabel = (status: string) => {
+  const getStatusLabel = (status: string, dateStr: string) => {
     const normalized = status?.toLowerCase();
+    if (normalized === 'paid' || normalized === 'completed') {
+      return 'Paid';
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const date = new Date(dateStr);
+    date.setHours(0, 0, 0, 0);
+
+    if (date < today) {
+      return 'Overdue';
+    }
+
     if (normalized === 'upcoming') {
       return 'Due';
     }
@@ -49,13 +67,19 @@ const UpcomingContributions = () => {
     return status;
   };
 
-  const getStatusClassName = (status: string) => {
+  const getStatusClassName = (status: string, dateStr: string) => {
     const normalized = status?.toLowerCase();
-    if (normalized === 'missed' || normalized === 'overdue') {
-      return 'bg-destructive/10 text-destructive';
-    }
     if (normalized === 'paid' || normalized === 'completed') {
       return 'bg-success/10 text-success';
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const date = new Date(dateStr);
+    date.setHours(0, 0, 0, 0);
+
+    if (date < today || normalized === 'missed' || normalized === 'overdue') {
+      return 'bg-destructive/10 text-destructive';
     }
 
     return 'bg-yellow-500/10 text-yellow-700';
@@ -109,8 +133,13 @@ const UpcomingContributions = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.04 }}
               onClick={() => openUpcomingContribution(contribution, navigate)}
-              className="w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/30"
+              className="relative w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/30"
             >
+              {isUrgentContribution(contribution) && (
+                <Badge className="absolute right-2 top-2 bg-red-500 hover:bg-red-600 text-white border-none text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded shadow-sm animate-pulse">
+                  Urgent
+                </Badge>
+              )}
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
@@ -123,24 +152,23 @@ const UpcomingContributions = () => {
                     </p>
                   </div>
                 </div>
-              <Badge variant="secondary" className={getStatusClassName(contribution.status)}>
-                {getStatusLabel(contribution.status)}
-              </Badge>
-            </div>
+                <Badge variant="secondary" className={getStatusClassName(contribution.status, contribution.date)}>
+                  {getStatusLabel(contribution.status, contribution.date)}
+                </Badge>
+              </div>
 
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Amount</span>
-                <span className="font-medium text-foreground">
-                  {formatCurrency(contribution.contributionAmount, 'NGN')}
-                </span>
+              <div className="space-y-1.5 text-sm">
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Amount</span>
+                  <span className="font-medium text-foreground">
+                    {formatCurrency(contribution.contributionAmount, 'NGN')}
+                  </span>
+                </div>
+                <p className="text-muted-foreground text-right">
+                  Due date - <span className="font-medium text-foreground">{formatDate(contribution.date)}</span>
+                </p>
               </div>
-              <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Due date</span>
-                <span className="font-medium text-foreground">{formatDate(contribution.date)}</span>
-              </div>
-            </div>
-          </motion.button>
+            </motion.button>
           );
         })}
       </div>
@@ -172,6 +200,35 @@ const UpcomingContributions = () => {
       )}
     </div>
   );
+};
+
+const isUrgentContribution = (activity: any) => {
+  const status = activity.status?.toLowerCase();
+  if (status === 'paid' || status === 'completed') {
+    return false;
+  }
+
+  const dueDate = new Date(activity.date);
+  const now = new Date();
+  
+  if (dueDate < now) {
+    return true;
+  }
+
+  const diffMs = dueDate.getTime() - now.getTime();
+  const frequency = activity.frequency?.toLowerCase() || 'monthly';
+
+  if (frequency === 'daily') {
+    return diffMs <= 12 * 60 * 60 * 1000;
+  }
+  if (frequency === 'weekly') {
+    return diffMs <= 2 * 24 * 60 * 60 * 1000;
+  }
+  if (frequency === 'monthly') {
+    return diffMs <= 7 * 24 * 60 * 60 * 1000;
+  }
+
+  return false;
 };
 
 export default UpcomingContributions;

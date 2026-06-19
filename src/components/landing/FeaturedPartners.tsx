@@ -10,7 +10,7 @@ const FeaturedPartners = () => {
       <div className="mx-auto max-w-5xl px-6 text-center">
         <h2
           id="featured-partners-heading"
-          className="mb-6 text-[11px] font-bold uppercase tracking-[0.25em] text-slate-400 sm:mb-8 sm:text-xs"
+          className="mb-16 font-display text-4xl font-black lg:text-6xl text-[#102A56]"
         >
           OUR PARTNERS
         </h2>

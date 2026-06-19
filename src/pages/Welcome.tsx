@@ -64,7 +64,11 @@ const navLinks: NavLink[] = [
   },
   {
     name: 'PLATFORM',
-    href: '/agent/apply',
+    href: '#',
+    submenu: [
+      { name: 'Agent', href: '/agent/apply' },
+      { name: 'Individual', href: '/signup' },
+    ],
   },
   { name: 'SERVICES', href: '#services' },
   { name: 'ABOUT US', href: 'https://www.safetransact.ng/' },
@@ -128,7 +132,7 @@ const howItWorks = [
     icon: UserPlus,
   },
   {
-    title: 'Set Savings Plan',
+    title: 'Create / Join a Circle',
     description: 'Join an existing circle or create your own plan with custom contribution rules.',
     icon: Settings,
   },
@@ -138,7 +142,7 @@ const howItWorks = [
     icon: Users,
   },
   {
-    title: 'Receive Funds & Grow',
+    title: 'Contribute and Grow',
     description: 'Track payouts, build financial history, and keep your community moving.',
     icon: CircleDollarSign,
   },
@@ -270,7 +274,7 @@ const Welcome = () => {
                       e.preventDefault();
                       setIsContactModalOpen(true);
                     }
-                    if (link.name === 'PLATFORM') {
+                    if (link.name === 'PLATFORM' && !link.submenu) {
                       e.preventDefault();
                       if (isAuthenticated) {
                         navigate('/agent/apply');
@@ -291,6 +295,20 @@ const Welcome = () => {
                       <a
                         key={sub.name}
                         href={sub.href}
+                        onClick={(e) => {
+                          if (sub.href.startsWith('/')) {
+                            e.preventDefault();
+                            if (sub.href === '/agent/apply') {
+                              if (isAuthenticated) {
+                                navigate('/agent/apply');
+                              } else {
+                                navigate('/login', { state: { from: { pathname: '/agent/apply' } } });
+                              }
+                            } else {
+                              goTo(sub.href);
+                            }
+                          }
+                        }}
                         className="block px-6 py-2 text-[10px] font-bold text-white/70 transition-colors hover:bg-white/5 hover:text-[#3B82F6]"
                       >
                         {sub.name}
@@ -405,8 +423,22 @@ const Welcome = () => {
                       <a
                         key={sub.name}
                         href={sub.href}
+                        onClick={(e) => {
+                          setIsMobileMenuOpen(false);
+                          if (sub.href.startsWith('/')) {
+                            e.preventDefault();
+                            if (sub.href === '/agent/apply') {
+                              if (isAuthenticated) {
+                                navigate('/agent/apply');
+                              } else {
+                                navigate('/login', { state: { from: { pathname: '/agent/apply' } } });
+                              }
+                            } else {
+                              goTo(sub.href);
+                            }
+                          }
+                        }}
                         className="py-1 text-sm font-bold text-white/55 transition-colors hover:text-[#3B82F6]"
-                        onClick={() => setIsMobileMenuOpen(false)}
                       >
                         {sub.name}
                       </a>
@@ -808,12 +840,19 @@ const Welcome = () => {
             <div className="grid gap-10 sm:grid-cols-2 md:gap-12 lg:grid-cols-3 lg:gap-16 xl:gap-20">
               <FooterLinks 
                 title="The Company" 
-                links={[{ name: 'About Us', href: 'https://www.safetransact.ng/' }, 'Platform', 'Contact Us']} 
+                links={[
+                  { name: 'About Us', href: 'https://www.safetransact.ng/' },
+                  {
+                    name: 'Platform',
+                    href: '#',
+                    submenu: [
+                      { name: 'Agent', href: '/agent/apply' },
+                      { name: 'Individual', href: '/signup' },
+                    ],
+                  },
+                  { name: 'Contact Us', href: '#contact-us' }
+                ]} 
                 onContactClick={() => setIsContactModalOpen(true)} 
-                onPlatformClick={() => {
-                  if (isAuthenticated) navigate('/agent/apply');
-                  else navigate('/login', { state: { from: { pathname: '/agent/apply' } } });
-                }}
               />
               <FooterLinks title="Features" links={featureMenuItems} />
               <FooterLinks title="Resources" links={['FAQ', 'Privacy']} />
@@ -908,9 +947,28 @@ const ServiceCard = ({ title, description, icon: Icon }: IconCard) => (
   </div>
 );
 
-type FooterLinkItem = string | { name: string; href: string };
+type FooterLinkItem =
+  | string
+  | {
+      name: string;
+      href: string;
+      submenu?: Array<{ name: string; href: string }>;
+    };
 
-const FooterLinks = ({ title, links, onContactClick, onPlatformClick }: { title: string; links: FooterLinkItem[], onContactClick?: () => void, onPlatformClick?: () => void }) => {
+const FooterLinks = ({
+  title,
+  links,
+  onContactClick,
+  onPlatformClick,
+}: {
+  title: string;
+  links: FooterLinkItem[];
+  onContactClick?: () => void;
+  onPlatformClick?: () => void;
+}) => {
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+
   return (
     <div>
       <h3 className="mb-6 text-xs font-black uppercase text-[#3B82F6]">{title}</h3>
@@ -923,25 +981,58 @@ const FooterLinks = ({ title, links, onContactClick, onPlatformClick }: { title:
                 ? '/signup'
                 : `#${link.toLowerCase().replace(/\s+/g, '-').replace('get-started', 'hero')}`
               : link.href;
+          const hasSubmenu = typeof link !== 'string' && 'submenu' in link && link.submenu;
 
           return (
-            <li key={label}>
-              <a 
-                href={href} 
-                className="transition-colors hover:text-white"
-                onClick={(e) => {
-                  if (label === 'Contact Us' && onContactClick) {
-                    e.preventDefault();
-                    onContactClick();
-                  }
-                  if (label === 'Platform' && onPlatformClick) {
-                    e.preventDefault();
-                    onPlatformClick();
-                  }
-                }}
-              >
-                {label}
-              </a>
+            <li key={label} className="space-y-2">
+              {hasSubmenu ? (
+                <>
+                  <span className="text-white/40 cursor-default">{label}</span>
+                  <ul className="list-disc pl-5 space-y-2 mt-2">
+                    {link.submenu.map(sub => (
+                      <li key={sub.name}>
+                        <a
+                          href={sub.href}
+                          onClick={(e) => {
+                            if (sub.href.startsWith('/')) {
+                              e.preventDefault();
+                              if (sub.href === '/agent/apply') {
+                                if (isAuthenticated) {
+                                  navigate('/agent/apply');
+                                } else {
+                                  navigate('/login', { state: { from: { pathname: '/agent/apply' } } });
+                                }
+                              } else {
+                                navigate(sub.href);
+                              }
+                            }
+                          }}
+                          className="transition-colors hover:text-white"
+                        >
+                          {sub.name}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <a
+                  href={href}
+                  className="transition-colors hover:text-white"
+                  onClick={(e) => {
+                    if (label === 'Contact Us' && onContactClick) {
+                      e.preventDefault();
+                      onContactClick();
+                    }
+                    if (label === 'Platform' && onPlatformClick) {
+                      e.preventDefault();
+                      onPlatformClick();
+                    }
+                  }}
+                >
+                  {label}
+                </a>
+              )}
             </li>
           );
         })}

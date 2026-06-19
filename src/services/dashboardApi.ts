@@ -67,7 +67,7 @@ export const getUpcomingContributions = (page = 1, pageSize = 10) =>
 export const compareUpcomingContributionsByDate = (
   a: UpcomingContributionItem,
   b: UpcomingContributionItem,
-) => new Date(b.date).getTime() - new Date(a.date).getTime();
+) => new Date(a.date).getTime() - new Date(b.date).getTime();
 
 
 
