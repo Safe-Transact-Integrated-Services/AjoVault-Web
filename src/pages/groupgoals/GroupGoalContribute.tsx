@@ -8,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { getApiErrorMessage } from '@/lib/api/http';
-import { dashboardKeys } from '@/services/dashboardApi';
+import { dashboardKeys, markContributionAsPaid } from '@/services/dashboardApi';
 import { contributeToGroupGoal, getGroupGoal, groupGoalsKeys, type GroupGoalContributionResult } from '@/services/groupGoalsApi';
 import { formatCurrency } from '@/services/mockData';
 import { walletKeys } from '@/services/walletApi';
@@ -67,6 +67,7 @@ const GroupGoalContribute = () => {
     try {
       const result = await contributeToGroupGoal(id, pin);
       setReceipt(result);
+      markContributionAsPaid(goal.id, queryClient);
       await refreshQueries();
       setStep('receipt');
       toast.success(result.goalStatus.toLowerCase() === 'completed' ? 'Group goal completed.' : 'Group goal contribution posted.');

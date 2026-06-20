@@ -33,12 +33,15 @@ import {
   CarouselPrevious,
 } from '@/components/ui/carousel';
 import { circlesKeys, getCircles } from '@/services/circlesApi';
+import { savingsKeys, getSavingsPlans } from '@/services/savingsApi';
+import { groupGoalsKeys, getGroupGoals } from '@/services/groupGoalsApi';
 import {
   dashboardKeys,
   getDashboardSummary,
   getUpcomingContributions,
   openUpcomingContribution,
-  sortUpcomingContributionsByDate,
+  compareUpcomingContributionsByDate,
+  filterUpcomingContributions,
 } from '@/services/dashboardApi';
 import { formatCurrency, formatDate, formatTime } from '@/services/mockData';
 import { mockUpcomingPayments, getStatusClassName, getStatusLabel } from '@/pages/UpcomingPayments';
@@ -55,9 +58,9 @@ const Dashboard = () => {
     if (!carouselApi) {
       return;
     }
-    
+
     setCurrentSlide(carouselApi.selectedScrollSnap());
-    
+
     carouselApi.on("select", () => {
       setCurrentSlide(carouselApi.selectedScrollSnap());
     });
@@ -78,6 +81,16 @@ const Dashboard = () => {
     queryFn: getCircles,
     enabled: !!user,
   });
+  const savingsPlansQuery = useQuery({
+    queryKey: savingsKeys.plans,
+    queryFn: getSavingsPlans,
+    enabled: !!user,
+  });
+  const groupGoalsQuery = useQuery({
+    queryKey: groupGoalsKeys.list,
+    queryFn: getGroupGoals,
+    enabled: !!user,
+  });
   const upcomingContributionsQuery = useQuery({
     queryKey: dashboardKeys.upcomingContributionsPreview,
     queryFn: () => getUpcomingContributions(1, 10),
@@ -90,14 +103,16 @@ const Dashboard = () => {
   const circles = dashboardQuery.data?.circles;
   const recentActivities = dashboardQuery.data?.recentActivities ?? [];
   const kycProgress = getKycProgress(user);
-  const upcomingActivities = upcomingContributionsQuery.data?.items ?? [];
 
-  let sortedUpcomingActivities = upcomingActivities;
-  
-  // Cap at exactly 4 items
-  if (sortedUpcomingActivities.length > 4) {
-    sortedUpcomingActivities = sortedUpcomingActivities.slice(0, 4);
-  }
+  const sortedUpcomingActivities = filterUpcomingContributions(
+    upcomingContributionsQuery.data?.items ?? []
+  )
+    .filter(activity => {
+      const status = activity.status?.toLowerCase();
+      return status !== 'paid' && status !== 'completed';
+    })
+    .sort(compareUpcomingContributionsByDate)
+    .slice(0, 4);
 
   const currentHour = currentTime.getHours();
   const greeting =
@@ -206,19 +221,38 @@ const Dashboard = () => {
               >
                 <CarouselContent className="-ml-2">
                   {sortedUpcomingActivities.map(activity => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const activityDate = new Date(activity.date);
+                    activityDate.setHours(0, 0, 0, 0);
+
                     const contributionStatus = activity.status?.toLowerCase();
-                    const isOverdueContribution = contributionStatus === 'missed' || contributionStatus === 'overdue';
+                    const isOverdue = activityDate < today && contributionStatus !== 'paid' && contributionStatus !== 'completed';
+
+                    const isOverdueContribution = contributionStatus === 'missed' || contributionStatus === 'overdue' || isOverdue;
                     const contributionStatusClass = isOverdueContribution
                       ? 'bg-red-50 text-red-700 ring-1 ring-red-200'
                       : 'bg-amber-50 text-amber-800 ring-1 ring-amber-200';
-                    const contributionStatusLabel = contributionStatus === 'upcoming' ? 'Due' : activity.status;
+                    const contributionStatusLabel = isOverdueContribution
+                      ? 'Overdue'
+                      : contributionStatus === 'upcoming' ? 'Due' : activity.status;
 
                     return (
                       <CarouselItem key={activity.id} className={`${sortedUpcomingActivities.length === 1 ? 'basis-full' : 'basis-1/2'} pl-2`}>
                         <div
                           onClick={() => openUpcomingContribution(activity, navigate)}
-                          className="cursor-pointer flex h-full flex-col justify-end rounded-xl border border-white/10 bg-white/20 p-3 backdrop-blur-md transition-colors hover:bg-white/30"
+                          className="relative cursor-pointer flex h-full flex-col justify-end rounded-xl border border-white/10 bg-white/20 p-3 backdrop-blur-md transition-colors hover:bg-white/30"
                         >
+                          {isUrgentContribution(
+                            activity,
+                            circlesQuery.data || [],
+                            savingsPlansQuery.data || [],
+                            groupGoalsQuery.data || []
+                          ) && (
+                            <Badge className="absolute right-2 top-2 bg-red-500 hover:bg-red-600 text-white border-none text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded shadow-sm animate-pulse">
+                              Urgent
+                            </Badge>
+                          )}
                           <div className="mt-1">
                             <p className="text-[9px] font-bold uppercase tracking-widest text-white/70 mb-0.5">
                               {activity.type ? `${activity.type} ` : ''}
@@ -252,7 +286,7 @@ const Dashboard = () => {
                 <p className="text-sm text-white/80">No upcoming contributions</p>
               </div>
             )}
-            </div>
+          </div>
         )}
       </motion.div>
 
@@ -331,9 +365,9 @@ const Dashboard = () => {
             <div>
               <p className="text-[13px] font-semibold text-amber-950">KYC Incomplete</p>
               <p className="text-[11px] text-amber-800/80 mt-0.5">
-                {kycProgress.nextStep === 'phone' ? 'Phone Verification Pending' : 
-                 kycProgress.nextStep === 'bvn' ? 'BVN Verification Pending' : 
-                 kycProgress.nextStep === 'nin' ? 'NIN Verification Pending' : ''}
+                {kycProgress.nextStep === 'phone' ? 'Phone Verification Pending' :
+                  kycProgress.nextStep === 'bvn' ? 'BVN Verification Pending' :
+                    kycProgress.nextStep === 'nin' ? 'NIN Verification Pending' : ''}
               </p>
             </div>
           </div>
@@ -370,63 +404,59 @@ const Dashboard = () => {
       </button>
 
       {/* <div className="mb-6 rounded-[20px] bg-white p-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-border/50"> */}
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-display text-sm font-bold text-[#1a2b4c]">Upcoming Payments</h2>
-          <button onClick={() => navigate('/upcoming-payments')} className="text-[13px] font-medium text-blue-500 hover:text-blue-600">View all</button>
-        </div>
-        <div className="space-y-3">
-          {mockUpcomingPayments.slice(0, 3).map(payment => {
-            const t = payment.type.toLowerCase();
-            let Icon = CreditCard;
-            if (t.includes('circle') || t.includes('ajo')) Icon = Users;
-            else if (t.includes('goal')) Icon = Target;
-            else if (t.includes('saving') || t.includes('thrift')) Icon = PiggyBank;
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="font-display text-sm font-bold text-[#1a2b4c]">Upcoming Payments</h2>
+        <button onClick={() => navigate('/upcoming-payments')} className="text-[13px] font-medium text-blue-500 hover:text-blue-600">View all</button>
+      </div>
+      <div className="space-y-3">
+        {mockUpcomingPayments.slice(0, 3).map(payment => {
+          const t = payment.type.toLowerCase();
+          let Icon = CreditCard;
+          if (t.includes('circle') || t.includes('ajo')) Icon = Users;
+          else if (t.includes('goal')) Icon = Target;
+          else if (t.includes('saving') || t.includes('thrift')) Icon = PiggyBank;
 
-            return (
-              <motion.button
-                key={payment.id}
-                type="button"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                onClick={() => {
-                  const pt = payment.type.toLowerCase();
-                  if (pt.includes('circle') || pt.includes('ajo')) {
-                    navigate(`/circles/${payment.referenceId}`);
-                  } else if (pt.includes('goal')) {
-                    navigate(`/group-goals/${payment.referenceId}`);
-                  } else {
-                    navigate(`/savings/${payment.referenceId}`);
-                  }
-                }}
-                className="w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/30"
-              >
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                      <Icon className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold text-foreground">{payment.title}</p>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                        {payment.type}
-                      </p>
-                    </div>
+          return (
+            <motion.button
+              key={payment.id}
+              type="button"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              onClick={() => {
+                const pt = payment.type.toLowerCase();
+                if (pt.includes('circle') || pt.includes('ajo')) {
+                  navigate(`/circles/${payment.referenceId}`);
+                } else if (pt.includes('goal')) {
+                  navigate(`/group-goals/${payment.referenceId}`);
+                } else {
+                  navigate(`/savings/${payment.referenceId}`);
+                }
+              }}
+              className="w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/30"
+            >
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                    <Icon className="h-5 w-5 text-primary" />
                   </div>
-                  <Badge variant="secondary" className={getStatusClassName(payment.status)}>
-                    {getStatusLabel(payment.status)}
-                  </Badge>
-                </div>
-
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between gap-3">
-                    <span className="text-muted-foreground">Due date</span>
-                    <span className="font-medium text-foreground">{payment.date}</span>
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-foreground">{payment.title}</p>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {payment.type}
+                    </p>
                   </div>
                 </div>
-              </motion.button>
-            );
-          })}
-        </div>
+              </div>
+
+              <div className="text-sm text-right">
+                <p className="text-muted-foreground">
+                  Due date - <span className="font-medium text-foreground">{payment.date}</span>
+                </p>
+              </div>
+            </motion.button>
+          );
+        })}
+      </div>
       {/* </div> */}
 
       <div className='pt-8 pb-8'>
@@ -435,7 +465,7 @@ const Dashboard = () => {
             <h2 className="font-display text-[15px] font-bold text-[#1a2b4c]">Recent Transaction</h2>
             <button onClick={() => navigate('/transactions')} className="text-[13px] font-medium text-blue-500 hover:text-blue-600">See all</button>
           </div>
-          
+
           <div className="flex flex-col">
             {dashboardQuery.isLoading && (
               <div className="py-3 text-sm text-muted-foreground">Loading recent transactions...</div>
@@ -460,7 +490,7 @@ const Dashboard = () => {
                     <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
                       {formatDate(transaction.date)} - {formatTime(transaction.date)}
                     </p>
-                    
+
                     <div className="mt-2 space-y-0.5">
                       <p className="text-[12px] text-muted-foreground truncate">
                         <span className="font-medium text-[#1a2b4c]">{transaction.type === 'credit' ? 'From:' : 'To:'}</span> AjoVault {transaction.category.charAt(0).toUpperCase() + transaction.category.slice(1)}
@@ -483,6 +513,57 @@ const Dashboard = () => {
       </div>
     </div>
   );
+};
+
+const isUrgentContribution = (
+  activity: any,
+  circles: any[] = [],
+  savingsPlans: any[] = [],
+  groupGoals: any[] = []
+) => {
+  const status = activity.status?.toLowerCase();
+  if (status === 'paid' || status === 'completed') {
+    return false;
+  }
+
+  const dueDate = new Date(activity.date);
+  const now = new Date();
+  
+  if (dueDate < now) {
+    return true;
+  }
+
+  const diffMs = dueDate.getTime() - now.getTime();
+  
+  let frequency = activity.frequency?.toLowerCase();
+  if (!frequency) {
+    const type = activity.type?.toLowerCase() || '';
+    const id = activity.id;
+    if (type.includes('circle') || type.includes('ajo')) {
+      const match = circles.find(c => c.id === id);
+      if (match) frequency = match.frequency?.toLowerCase();
+    } else if (type.includes('saving') || type.includes('thrift')) {
+      const match = savingsPlans.find(s => s.id === id);
+      if (match) frequency = match.frequency?.toLowerCase();
+    } else if (type.includes('goal')) {
+      const match = groupGoals.find(g => g.id === id);
+      if (match) frequency = match.frequency?.toLowerCase();
+    }
+  }
+  
+  frequency = frequency || 'monthly';
+
+  if (frequency === 'daily') {
+    return diffMs <= 12 * 60 * 60 * 1000;
+  }
+  if (frequency === 'weekly') {
+    return diffMs <= 2 * 24 * 60 * 60 * 1000;
+  }
+  if (frequency === 'monthly') {
+    return diffMs <= 7 * 24 * 60 * 60 * 1000;
+  }
+
+  return false;
 };
 
 export default Dashboard;
