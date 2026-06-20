@@ -20,6 +20,9 @@ import {
   filterUpcomingContributions,
 } from '@/services/dashboardApi';
 import { formatCurrency, formatDate } from '@/services/mockData';
+import { circlesKeys, getCircles } from '@/services/circlesApi';
+import { savingsKeys, getSavingsPlans } from '@/services/savingsApi';
+import { groupGoalsKeys, getGroupGoals } from '@/services/groupGoalsApi';
 
 const PAGE_SIZE = 5;
 
@@ -30,6 +33,19 @@ const UpcomingContributions = () => {
   const contributionsQuery = useQuery({
     queryKey: dashboardKeys.upcomingContributionsAll,
     queryFn: getAllUpcomingContributions,
+  });
+
+  const circlesQuery = useQuery({
+    queryKey: circlesKeys.all,
+    queryFn: getCircles,
+  });
+  const savingsPlansQuery = useQuery({
+    queryKey: savingsKeys.plans,
+    queryFn: getSavingsPlans,
+  });
+  const groupGoalsQuery = useQuery({
+    queryKey: groupGoalsKeys.list,
+    queryFn: getGroupGoals,
   });
 
   const sortedContributions = filterUpcomingContributions(
@@ -138,7 +154,12 @@ const UpcomingContributions = () => {
               onClick={() => openUpcomingContribution(contribution, navigate)}
               className="relative w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/30"
             >
-              {isUrgentContribution(contribution) && (
+              {isUrgentContribution(
+                contribution,
+                circlesQuery.data || [],
+                savingsPlansQuery.data || [],
+                groupGoalsQuery.data || []
+              ) && (
                 <Badge className="absolute right-2 top-2 bg-red-500 hover:bg-red-600 text-white border-none text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded shadow-sm animate-pulse">
                   Urgent
                 </Badge>
@@ -205,7 +226,12 @@ const UpcomingContributions = () => {
   );
 };
 
-const isUrgentContribution = (activity: any) => {
+const isUrgentContribution = (
+  activity: any,
+  circles: any[] = [],
+  savingsPlans: any[] = [],
+  groupGoals: any[] = []
+) => {
   const status = activity.status?.toLowerCase();
   if (status === 'paid' || status === 'completed') {
     return false;
@@ -219,7 +245,24 @@ const isUrgentContribution = (activity: any) => {
   }
 
   const diffMs = dueDate.getTime() - now.getTime();
-  const frequency = activity.frequency?.toLowerCase() || 'monthly';
+  
+  let frequency = activity.frequency?.toLowerCase();
+  if (!frequency) {
+    const type = activity.type?.toLowerCase() || '';
+    const id = activity.id;
+    if (type.includes('circle') || type.includes('ajo')) {
+      const match = circles.find(c => c.id === id);
+      if (match) frequency = match.frequency?.toLowerCase();
+    } else if (type.includes('saving') || type.includes('thrift')) {
+      const match = savingsPlans.find(s => s.id === id);
+      if (match) frequency = match.frequency?.toLowerCase();
+    } else if (type.includes('goal')) {
+      const match = groupGoals.find(g => g.id === id);
+      if (match) frequency = match.frequency?.toLowerCase();
+    }
+  }
+  
+  frequency = frequency || 'monthly';
 
   if (frequency === 'daily') {
     return diffMs <= 12 * 60 * 60 * 1000;
