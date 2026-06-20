@@ -17,6 +17,7 @@ import {
   getAllUpcomingContributions,
   openUpcomingContribution,
   compareUpcomingContributionsByDate,
+  filterUpcomingContributions,
 } from '@/services/dashboardApi';
 import { formatCurrency, formatDate } from '@/services/mockData';
 
@@ -31,7 +32,9 @@ const UpcomingContributions = () => {
     queryFn: getAllUpcomingContributions,
   });
 
-  const sortedContributions = [...(contributionsQuery.data?.items ?? [])]
+  const sortedContributions = filterUpcomingContributions(
+    contributionsQuery.data?.items ?? []
+  )
     .filter(c => {
       const status = c.status?.toLowerCase();
       return status !== 'paid' && status !== 'completed';

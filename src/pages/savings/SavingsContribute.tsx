@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { contributeToSavingsPlan, getSavingsPlan, savingsKeys } from '@/services/savingsApi';
-import { dashboardKeys } from '@/services/dashboardApi';
+import { dashboardKeys, markContributionAsPaid } from '@/services/dashboardApi';
 import { getPaymentCheckoutStatus } from '@/services/paymentApi';
 import { walletKeys } from '@/services/walletApi';
 import { formatCurrency } from '@/services/mockData';
@@ -102,6 +102,7 @@ const SavingsContribute = () => {
         const checkoutStatus = await waitForCheckoutStatus(popupResult.reference || contribution.reference);
 
         if (checkoutStatus.status === 'Success') {
+          markContributionAsPaid(plan.id, queryClient);
           await refreshSavingsQueries();
           toast.success('Saved-card contribution posted.');
           navigate(`/savings/${plan.id}`, { replace: true });
@@ -122,6 +123,7 @@ const SavingsContribute = () => {
       }
 
       if (isContributionSuccessStatus(contribution.status)) {
+        markContributionAsPaid(plan.id, queryClient);
         await refreshSavingsQueries();
         toast.success(
           contributionFundingSource === 'saved_card'

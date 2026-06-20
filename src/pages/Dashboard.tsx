@@ -39,6 +39,7 @@ import {
   getUpcomingContributions,
   openUpcomingContribution,
   compareUpcomingContributionsByDate,
+  filterUpcomingContributions,
 } from '@/services/dashboardApi';
 import { formatCurrency, formatDate, formatTime } from '@/services/mockData';
 import { mockUpcomingPayments, getStatusClassName, getStatusLabel } from '@/pages/UpcomingPayments';
@@ -91,7 +92,9 @@ const Dashboard = () => {
   const recentActivities = dashboardQuery.data?.recentActivities ?? [];
   const kycProgress = getKycProgress(user);
 
-  const sortedUpcomingActivities = (upcomingContributionsQuery.data?.items ?? [])
+  const sortedUpcomingActivities = filterUpcomingContributions(
+    upcomingContributionsQuery.data?.items ?? []
+  )
     .filter(activity => {
       const status = activity.status?.toLowerCase();
       return status !== 'paid' && status !== 'completed';

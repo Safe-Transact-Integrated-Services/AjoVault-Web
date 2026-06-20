@@ -124,10 +124,82 @@ export const openUpcomingContribution = (
   item: UpcomingContributionItem,
   navigate: (path: string) => void,
 ) => {
+  if (item.id) {
+    localStorage.setItem('ajovault_last_clicked_contribution_id', item.id);
+  }
+  if (item.date) {
+    localStorage.setItem('ajovault_last_clicked_contribution_date', item.date);
+  }
   if (item.paymentUrl && !item.paymentUrl.startsWith('/')) {
     window.location.href = item.paymentUrl;
     return;
   }
 
   navigate(resolveUpcomingContributionPath(item));
+};
+
+export const markContributionAsPaid = (entityId: string, queryClient?: any) => {
+  const completed = JSON.parse(localStorage.getItem('ajovault_completed_contributions') || '[]');
+  
+  const lastClickedId = localStorage.getItem('ajovault_last_clicked_contribution_id');
+  const lastClickedDate = localStorage.getItem('ajovault_last_clicked_contribution_date');
+  
+  let dateToMark: string | null = null;
+  if (lastClickedId === entityId && lastClickedDate) {
+    dateToMark = lastClickedDate;
+  } else if (queryClient) {
+    try {
+      const previewData = queryClient.getQueryData(dashboardKeys.summary);
+      const previewItems = (previewData as any)?.recentActivities || [];
+      
+      const upcomingPreviewData = queryClient.getQueryData(dashboardKeys.upcomingContributionsPreview);
+      const upcomingAllData = queryClient.getQueryData(dashboardKeys.upcomingContributionsAll);
+      
+      const upcomingItems = [
+        ...((upcomingPreviewData as any)?.items || []),
+        ...((upcomingAllData as any)?.items || [])
+      ];
+      
+      const matchingItem = upcomingItems.find((item: any) => item.id === entityId);
+      if (matchingItem) {
+        dateToMark = matchingItem.date;
+      }
+    } catch (e) {
+      console.error('Error reading query cache:', e);
+    }
+  }
+  
+  if (dateToMark) {
+    const exists = completed.some((c: any) => c.id === entityId && c.date === dateToMark);
+    if (!exists) {
+      completed.push({ id: entityId, date: dateToMark });
+      localStorage.setItem('ajovault_completed_contributions', JSON.stringify(completed));
+    }
+  } else {
+    const exists = completed.some((c: any) => c.id === entityId);
+    if (!exists) {
+      completed.push({ id: entityId });
+      localStorage.setItem('ajovault_completed_contributions', JSON.stringify(completed));
+    }
+  }
+  
+  localStorage.removeItem('ajovault_last_clicked_contribution_id');
+  localStorage.removeItem('ajovault_last_clicked_contribution_date');
+};
+
+export const filterUpcomingContributions = (items: UpcomingContributionItem[]): UpcomingContributionItem[] => {
+  const completedStr = localStorage.getItem('ajovault_completed_contributions');
+  if (!completedStr) return items;
+  
+  try {
+    const completed = JSON.parse(completedStr);
+    if (!Array.isArray(completed)) return items;
+    
+    return items.filter(item => {
+      return !completed.some((c: any) => c.id === item.id && (!c.date || c.date === item.date));
+    });
+  } catch (e) {
+    console.error('Error parsing completed contributions:', e);
+    return items;
+  }
 };

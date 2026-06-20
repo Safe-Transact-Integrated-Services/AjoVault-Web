@@ -8,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { circlesKeys, contributeToCircle, getCircle, type CircleContributionResult } from '@/services/circlesApi';
-import { dashboardKeys } from '@/services/dashboardApi';
+import { dashboardKeys, markContributionAsPaid } from '@/services/dashboardApi';
 import { getApiErrorMessage } from '@/lib/api/http';
 import { formatCurrency } from '@/services/mockData';
 import { walletKeys } from '@/services/walletApi';
@@ -67,6 +67,7 @@ const CircleContribute = () => {
     try {
       const result = await contributeToCircle(id, pin);
       setReceipt(result);
+      markContributionAsPaid(circle.id, queryClient);
       await refreshQueries();
       setStep('receipt');
       toast.success('Circle contribution posted.');
