@@ -33,6 +33,8 @@ import {
   CarouselPrevious,
 } from '@/components/ui/carousel';
 import { circlesKeys, getCircles } from '@/services/circlesApi';
+import { savingsKeys, getSavingsPlans } from '@/services/savingsApi';
+import { groupGoalsKeys, getGroupGoals } from '@/services/groupGoalsApi';
 import {
   dashboardKeys,
   getDashboardSummary,
@@ -77,6 +79,16 @@ const Dashboard = () => {
   const circlesQuery = useQuery({
     queryKey: circlesKeys.all,
     queryFn: getCircles,
+    enabled: !!user,
+  });
+  const savingsPlansQuery = useQuery({
+    queryKey: savingsKeys.plans,
+    queryFn: getSavingsPlans,
+    enabled: !!user,
+  });
+  const groupGoalsQuery = useQuery({
+    queryKey: groupGoalsKeys.list,
+    queryFn: getGroupGoals,
     enabled: !!user,
   });
   const upcomingContributionsQuery = useQuery({
@@ -231,7 +243,12 @@ const Dashboard = () => {
                           onClick={() => openUpcomingContribution(activity, navigate)}
                           className="relative cursor-pointer flex h-full flex-col justify-end rounded-xl border border-white/10 bg-white/20 p-3 backdrop-blur-md transition-colors hover:bg-white/30"
                         >
-                          {isUrgentContribution(activity) && (
+                          {isUrgentContribution(
+                            activity,
+                            circlesQuery.data || [],
+                            savingsPlansQuery.data || [],
+                            groupGoalsQuery.data || []
+                          ) && (
                             <Badge className="absolute right-2 top-2 bg-red-500 hover:bg-red-600 text-white border-none text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded shadow-sm animate-pulse">
                               Urgent
                             </Badge>
@@ -498,7 +515,12 @@ const Dashboard = () => {
   );
 };
 
-const isUrgentContribution = (activity: any) => {
+const isUrgentContribution = (
+  activity: any,
+  circles: any[] = [],
+  savingsPlans: any[] = [],
+  groupGoals: any[] = []
+) => {
   const status = activity.status?.toLowerCase();
   if (status === 'paid' || status === 'completed') {
     return false;
@@ -512,7 +534,24 @@ const isUrgentContribution = (activity: any) => {
   }
 
   const diffMs = dueDate.getTime() - now.getTime();
-  const frequency = activity.frequency?.toLowerCase() || 'monthly';
+  
+  let frequency = activity.frequency?.toLowerCase();
+  if (!frequency) {
+    const type = activity.type?.toLowerCase() || '';
+    const id = activity.id;
+    if (type.includes('circle') || type.includes('ajo')) {
+      const match = circles.find(c => c.id === id);
+      if (match) frequency = match.frequency?.toLowerCase();
+    } else if (type.includes('saving') || type.includes('thrift')) {
+      const match = savingsPlans.find(s => s.id === id);
+      if (match) frequency = match.frequency?.toLowerCase();
+    } else if (type.includes('goal')) {
+      const match = groupGoals.find(g => g.id === id);
+      if (match) frequency = match.frequency?.toLowerCase();
+    }
+  }
+  
+  frequency = frequency || 'monthly';
 
   if (frequency === 'daily') {
     return diffMs <= 12 * 60 * 60 * 1000;
