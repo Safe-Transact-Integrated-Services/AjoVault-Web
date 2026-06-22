@@ -19,6 +19,9 @@ const categoryLabels: Record<string, string> = {
   other: 'Other',
 };
 
+const typeLabels = { flexible: 'Flexible', locked: 'Locked', goal: 'Goal' } as const;
+const typeColors = { flexible: 'bg-accent/10 text-accent', locked: 'bg-primary/10 text-primary', goal: 'bg-success/10 text-success' } as const;
+
 const GroupGoalsHome = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'personal' | 'group'>('group');
@@ -34,7 +37,7 @@ const GroupGoalsHome = () => {
   });
 
   const groupGoals = goalsQuery.data ?? [];
-  const personalGoals = (savingsQuery.data ?? []).filter(plan => plan.type === 'goal');
+  const personalGoals = savingsQuery.data ?? [];
 
   const currentList = activeTab === 'personal' ? personalGoals : groupGoals;
   
@@ -184,7 +187,7 @@ const GroupGoalsHome = () => {
                     <p className="text-xs text-muted-foreground">{plan.interestRate}% p.a.</p>
                   </div>
                 </div>
-                <Badge className="bg-success/10 text-success" variant="secondary">Goal</Badge>
+                <Badge className={typeColors[plan.type]} variant="secondary">{typeLabels[plan.type]}</Badge>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
