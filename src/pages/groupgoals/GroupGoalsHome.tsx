@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { Plus, Target, Users, User, PiggyBank } from 'lucide-react';
+import { Plus, Target, Users, User, PiggyBank, UserPlus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { formatCurrency, formatDate } from '@/services/mockData';
 import { getGroupGoals, groupGoalsKeys } from '@/services/groupGoalsApi';
@@ -25,6 +27,8 @@ const typeColors = { flexible: 'bg-accent/10 text-accent', locked: 'bg-primary/1
 const GroupGoalsHome = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'personal' | 'group'>('group');
+  const [showJoinForm, setShowJoinForm] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
 
   const goalsQuery = useQuery({
     queryKey: groupGoalsKeys.list,
@@ -51,11 +55,6 @@ const GroupGoalsHome = () => {
     <div className="px-4 py-6 safe-top">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="font-display text-xl font-bold text-foreground">Goals</h1>
-        <div className="flex gap-2">
-          {activeTab === 'group' && (
-            <Button size="sm" variant="outline" onClick={() => navigate('/group-goals/join')}>Join</Button>
-          )}
-        </div>
       </div>
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6 rounded-2xl bg-primary p-5 text-primary-foreground">
@@ -64,34 +63,83 @@ const GroupGoalsHome = () => {
         <p className="mt-1 text-xs opacity-70">{activeCount} active goals</p>
       </motion.div>
 
-      <div className="mb-6 grid grid-cols-2 gap-4">
+      <div className="mb-6 grid grid-cols-3 gap-3">
         <button
-          onClick={() => setActiveTab('personal')}
-          className={`flex flex-col items-center justify-center gap-3 rounded-2xl border p-6 transition-all ${
+          onClick={() => {
+            setActiveTab('personal');
+          }}
+          className={`flex flex-col items-center justify-center gap-2.5 rounded-2xl border p-4 text-center transition-all ${
             activeTab === 'personal' 
               ? 'border-accent bg-accent/10' 
               : 'border-border bg-card hover:border-accent hover:bg-accent/5'
           }`}
         >
-          <div className={`flex h-12 w-12 items-center justify-center rounded-full ${activeTab === 'personal' ? 'bg-accent/20 text-accent' : 'bg-accent/10 text-accent'}`}>
-            <User className="h-6 w-6" />
+          <div className={`flex h-10 w-10 items-center justify-center rounded-full ${activeTab === 'personal' ? 'bg-accent/20 text-accent' : 'bg-accent/10 text-accent'}`}>
+            <User className="h-5 w-5" />
           </div>
-          <span className={`font-semibold ${activeTab === 'personal' ? 'text-accent' : 'text-foreground'}`}>Personal Goal</span>
+          <span className={`text-xs md:text-sm font-semibold ${activeTab === 'personal' ? 'text-accent' : 'text-foreground'}`}>Personal Goal</span>
         </button>
         <button
-          onClick={() => setActiveTab('group')}
-          className={`flex flex-col items-center justify-center gap-3 rounded-2xl border p-6 transition-all ${
+          onClick={() => {
+            setActiveTab('group');
+          }}
+          className={`flex flex-col items-center justify-center gap-2.5 rounded-2xl border p-4 text-center transition-all ${
             activeTab === 'group' 
               ? 'border-primary bg-primary/10' 
               : 'border-border bg-card hover:border-primary hover:bg-primary/5'
           }`}
         >
-          <div className={`flex h-12 w-12 items-center justify-center rounded-full ${activeTab === 'group' ? 'bg-primary/20 text-primary' : 'bg-primary/10 text-primary'}`}>
-            <Users className="h-6 w-6" />
+          <div className={`flex h-10 w-10 items-center justify-center rounded-full ${activeTab === 'group' ? 'bg-primary/20 text-primary' : 'bg-primary/10 text-primary'}`}>
+            <Users className="h-5 w-5" />
           </div>
-          <span className={`font-semibold ${activeTab === 'group' ? 'text-primary' : 'text-foreground'}`}>Group Goal</span>
+          <span className={`text-xs md:text-sm font-semibold ${activeTab === 'group' ? 'text-primary' : 'text-foreground'}`}>Group Goal</span>
+        </button>
+        <button
+          onClick={() => setShowJoinForm(prev => !prev)}
+          className={`flex flex-col items-center justify-center gap-2.5 rounded-2xl border p-4 text-center transition-all ${
+            showJoinForm 
+              ? 'border-primary bg-primary/10' 
+              : 'border-border bg-card hover:border-primary hover:bg-primary/5'
+          }`}
+        >
+          <div className={`flex h-10 w-10 items-center justify-center rounded-full ${showJoinForm ? 'bg-primary/20 text-primary' : 'bg-primary/10 text-primary'}`}>
+            <UserPlus className="h-5 w-5" />
+          </div>
+          <span className={`text-xs md:text-sm font-semibold ${showJoinForm ? 'text-primary' : 'text-foreground'}`}>Join Goal</span>
         </button>
       </div>
+
+      {showJoinForm && (
+        <motion.div
+          initial={{ opacity: 0, y: -10, scale: 0.99 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
+          className="rounded-2xl border border-border bg-card p-5 shadow-sm mb-6"
+        >
+          <div className="space-y-2">
+            <Label htmlFor="group-goal-invite-code" className="text-sm font-semibold text-foreground">
+              Invite Code
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                id="group-goal-invite-code"
+                value={inviteCode}
+                onChange={event => setInviteCode(event.target.value.trim().toUpperCase())}
+                placeholder="GOAL-XXXXXX"
+                className="h-12 text-center font-mono text-lg tracking-wider border-border focus-visible:ring-primary flex-1"
+                maxLength={13}
+              />
+              <Button
+                className="h-12 px-6 bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-200 font-semibold"
+                onClick={() => navigate(`/group-goals/join/${encodeURIComponent(inviteCode)}`)}
+                disabled={inviteCode.length < 10}
+              >
+                Join
+              </Button>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       <div className="mb-4 flex items-center justify-between">
         <h2 className="font-display text-lg font-bold text-foreground">

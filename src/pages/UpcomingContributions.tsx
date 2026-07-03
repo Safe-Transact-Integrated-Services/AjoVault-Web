@@ -160,7 +160,7 @@ const UpcomingContributions = () => {
                 savingsPlansQuery.data || [],
                 groupGoalsQuery.data || []
               ) && (
-                <Badge className="absolute right-2 top-2 bg-red-500 hover:bg-red-600 text-white border-none text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded shadow-sm animate-pulse">
+                <Badge className="absolute right-2 top-2 bg-red-500 hover:bg-red-600 text-white border-none text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded shadow-sm">
                   Urgent
                 </Badge>
               )}

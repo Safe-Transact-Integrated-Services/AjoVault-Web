@@ -45,6 +45,7 @@ export const mockCircles: Circle[] = [
     id: 'cir_001', name: 'Ajo Family Circle', description: 'Monthly family contribution group', amount: 25000, currency: 'NGN', frequency: 'monthly',
     memberCount: 6, maxMembers: 6, currentCycle: 3, totalCycles: 6, role: 'admin',
     nextContributionDate: '2026-04-01', nextPayoutDate: '2026-04-05', status: 'active', payoutType: 'rotation',
+    createdAt: '2026-01-10',
     members: [
       { id: 'm1', name: 'Adaeze O.', hasPaid: true, payoutPosition: 1, hasReceivedPayout: true },
       { id: 'm2', name: 'Chidi N.', hasPaid: true, payoutPosition: 2, hasReceivedPayout: true },
@@ -58,6 +59,7 @@ export const mockCircles: Circle[] = [
     id: 'cir_002', name: 'Wealth Builders', description: 'Investment-focused savings group', amount: 50000, currency: 'NGN', frequency: 'monthly',
     memberCount: 10, maxMembers: 12, currentCycle: 5, totalCycles: 12, role: 'member',
     nextContributionDate: '2026-04-01', nextPayoutDate: '2026-04-10', status: 'active', payoutType: 'rotation',
+    createdAt: '2026-02-15',
     members: [
       { id: 'm7', name: 'Amina B.', hasPaid: true, payoutPosition: 1, hasReceivedPayout: true },
       { id: 'm8', name: 'David O.', hasPaid: true, payoutPosition: 2, hasReceivedPayout: true },
