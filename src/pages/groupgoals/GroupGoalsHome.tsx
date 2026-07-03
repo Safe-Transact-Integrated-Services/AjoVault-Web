@@ -55,11 +55,6 @@ const GroupGoalsHome = () => {
     <div className="px-4 py-6 safe-top">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="font-display text-xl font-bold text-foreground">Goals</h1>
-        <div className="flex gap-2">
-          {!showJoinForm && (
-            <Button size="sm" variant="outline" onClick={() => setShowJoinForm(true)}>Join</Button>
-          )}
-        </div>
       </div>
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6 rounded-2xl bg-primary p-5 text-primary-foreground">
