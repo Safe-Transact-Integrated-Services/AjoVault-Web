@@ -18,6 +18,7 @@ interface GroupSummaryResponse {
   status: 'active' | 'pending' | 'completed';
   payoutType: 'rotation' | 'random' | 'bidding';
   hasPaidCurrentCycle?: boolean;
+  createdAt?: string;
 }
 
 interface GroupMemberResponse {
@@ -149,6 +150,7 @@ export interface CircleSummary {
   status: 'active' | 'pending' | 'completed';
   payoutType: 'rotation' | 'random' | 'bidding';
   hasPaidCurrentCycle?: boolean;
+  createdAt?: string;
 }
 
 export interface CircleMember {
@@ -266,6 +268,9 @@ export interface CreateCircleInput {
   maxMembers: number;
   payoutType: 'rotation' | 'random' | 'bidding';
   currency?: string;
+  isOngoing?: boolean;
+  currentCycle?: number;
+  completedPayoutsCount?: number;
 }
 
 export interface SendCircleInviteInput {
@@ -341,6 +346,9 @@ export const createCircle = async (input: CreateCircleInput): Promise<CircleDeta
       maxMembers: input.maxMembers,
       payoutType: input.payoutType,
       currency: input.currency ?? 'NGN',
+      isOngoing: input.isOngoing,
+      currentCycle: input.currentCycle,
+      completedPayoutsCount: input.completedPayoutsCount,
     },
   });
 
@@ -439,6 +447,7 @@ const mapCircleSummary = (circle: GroupSummaryResponse): CircleSummary => ({
   status: circle.status,
   payoutType: circle.payoutType,
   hasPaidCurrentCycle: circle.hasPaidCurrentCycle,
+  createdAt: circle.createdAt ?? '2026-01-01',
 });
 
 const mapCircleDetail = (circle: GroupDetailResponse): CircleDetail => ({

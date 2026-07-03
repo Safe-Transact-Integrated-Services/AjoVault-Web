@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Banknote, Calendar, CheckCircle2, Share2, UserPlus, Wallet, XCircle } from 'lucide-react';
+import { ArrowLeft, Banknote, Calendar, CheckCircle2, Share2, UserPlus, Wallet, XCircle, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -141,22 +141,32 @@ const CircleDetail = () => {
         <div className="mx-auto max-w-lg space-y-2">
           {circle.role === 'admin' && (
             <div className="flex gap-2">
-              <Button variant="outline" className="h-11 flex-1 gap-2" onClick={() => navigate(`/circles/${circle.id}/invite`)}>
+              <Button variant="outline" className="h-11 flex-grow gap-1.5 px-2.5 text-xs font-semibold" onClick={() => navigate(`/circles/${circle.id}/invite`)}>
                 <UserPlus className="h-4 w-4" /> Invite
               </Button>
-              <Button variant="outline" className="h-11 flex-1 gap-2" onClick={() => { void handleShare(); }}>
+              <Button variant="outline" className="h-11 flex-grow gap-1.5 px-2.5 text-xs font-semibold" onClick={() => { void handleShare(); }}>
                 <Share2 className="h-4 w-4" /> Share
+              </Button>
+              <Button variant="outline" className="h-11 flex-grow gap-1.5 px-2.5 text-xs font-semibold" onClick={() => navigate('/circles/create', { state: { templateCircle: circle } })}>
+                <Copy className="h-4 w-4" /> Duplicate
               </Button>
             </div>
           )}
           {circle.role === 'admin' && (
             <div className="flex gap-2">
-              <Button variant="outline" className="h-11 flex-1 gap-2" onClick={() => navigate(`/circles/${circle.id}/payout`)}>
+              <Button variant="outline" className="h-11 flex-grow gap-1.5 px-2.5 text-xs font-semibold" onClick={() => navigate(`/circles/${circle.id}/payout`)}>
                 <Banknote className="h-4 w-4" /> Payout
               </Button>
             </div>
           )}
-          <Button className="h-12 w-full" onClick={() => navigate(`/circles/${circle.id}/contribute`)}>
+          {circle.role !== 'admin' && (
+            <div className="flex gap-2">
+              <Button variant="outline" className="h-11 flex-grow gap-1.5 px-2.5 text-xs font-semibold" onClick={() => navigate('/circles/create', { state: { templateCircle: circle } })}>
+                <Copy className="h-4 w-4" /> Use as Template
+              </Button>
+            </div>
+          )}
+          <Button className="h-12 w-full font-bold" onClick={() => navigate(`/circles/${circle.id}/contribute`)}>
             {circle.hasPaidCurrentCycle ? 'Contribution posted for this cycle' : `Make Contribution - ${formatCurrency(circle.amount)}`}
           </Button>
         </div>

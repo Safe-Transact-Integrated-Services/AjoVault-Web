@@ -73,6 +73,7 @@ export interface Circle {
   status: 'active' | 'pending' | 'completed';
   payoutType: 'rotation' | 'random' | 'bidding';
   members: CircleMember[];
+  createdAt?: string;
 }
 
 export interface CircleMember {

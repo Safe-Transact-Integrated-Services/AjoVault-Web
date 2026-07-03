@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Copy, Share2 } from 'lucide-react';
@@ -38,6 +38,26 @@ const CreateCircle = () => {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Ongoing offline progress import state variables
+  const [isOngoing, setIsOngoing] = useState(false);
+  const [currentCycle, setCurrentCycle] = useState('1');
+  const [completedPayoutsCount, setCompletedPayoutsCount] = useState('0');
+
+  const location = useLocation();
+  const template = location.state?.templateCircle;
+
+  // Auto pre-fill if navigating with template state
+  useEffect(() => {
+    if (template) {
+      setName(template.name ?? '');
+      setDescription(template.description ?? '');
+      setAmount(template.amount?.toString() ?? '');
+      setFrequency(template.frequency ?? 'monthly');
+      setMaxMembers(template.maxMembers?.toString() ?? '');
+      setPayoutType(template.payoutType ?? 'rotation');
+    }
+  }, [template]);
+
   const steps: Step[] = ['name', 'amount', 'rules', 'invite'];
   const stepIndex = steps.indexOf(step);
 
@@ -52,6 +72,9 @@ const CreateCircle = () => {
     setIsSubmitting(true);
     setError('');
 
+    const currentCycleValue = isOngoing ? Number(currentCycle) : 1;
+    const completedPayoutsValue = isOngoing ? Number(completedPayoutsCount) : 0;
+
     try {
       const createdCircle = await createCircle({
         name,
@@ -60,6 +83,9 @@ const CreateCircle = () => {
         frequency,
         maxMembers: maxMembersValue,
         payoutType,
+        isOngoing,
+        currentCycle: currentCycleValue,
+        completedPayoutsCount: completedPayoutsValue,
       });
 
       setCircle(createdCircle);
@@ -180,6 +206,69 @@ const CreateCircle = () => {
                   <Label htmlFor="circle-max-members">Max Members</Label>
                   <Input id="circle-max-members" type="number" value={maxMembers} onChange={event => setMaxMembers(event.target.value.replace(/[^\d]/g, ''))} placeholder="6" className="h-12" />
                 </div>
+
+                <div className="pt-2">
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={isOngoing}
+                      onChange={(e) => {
+                        setIsOngoing(e.target.checked);
+                        if (!e.target.checked) {
+                          setCurrentCycle('1');
+                          setCompletedPayoutsCount('0');
+                        }
+                      }}
+                      className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent accent-accent"
+                    />
+                    <span className="text-sm font-semibold text-foreground">Import ongoing progress (offline circle)</span>
+                  </label>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 ml-6">
+                    Select this if some contributions/payouts have already been processed offline.
+                  </p>
+                </div>
+
+                {isOngoing && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="space-y-4 border-l-2 border-accent/20 pl-4 py-1"
+                  >
+                    <div className="space-y-2">
+                      <Label htmlFor="circle-current-cycle">Current Cycle Number</Label>
+                      <Input
+                        id="circle-current-cycle"
+                        type="number"
+                        min="1"
+                        max={maxMembers || "100"}
+                        value={currentCycle}
+                        onChange={event => setCurrentCycle(event.target.value.replace(/[^\d]/g, ''))}
+                        placeholder="e.g. 4"
+                        className="h-12"
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        The circle will start digitized at this cycle number.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="circle-completed-payouts">Payouts Completed Offline</Label>
+                      <Input
+                        id="circle-completed-payouts"
+                        type="number"
+                        min="0"
+                        max={String(Math.max(0, Number(currentCycle) - 1))}
+                        value={completedPayoutsCount}
+                        onChange={event => setCompletedPayoutsCount(event.target.value.replace(/[^\d]/g, ''))}
+                        placeholder="e.g. 3"
+                        className="h-12"
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        Number of members who have already received their payouts offline.
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
               </div>
               <Button className="h-12 w-full" onClick={() => setStep('rules')} disabled={!amount || !maxMembers}>
                 Continue
