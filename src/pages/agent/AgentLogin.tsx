@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Shield } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import PinPad from '@/components/shared/PinPad';
@@ -77,9 +77,7 @@ const AgentLogin = () => {
       {!showPassword ? (
         <div className="space-y-6">
           <div className="flex flex-col items-center text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 mb-4">
-              <Shield className="h-8 w-8 text-primary" />
-            </div>
+            <img src="/favicon.png" alt="AjoVault Logo" className="h-16 w-16 rounded-2xl object-contain mb-4" />
             <h1 className="font-display text-2xl font-bold">Agent Login</h1>
             <p className="mt-1 text-muted-foreground text-sm">Enter your agent code to access the portal</p>
           </div>
