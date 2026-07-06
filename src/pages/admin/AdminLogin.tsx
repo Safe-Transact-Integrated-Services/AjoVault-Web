@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Shield, AlertTriangle, Lock } from 'lucide-react';
+import { AlertTriangle, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAdminAuth } from '@/contexts/AdminAuthContext';
 import { getRedirectPath, type RedirectTarget } from '@/lib/auth';
@@ -86,13 +86,13 @@ const AdminLogin = () => {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-xl bg-primary">
-            {isLocked ? (
+          {isLocked ? (
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-xl bg-primary">
               <Lock className="h-7 w-7 text-primary-foreground" />
-            ) : (
-              <Shield className="h-7 w-7 text-primary-foreground" />
-            )}
-          </div>
+            </div>
+          ) : (
+            <img src="/favicon.png" alt="AjoVault Logo" className="mx-auto mb-3 h-14 w-14 rounded-xl object-contain" />
+          )}
           <CardTitle className="font-display text-xl">Admin Login</CardTitle>
           <p className="text-sm text-muted-foreground">AjoVault Super Admin Portal</p>
         </CardHeader>

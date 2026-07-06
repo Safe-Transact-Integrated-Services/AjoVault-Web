@@ -7,7 +7,6 @@ import {
   Mail,
   Settings,
   LogOut,
-  Shield,
 } from 'lucide-react';
 import { useAdminAuth } from '@/contexts/AdminAuthContext';
 import { NavLink } from '@/components/NavLink';
@@ -59,9 +58,7 @@ export function AdminSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border px-4 py-4">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <Shield className="h-4 w-4 text-primary-foreground" />
-          </div>
+          <img src="/favicon.png" alt="AjoVault Logo" className="h-8 w-8 rounded-lg object-contain" />
           {!collapsed && (
             <div>
               <p className="font-display text-sm font-bold text-sidebar-foreground">AjoVault</p>

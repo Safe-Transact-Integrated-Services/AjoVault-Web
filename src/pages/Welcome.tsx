@@ -257,11 +257,8 @@ const Welcome = () => {
           }`}
       >
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6">
-          <a href="#hero" className="relative z-10 flex items-center gap-2">
-            <span className="rounded-lg bg-[#3B82F6] p-1.5 shadow-lg shadow-blue-500/20">
-              <ShieldCheck className="h-5 w-5 text-white lg:h-6 lg:w-6" />
-            </span>
-            <span className="font-display text-xl font-bold text-white lg:text-2xl">AjoVault</span>
+          <a href="#hero" className="relative z-10 flex items-center">
+            <img src="/logo.png" alt="AjoVault Logo" className="h-16 w-auto brightness-0 invert" />
           </a>
 
           <nav className="hidden items-center gap-8 lg:flex">
@@ -359,11 +356,8 @@ const Welcome = () => {
       >
         <div className="flex h-full flex-col">
           <div className="flex items-center justify-between border-b border-white/5 p-6">
-            <div className="flex items-center gap-2">
-              <span className="rounded-lg bg-[#3B82F6] p-1.5">
-                <ShieldCheck className="h-5 w-5 text-white" />
-              </span>
-              <span className="font-display text-xl font-bold text-white">AjoVault</span>
+            <div className="flex items-center">
+              <img src="/logo.png" alt="AjoVault Logo" className="h-12 w-auto brightness-0 invert" />
             </div>
             <button
               type="button"
@@ -802,11 +796,8 @@ const Welcome = () => {
 
           <div className="mb-12 flex flex-col gap-12 border-b border-white/10 pb-12 lg:flex-row lg:items-start lg:justify-between lg:gap-16 xl:gap-24">
             <div className="max-w-sm shrink-0">
-              <div className="mb-6 flex items-center gap-2">
-                <span className="rounded-lg bg-[#3B82F6] p-1.5 shadow-lg shadow-blue-500/20">
-                  <ShieldCheck className="h-6 w-6 text-white" />
-                </span>
-                <span className="font-display text-2xl font-black text-white">AjoVault</span>
+              <div className="mb-6">
+                <img src="/logo.png" alt="AjoVault Logo" className="h-16 w-auto brightness-0 invert" />
               </div>
               <p className="mb-6 max-w-xs font-medium leading-relaxed text-white/50">
                 Digitizing community savings and empowering financial freedom for every circle.

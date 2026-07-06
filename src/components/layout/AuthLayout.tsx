@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShieldCheck } from 'lucide-react';
 
 interface AuthLayoutProps {
   children: React.ReactNode;
@@ -89,12 +88,7 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
 
         {/* Logo at top */}
         <div className="relative z-20 mb-[-3rem] mt-[-2rem]">
-          <div className="flex items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#3B82F6] shadow-lg shadow-blue-500/20">
-              <ShieldCheck className="h-6 w-6 text-white" />
-            </div>
-            <span className="text-2xl font-bold text-white tracking-tight font-display">AjoVault</span>
-          </div>
+          <img src="/logo.png" alt="AjoVault Logo" className="h-16 w-auto brightness-0 invert" />
         </div>
 
         {/* Centered Content Wrapper */}
@@ -156,11 +150,8 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
       <div className="w-full lg:w-[55%] flex items-center justify-center p-6 md:p-12 lg:p-20 h-full overflow-y-auto">
         <div className="w-full max-w-[480px]">
           {/* Logo for mobile */}
-          <div className="lg:hidden flex items-center gap-2 mb-10">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#3B82F6] shadow-lg shadow-blue-500/20">
-              <ShieldCheck className="h-6 w-6 text-white" />
-            </div>
-            <span className="text-2xl font-bold text-[#102A56] tracking-tight font-display">AjoVault</span>
+          <div className="lg:hidden mb-10">
+            <img src="/logo.png" alt="AjoVault Logo" className="h-16 w-auto" />
           </div>
 
           <motion.div
