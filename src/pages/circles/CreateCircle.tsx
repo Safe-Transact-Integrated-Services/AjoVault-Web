@@ -22,12 +22,12 @@ import { getApiErrorMessage } from '@/lib/api/http';
 import type { PlatformUserSearchResult } from '@/services/platformUsersApi';
 import { toast } from 'sonner';
 
-type Step = 'name' | 'amount' | 'rules' | 'invite';
+type Step = 'form' | 'invite';
 
 const CreateCircle = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [step, setStep] = useState<Step>('name');
+  const [step, setStep] = useState<Step>('form');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -57,9 +57,6 @@ const CreateCircle = () => {
       setPayoutType(template.payoutType ?? 'rotation');
     }
   }, [template]);
-
-  const steps: Step[] = ['name', 'amount', 'rules', 'invite'];
-  const stepIndex = steps.indexOf(step);
 
   const handleCreate = async () => {
     const amountValue = Number(amount);
@@ -153,17 +150,20 @@ const CreateCircle = () => {
   return (
     <div className="min-h-screen px-4 py-6 safe-top">
       <div className="mb-6 flex gap-1">
-        {[0, 1, 2, 3].map(index => (
-          <div key={index} className={`h-1 flex-1 rounded-full ${stepIndex >= index ? 'bg-accent' : 'bg-muted'}`} />
+        {[0, 1].map(index => (
+          <div key={index} className={`h-1 flex-1 rounded-full ${(step === 'form' ? 0 : 1) >= index ? 'bg-accent' : 'bg-muted'}`} />
         ))}
       </div>
 
       <AnimatePresence mode="wait">
         <motion.div key={step} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
-          {step === 'name' && (
+          {step === 'form' && (
             <div className="space-y-6">
               <h1 className="font-display text-2xl font-bold">Create Circle</h1>
-              <div className="space-y-4">
+              
+              {/* Section 1: Basic Information */}
+              <div className="space-y-4 rounded-xl border border-border bg-card p-4">
+                <h3 className="font-semibold text-foreground text-sm border-b border-border pb-2">Basic Info</h3>
                 <div className="space-y-2">
                   <Label htmlFor="circle-name">Circle Name</Label>
                   <Input id="circle-name" value={name} onChange={event => setName(event.target.value)} placeholder="e.g. Ajo Family" className="h-12" />
@@ -173,18 +173,12 @@ const CreateCircle = () => {
                   <Input id="circle-description" value={description} onChange={event => setDescription(event.target.value)} placeholder="Monthly family contribution group" className="h-12" />
                 </div>
               </div>
-              <Button className="h-12 w-full" onClick={() => setStep('amount')} disabled={!name.trim()}>
-                Continue
-              </Button>
-            </div>
-          )}
 
-          {step === 'amount' && (
-            <div className="space-y-6">
-              <h1 className="font-display text-2xl font-bold">Contribution Details</h1>
-              <div className="space-y-4">
+              {/* Section 2: Contribution Details */}
+              <div className="space-y-4 rounded-xl border border-border bg-card p-4">
+                <h3 className="font-semibold text-foreground text-sm border-b border-border pb-2">Contribution Settings</h3>
                 <div className="space-y-2">
-                  <Label htmlFor="circle-amount">Amount per member (N)</Label>
+                  <Label htmlFor="circle-amount">Amount per member (₦)</Label>
                   <Input id="circle-amount" type="number" value={amount} onChange={event => setAmount(event.target.value.replace(/[^\d]/g, ''))} placeholder="25000" className="h-12" />
                 </div>
                 <div className="space-y-2">
@@ -270,31 +264,27 @@ const CreateCircle = () => {
                   </motion.div>
                 )}
               </div>
-              <Button className="h-12 w-full" onClick={() => setStep('rules')} disabled={!amount || !maxMembers}>
-                Continue
-              </Button>
-            </div>
-          )}
 
-          {step === 'rules' && (
-            <div className="space-y-6">
-              <h1 className="font-display text-2xl font-bold">Payout Rules</h1>
-              <div className="space-y-3">
-                {Object.entries(CIRCLE_PAYOUT_TYPE_METADATA).map(([id, option]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setPayoutType(id as typeof payoutType)}
-                    className={`flex w-full flex-col rounded-xl border p-4 text-left transition-colors ${payoutType === id ? 'border-accent bg-accent/10' : 'border-border bg-card'}`}
-                  >
-                    <span className="font-semibold text-foreground">{option.label}</span>
-                    <span className="mt-0.5 text-xs text-muted-foreground">{option.description}</span>
-                  </button>
-                ))}
-              </div>
+              {/* Section 3: Payout Rules */}
+              <div className="space-y-4 rounded-xl border border-border bg-card p-4">
+                <h3 className="font-semibold text-foreground text-sm border-b border-border pb-2">Payout Rules</h3>
+                <div className="space-y-3">
+                  {Object.entries(CIRCLE_PAYOUT_TYPE_METADATA).map(([id, option]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setPayoutType(id as typeof payoutType)}
+                      className={`flex w-full flex-col rounded-xl border p-4 text-left transition-colors ${payoutType === id ? 'border-accent bg-accent/10 border-accent' : 'border-border bg-card'}`}
+                    >
+                      <span className="font-semibold text-foreground">{option.label}</span>
+                      <span className="mt-0.5 text-xs text-muted-foreground">{option.description}</span>
+                    </button>
+                  ))}
+                </div>
 
-              <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
-                {getCirclePayoutTypeDescription(payoutType)}
+                <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+                  {getCirclePayoutTypeDescription(payoutType)}
+                </div>
               </div>
 
               {error && (
@@ -304,7 +294,7 @@ const CreateCircle = () => {
                 </Alert>
               )}
 
-              <Button className="h-12 w-full" onClick={handleCreate} disabled={isSubmitting}>
+              <Button className="h-12 w-full font-bold" onClick={handleCreate} disabled={isSubmitting || !name.trim() || !amount || !maxMembers}>
                 {isSubmitting ? 'Creating...' : 'Create Circle'}
               </Button>
             </div>
@@ -344,7 +334,7 @@ const CreateCircle = () => {
 
               <div className="space-y-2 rounded-xl border border-border bg-card p-4 text-sm">
                 <div className="flex justify-between"><span className="text-muted-foreground">Name</span><span className="font-medium text-foreground">{circle.name}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Amount</span><span className="font-medium text-foreground">N{Number(amount || 0).toLocaleString()} / {frequency}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Amount</span><span className="font-medium text-foreground">₦{Number(amount || 0).toLocaleString()} / {frequency}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Max Members</span><span className="font-medium text-foreground">{maxMembers}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Payout</span><span className="font-medium text-foreground">{getCirclePayoutTypeLabel(payoutType)}</span></div>
               </div>
