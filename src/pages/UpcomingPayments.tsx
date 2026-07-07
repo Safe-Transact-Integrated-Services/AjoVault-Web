@@ -78,7 +78,7 @@ const UpcomingPayments = () => {
       </button>
 
       <div className="mb-6">
-        <h1 className="font-display text-2xl font-bold text-foreground">Upcoming Payments</h1>
+        <h1 className="font-display text-2xl font-bold text-foreground">Upcoming Payout</h1>
       </div>
 
       <div className="space-y-3">

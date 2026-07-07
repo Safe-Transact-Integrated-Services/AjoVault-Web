@@ -405,7 +405,7 @@ const Dashboard = () => {
 
       {/* <div className="mb-6 rounded-[20px] bg-white p-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-border/50"> */}
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-display text-sm font-bold text-[#1a2b4c]">Upcoming Payments</h2>
+        <h2 className="font-display text-sm font-bold text-[#1a2b4c]">Upcoming Payout</h2>
         <button onClick={() => navigate('/upcoming-payments')} className="text-[13px] font-medium text-blue-500 hover:text-blue-600">View all</button>
       </div>
       <div className="space-y-3">
