@@ -16,6 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { circlesKeys, getCircles } from '@/services/circlesApi';
 import { formatCurrency, formatDate } from '@/services/mockData';
@@ -47,6 +48,9 @@ const CirclesHome = () => {
   const [activeTab, setActiveTab] = useState('all');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('newest');
+  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
+  const normalizedCode = inviteCode.trim().toUpperCase();
   const itemsPerPage = 5;
 
   const contributionsQuery = useQuery({
@@ -149,18 +153,13 @@ const CirclesHome = () => {
 
   return (
     <div className="px-4 py-6 safe-top">
-      {/* Title */}
-      <div className="mb-5 flex items-center justify-between">
-        <h1 className="font-display text-xl font-bold text-foreground">Circles (Ajo)</h1>
-      </div>
-
       {/* Dashboard Overview Hero Card */}
       <motion.div
         initial={{ opacity: 0, y: -15 }}
         animate={{ opacity: 1, y: 0 }}
         className="mb-6 overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#1a2b4c] to-[#126989] p-5 text-white shadow-xl"
       >
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between my-4">
           <div>
             <h2 className="font-display text-2xl font-bold text-white">Circles</h2>
           </div>
@@ -223,7 +222,10 @@ const CirclesHome = () => {
       {/* Quick Action Grid */}
       <div className="mb-6 grid grid-cols-2 gap-3">
         <button
-          onClick={() => navigate('/circles/join')}
+          onClick={() => {
+            setInviteCode('');
+            setIsJoinModalOpen(true);
+          }}
           className="flex items-center justify-between rounded-2xl border border-blue-200 bg-blue-50/50 p-3.5 text-left transition-all hover:border-blue-300 hover:bg-blue-50"
         >
           <div className="flex items-center gap-3">
@@ -496,6 +498,45 @@ const CirclesHome = () => {
           </Pagination>
         </div>
       )}
+
+      {/* Join Circle Modal */}
+      <Dialog open={isJoinModalOpen} onOpenChange={setIsJoinModalOpen}>
+        <DialogContent className="w-[90%] max-w-[400px] rounded-2xl p-6 gap-6">
+          <DialogHeader className="text-left">
+            <DialogTitle className="font-display text-2xl font-bold">Join a Circle</DialogTitle>
+            <DialogDescription className="mt-1 text-muted-foreground">
+              Enter the invite code shared with you.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <label htmlFor="modal-circle-invite-code" className="text-sm font-medium text-foreground">
+                Invite Code
+              </label>
+              <Input
+                id="modal-circle-invite-code"
+                value={normalizedCode}
+                onChange={event => setInviteCode(event.target.value)}
+                placeholder="AJO-XXXXXX"
+                className="h-14 text-center font-mono text-xl tracking-wider uppercase"
+                maxLength={12}
+              />
+            </div>
+
+            <Button
+              className="h-12 w-full font-semibold"
+              onClick={() => {
+                setIsJoinModalOpen(false);
+                navigate(`/circles/join/${encodeURIComponent(normalizedCode)}`);
+              }}
+              disabled={normalizedCode.length < 8}
+            >
+              Continue
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
