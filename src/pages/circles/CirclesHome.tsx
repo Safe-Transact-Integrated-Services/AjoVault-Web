@@ -1,13 +1,14 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
   Users,
   Clock,
   Calendar,
   ChevronRight,
+  ChevronDown,
   UserPlus,
   TrendingUp,
   PiggyBank,
@@ -50,6 +51,15 @@ const CirclesHome = () => {
   const [sortBy, setSortBy] = useState('newest');
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
+  const [expandedCircles, setExpandedCircles] = useState<Record<string, boolean>>({});
+  
+  const toggleExpand = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedCircles(prev => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
   const normalizedCode = inviteCode.trim().toUpperCase();
   const itemsPerPage = 5;
 
@@ -375,17 +385,18 @@ const CirclesHome = () => {
 
         {!circlesQuery.isLoading && !circlesQuery.isError && currentCircles.map((circle, index) => {
           const percent = Math.min(100, Math.max(0, (circle.currentCycle / circle.totalCycles) * 100));
+          const isExpanded = !!expandedCircles[circle.id];
           return (
-            <motion.button
+            <motion.div
               key={circle.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
               onClick={() => navigate(`/circles/${circle.id}`)}
-              className="group w-full rounded-2xl border border-border bg-card p-4 text-left transition-all hover:border-accent/40 hover:shadow-md"
+              className="group w-full rounded-2xl border border-border bg-card p-4 text-left transition-all hover:border-accent/40 hover:shadow-md cursor-pointer"
             >
-              {/* Card Header */}
-              <div className="mb-3.5 flex items-start justify-between">
+              {/* Header section which is always visible */}
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent/10 transition-colors group-hover:bg-accent/20">
                     <Users className="h-5 w-5 text-accent" />
@@ -394,80 +405,124 @@ const CirclesHome = () => {
                     <h4 className="font-bold text-foreground group-hover:text-accent transition-colors truncate max-w-[150px] sm:max-w-none">
                       {circle.name}
                     </h4>
-                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
-                      <span>{circle.memberCount}/{circle.maxMembers} members</span>
-                      <span className="inline-block h-1 w-1 rounded-full bg-muted-foreground/50" />
-                      <span className="capitalize">{circle.payoutType} layout</span>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {formatCurrency(circle.amount)} / {circle.frequency}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <Badge variant="secondary" className={`text-[10px] font-semibold tracking-wide border px-2 py-0.5 rounded-md ${circle.role === 'admin'
-                      ? 'bg-accent/10 text-accent border-accent/20'
-                      : 'bg-blue-50 text-blue-700 border-blue-100'
-                    }`}>
-                    {circle.role}
-                  </Badge>
-                  <Badge variant="outline" className={`text-[10px] font-semibold tracking-wide capitalize px-2 py-0.5 rounded-md ${circle.status === 'active'
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      : circle.status === 'completed'
-                        ? 'bg-blue-50 text-blue-700 border-blue-200'
-                        : 'bg-amber-50 text-amber-700 border-amber-200'
-                    }`}>
-                    {circle.status}
-                  </Badge>
+
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <span className="inline-block text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded-md border border-amber-100 uppercase tracking-wider">
+                      Due: {formatDate(circle.nextContributionDate)}
+                    </span>
+                  </div>
+                  <button
+                    onClick={(e) => toggleExpand(circle.id, e)}
+                    className="p-1.5 hover:bg-muted rounded-full transition-colors shrink-0"
+                  >
+                    <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                  </button>
                 </div>
               </div>
 
-              {/* Progress Indicator */}
-              <div className="mb-4 space-y-1">
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Cycle progress</span>
-                  <span className="font-semibold text-foreground">{circle.currentCycle} of {circle.totalCycles}</span>
-                </div>
-                <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-accent to-[#126989] transition-all duration-500"
-                    style={{ width: `${percent}%` }}
-                  />
-                </div>
-              </div>
+              {/* Collapsible Content */}
+              <AnimatePresence initial={false}>
+                {isExpanded && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                    animate={{ height: 'auto', opacity: 1, marginTop: 14 }}
+                    exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden border-t border-border/50 pt-3.5 space-y-4"
+                    onClick={(e) => e.stopPropagation()} // Prevent clicking details from triggering navigation
+                  >
+                    {/* Badges & Meta row */}
+                    <div className="flex items-center justify-between text-xs">
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5 font-medium">
+                        <span>{circle.memberCount}/{circle.maxMembers} members</span>
+                        <span className="inline-block h-1 w-1 rounded-full bg-muted-foreground/50" />
+                        <span className="capitalize">{circle.payoutType} layout</span>
+                      </p>
+                      
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="secondary" className={`text-[10px] font-semibold tracking-wide border px-2 py-0.5 rounded-md ${circle.role === 'admin'
+                            ? 'bg-accent/10 text-accent border-accent/20'
+                            : 'bg-blue-50 text-blue-700 border-blue-100'
+                          }`}>
+                          {circle.role}
+                        </Badge>
+                        <Badge variant="outline" className={`text-[10px] font-semibold tracking-wide capitalize px-2 py-0.5 rounded-md ${circle.status === 'active'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : circle.status === 'completed'
+                              ? 'bg-blue-50 text-blue-700 border-blue-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}>
+                          {circle.status}
+                        </Badge>
+                      </div>
+                    </div>
 
-              {/* Details Grid */}
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border/50 pt-3.5 text-xs">
-                <div className="flex items-center gap-2">
-                  <PiggyBank className="h-4 w-4 text-[#126989] shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Contribution</p>
-                    <p className="font-semibold text-foreground mt-0.5">{formatCurrency(circle.amount)} / {circle.frequency}</p>
-                  </div>
-                </div>
+                    {/* Progress Indicator */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Cycle progress</span>
+                        <span className="font-semibold text-foreground">{circle.currentCycle} of {circle.totalCycles}</span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-accent to-[#126989] transition-all duration-500"
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
+                    </div>
 
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-[#126989] shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Payout Pool</p>
-                    <p className="font-semibold text-foreground mt-0.5">{formatCurrency(circle.amount * circle.maxMembers)}</p>
-                  </div>
-                </div>
+                    {/* Details Grid */}
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+                      <div className="flex items-center gap-2">
+                        <PiggyBank className="h-4 w-4 text-[#126989] shrink-0" />
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Contribution</p>
+                          <p className="font-semibold text-foreground mt-0.5">{formatCurrency(circle.amount)} / {circle.frequency}</p>
+                        </div>
+                      </div>
 
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-[#126989] shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Next Due</p>
-                    <p className="font-semibold text-foreground mt-0.5">{formatDate(circle.nextContributionDate)}</p>
-                  </div>
-                </div>
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4 text-[#126989] shrink-0" />
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Payout Pool</p>
+                          <p className="font-semibold text-foreground mt-0.5">{formatCurrency(circle.amount * circle.maxMembers)}</p>
+                        </div>
+                      </div>
 
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-[#126989] shrink-0" />
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Next Payout</p>
-                    <p className="font-semibold text-foreground mt-0.5">{formatDate(circle.nextPayoutDate)}</p>
-                  </div>
-                </div>
-              </div>
-            </motion.button>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-[#126989] shrink-0" />
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Next Due</p>
+                          <p className="font-semibold text-foreground mt-0.5">{formatDate(circle.nextContributionDate)}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-[#126989] shrink-0" />
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Next Payout</p>
+                          <p className="font-semibold text-foreground mt-0.5">{formatDate(circle.nextPayoutDate)}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Go to Circle Action */}
+                    <Button 
+                      className="w-full mt-2 h-10 font-bold bg-accent text-accent-foreground"
+                      onClick={() => navigate(`/circles/${circle.id}`)}
+                    >
+                      Go to Circle
+                    </Button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
           );
         })}
       </div>

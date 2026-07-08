@@ -76,6 +76,7 @@ import CooperativeLoans from '@/pages/cooperative/CooperativeLoans';
 
 import GroupGoalsHome from '@/pages/groupgoals/GroupGoalsHome';
 import CreateGroupGoal from '@/pages/groupgoals/CreateGroupGoal';
+import CreateGoalSelect from '@/pages/groupgoals/CreateGoalSelect';
 import JoinGroupGoal from '@/pages/groupgoals/JoinGroupGoal';
 import GroupGoalDetail from '@/pages/groupgoals/GroupGoalDetail';
 import GroupGoalContribute from '@/pages/groupgoals/GroupGoalContribute';
@@ -167,6 +168,7 @@ const App = () => (
                   <Route path="/circles/:id/payout" element={<CirclePayout />} />
                   <Route path="/circles/join/:code" element={<CircleJoinInvite />} />
                   <Route path="/group-goals" element={<GroupGoalsHome />} />
+                  <Route path="/group-goals/create/select" element={<CreateGoalSelect />} />
                   <Route path="/group-goals/create" element={<CreateGroupGoal />} />
                   <Route path="/group-goals/join" element={<JoinGroupGoal />} />
                   <Route path="/group-goals/join/:code" element={<GroupGoalJoinInvite />} />

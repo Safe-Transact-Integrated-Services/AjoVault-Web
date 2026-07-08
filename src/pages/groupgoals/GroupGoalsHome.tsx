@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
   Target,
@@ -11,6 +11,7 @@ import {
   UserPlus,
   Search,
   ChevronRight,
+  ChevronDown,
   Calendar,
   Clock,
   TrendingUp
@@ -47,8 +48,16 @@ const GroupGoalsHome = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'all' | 'personal' | 'group' | 'completed'>('all');
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
+  const [expandedGoals, setExpandedGoals] = useState<Record<string, boolean>>({});
+
+  const toggleExpand = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedGoals(prev => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('newest');
   const [currentPage, setCurrentPage] = useState(1);
@@ -372,7 +381,7 @@ const GroupGoalsHome = () => {
         </button>
 
         <button
-          onClick={() => setIsCreateModalOpen(true)}
+          onClick={() => navigate('/group-goals/create/select')}
           className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50/50 p-3.5 text-left transition-all hover:border-emerald-300 hover:bg-emerald-50"
         >
           <div className="flex items-center gap-3">
@@ -469,14 +478,14 @@ const GroupGoalsHome = () => {
           return (
             <div key={`${item.type}-${item.id}`}>
               {item.type === 'personal' && (
-                <motion.button
+                <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
                   onClick={() => navigate(`/savings/${item.id}`)}
-                  className="group w-full rounded-2xl border border-border bg-card p-4 text-left transition-all hover:border-accent/40 hover:shadow-md"
+                  className="group w-full rounded-2xl border border-border bg-card p-4 text-left transition-all hover:border-accent/40 hover:shadow-md cursor-pointer"
                 >
-                  <div className="mb-3.5 flex items-start justify-between">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent/10 transition-colors group-hover:bg-accent/20">
                         {item.raw.goalImage ? (
@@ -489,69 +498,110 @@ const GroupGoalsHome = () => {
                         <h4 className="font-bold text-foreground group-hover:text-accent transition-colors truncate max-w-[150px] sm:max-w-none">
                           {item.name}
                         </h4>
-                        <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
-                          <span>{item.raw.interestRate}% p.a. interest</span>
-                          <span className="inline-block h-1 w-1 rounded-full bg-muted-foreground/50" />
-                          <span className="capitalize">{item.raw.frequency} contribution</span>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {formatCurrency(item.raw.contributionAmount)} / {item.raw.frequency}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <Badge variant="secondary" className={`text-[10px] font-semibold tracking-wide border px-2 py-0.5 rounded-md ${(typeColors as any)[item.raw.type] || 'bg-accent/10 text-accent border-accent/20'}`}>
-                        {(typeLabels as any)[item.raw.type] || item.raw.type}
-                      </Badge>
-                      <Badge variant="outline" className={`text-[10px] font-semibold tracking-wide capitalize px-2 py-0.5 rounded-md ${item.status === 'active'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : 'bg-amber-50 text-amber-700 border-amber-200'
-                        }`}>
-                        {item.status}
-                      </Badge>
+
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <span className="inline-block text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded-md border border-amber-100 uppercase tracking-wider">
+                          Due: {item.raw.nextContributionDate ? formatDate(item.raw.nextContributionDate) : 'N/A'}
+                        </span>
+                      </div>
+                      <button
+                        onClick={(e) => toggleExpand(`${item.type}-${item.id}`, e)}
+                        className="p-1.5 hover:bg-muted rounded-full transition-colors shrink-0"
+                      >
+                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${expandedGoals[`${item.type}-${item.id}`] ? 'rotate-180' : ''}`} />
+                      </button>
                     </div>
                   </div>
 
-                  <div className="mb-4 space-y-1">
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Savings progress</span>
-                      <span className="font-semibold text-foreground">
-                        {formatCurrency(item.savedAmount)} of {formatCurrency(item.targetAmount)}
-                      </span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-accent to-[#126989] transition-all duration-500"
-                        style={{ width: `${item.targetAmount <= 0 ? 0 : Math.min(100, Math.round((item.savedAmount / item.targetAmount) * 100))}%` }}
-                      />
-                    </div>
-                  </div>
+                  <AnimatePresence initial={false}>
+                    {expandedGoals[`${item.type}-${item.id}`] && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                        animate={{ height: 'auto', opacity: 1, marginTop: 14 }}
+                        exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden border-t border-border/50 pt-3.5 space-y-4"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {/* Meta row */}
+                        <div className="flex items-center justify-between text-xs">
+                          <p className="text-xs text-muted-foreground font-medium capitalize">
+                            {item.raw.frequency} Contribution
+                          </p>
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant="secondary" className={`text-[10px] font-semibold tracking-wide border px-2 py-0.5 rounded-md ${(typeColors as any)[item.raw.type] || 'bg-accent/10 text-accent border-accent/20'}`}>
+                              {(typeLabels as any)[item.raw.type] || item.raw.type}
+                            </Badge>
+                            <Badge variant="outline" className={`text-[10px] font-semibold tracking-wide capitalize px-2 py-0.5 rounded-md ${item.status === 'active'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}>
+                              {item.status}
+                            </Badge>
+                          </div>
+                        </div>
 
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border/50 pt-3.5 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="h-4 w-4 text-[#126989] shrink-0" />
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Interest Rate</p>
-                        <p className="font-semibold text-foreground mt-0.5">{item.raw.interestRate}% p.a.</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-[#126989] shrink-0" />
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Next Due</p>
-                        <p className="font-semibold text-foreground mt-0.5">{item.raw.nextContributionDate ? formatDate(item.raw.nextContributionDate) : 'N/A'}</p>
-                      </div>
-                    </div>
-                  </div>
-                </motion.button>
+                        {/* Progress */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Savings progress</span>
+                            <span className="font-semibold text-foreground">
+                              {formatCurrency(item.savedAmount)} of {formatCurrency(item.targetAmount)}
+                            </span>
+                          </div>
+                          <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-accent to-[#126989] transition-all duration-500"
+                              style={{ width: `${item.targetAmount <= 0 ? 0 : Math.min(100, Math.round((item.savedAmount / item.targetAmount) * 100))}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Details grid */}
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <TrendingUp className="h-4 w-4 text-[#126989] shrink-0" />
+                            <div>
+                              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Interest Rate</p>
+                              <p className="font-semibold text-foreground mt-0.5">{item.raw.interestRate}% p.a.</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-[#126989] shrink-0" />
+                            <div>
+                              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Next Due</p>
+                              <p className="font-semibold text-foreground mt-0.5">{item.raw.nextContributionDate ? formatDate(item.raw.nextContributionDate) : 'N/A'}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <Button 
+                          className="w-full mt-2 h-10 font-bold bg-accent text-accent-foreground"
+                          onClick={() => navigate(`/savings/${item.id}`)}
+                        >
+                          View Details
+                        </Button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
               )}
 
               {item.type === 'group' && (
-                <motion.button
+                <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
                   onClick={() => navigate(`/group-goals/${item.id}`)}
-                  className="group w-full rounded-2xl border border-border bg-card p-4 text-left transition-all hover:border-primary/40 hover:shadow-md"
+                  className="group w-full rounded-2xl border border-border bg-card p-4 text-left transition-all hover:border-primary/40 hover:shadow-md cursor-pointer"
                 >
-                  <div className="mb-3.5 flex items-start justify-between">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 transition-colors group-hover:bg-primary/20">
                         <Target className="h-5 w-5 text-primary" />
@@ -560,58 +610,101 @@ const GroupGoalsHome = () => {
                         <h4 className="font-bold text-foreground group-hover:text-primary transition-colors truncate max-w-[150px] sm:max-w-none">
                           {item.name}
                         </h4>
-                        <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
-                          <span>{item.raw.memberCount} members</span>
-                          <span className="inline-block h-1 w-1 rounded-full bg-muted-foreground/50" />
-                          <span className="capitalize">{item.raw.frequency} payout</span>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {formatCurrency(item.raw.contributionAmount)} / {item.raw.frequency}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <Badge variant="secondary" className="text-[10px] font-semibold tracking-wide border px-2 py-0.5 rounded-md bg-accent/10 text-accent border-accent/20">
-                        {(categoryLabels as any)[item.raw.category] || item.raw.category}
-                      </Badge>
-                      <Badge variant="outline" className={`text-[10px] font-semibold tracking-wide capitalize px-2 py-0.5 rounded-md ${item.status === 'active'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                          : 'bg-amber-50 text-amber-700 border-amber-200'
-                        }`}>
-                        {item.status}
-                      </Badge>
+
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <span className="inline-block text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded-md border border-amber-100 uppercase tracking-wider">
+                          Due: {item.raw.deadline ? formatDate(item.raw.deadline) : 'N/A'}
+                        </span>
+                      </div>
+                      <button
+                        onClick={(e) => toggleExpand(`${item.type}-${item.id}`, e)}
+                        className="p-1.5 hover:bg-muted rounded-full transition-colors shrink-0"
+                      >
+                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${expandedGoals[`${item.type}-${item.id}`] ? 'rotate-180' : ''}`} />
+                      </button>
                     </div>
                   </div>
 
-                  <div className="mb-4 space-y-1">
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Group raised progress</span>
-                      <span className="font-semibold text-foreground">
-                        {formatCurrency(item.savedAmount)} of {formatCurrency(item.targetAmount)}
-                      </span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-primary to-[#126989] transition-all duration-500"
-                        style={{ width: `${item.raw.progressPercent || 0}%` }}
-                      />
-                    </div>
-                  </div>
+                  <AnimatePresence initial={false}>
+                    {expandedGoals[`${item.type}-${item.id}`] && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                        animate={{ height: 'auto', opacity: 1, marginTop: 14 }}
+                        exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden border-t border-border/50 pt-3.5 space-y-4"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {/* Meta row */}
+                        <div className="flex items-center justify-between text-xs">
+                          <p className="text-xs text-muted-foreground font-medium">
+                            <span>{item.raw.memberCount} members</span>
+                            <span className="inline-block h-1 w-1 rounded-full bg-muted-foreground/50 mx-1.5" />
+                            <span className="capitalize">{item.raw.frequency} contribution</span>
+                          </p>
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant="secondary" className="text-[10px] font-semibold tracking-wide border px-2 py-0.5 rounded-md bg-accent/10 text-accent border-accent/20">
+                              {(categoryLabels as any)[item.raw.category] || item.raw.category}
+                            </Badge>
+                            <Badge variant="outline" className={`text-[10px] font-semibold tracking-wide capitalize px-2 py-0.5 rounded-md ${item.status === 'active'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}>
+                              {item.status}
+                            </Badge>
+                          </div>
+                        </div>
 
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border/50 pt-3.5 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-primary shrink-0" />
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Creator</p>
-                        <p className="font-semibold text-foreground mt-0.5">{item.raw.creatorName}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-primary shrink-0" />
-                      <div>
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Deadline</p>
-                        <p className="font-semibold text-foreground mt-0.5">{formatDate(item.raw.deadline)}</p>
-                      </div>
-                    </div>
-                  </div>
-                </motion.button>
+                        {/* Progress */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Group raised progress</span>
+                            <span className="font-semibold text-foreground">
+                              {formatCurrency(item.savedAmount)} of {formatCurrency(item.targetAmount)}
+                            </span>
+                          </div>
+                          <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-primary to-[#126989] transition-all duration-500"
+                              style={{ width: `${item.raw.progressPercent || 0}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Details grid */}
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-primary shrink-0" />
+                            <div>
+                              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Creator</p>
+                              <p className="font-semibold text-foreground mt-0.5">{item.raw.creatorName}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-primary shrink-0" />
+                            <div>
+                              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Deadline</p>
+                              <p className="font-semibold text-foreground mt-0.5">{formatDate(item.raw.deadline)}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <Button 
+                          className="w-full mt-2 h-10 font-bold bg-primary text-primary-foreground"
+                          onClick={() => navigate(`/group-goals/${item.id}`)}
+                        >
+                          View Details
+                        </Button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
               )}
             </div>
           );
@@ -644,52 +737,6 @@ const GroupGoalsHome = () => {
           </Pagination>
         </div>
       )}
-
-      {/* Create Goal Dialog Modal */}
-      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-        <DialogContent className="w-[90%] max-w-[400px] rounded-2xl p-6 gap-6">
-          <DialogHeader className="text-left font-display">
-            <DialogTitle className="text-2xl font-bold">Create a Goal</DialogTitle>
-            <DialogDescription className="mt-1 text-muted-foreground">
-              Select what type of savings goal you want to start.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex flex-col gap-4">
-            <button
-              onClick={() => {
-                setIsCreateModalOpen(false);
-                navigate('/savings/create');
-              }}
-              className="flex items-center gap-4 rounded-2xl border border-accent/20 bg-accent/5 p-4 text-left transition-all hover:border-accent hover:bg-accent/10"
-            >
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent/20 text-accent">
-                <Target className="h-6 w-6" />
-              </div>
-              <div className="flex-1">
-                <p className="font-bold text-foreground">Personal Goal</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Save individually for a specific target with interest.</p>
-              </div>
-            </button>
-
-            <button
-              onClick={() => {
-                setIsCreateModalOpen(false);
-                navigate('/group-goals/create');
-              }}
-              className="flex items-center gap-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 text-left transition-all hover:border-primary hover:bg-primary/10"
-            >
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/20 text-primary">
-                <Users className="h-6 w-6" />
-              </div>
-              <div className="flex-1">
-                <p className="font-bold text-foreground">Group Goal</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Save with friends or family for a shared purpose.</p>
-              </div>
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Join Goal Modal */}
       <Dialog open={isJoinModalOpen} onOpenChange={setIsJoinModalOpen}>
