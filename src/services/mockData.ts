@@ -57,7 +57,7 @@ export const mockCircles: Circle[] = [
   },
   {
     id: 'cir_002', name: 'Wealth Builders', description: 'Investment-focused savings group', amount: 50000, currency: 'NGN', frequency: 'monthly',
-    memberCount: 10, maxMembers: 12, currentCycle: 5, totalCycles: 12, role: 'member',
+    memberCount: 5, maxMembers: 12, currentCycle: 5, totalCycles: 12, role: 'member',
     nextContributionDate: '2026-04-01', nextPayoutDate: '2026-04-10', status: 'active', payoutType: 'rotation',
     createdAt: '2026-02-15',
     members: [
@@ -66,6 +66,16 @@ export const mockCircles: Circle[] = [
       { id: 'm9', name: 'Emeka C.', hasPaid: false, payoutPosition: 3, hasReceivedPayout: true },
       { id: 'm10', name: 'Grace I.', hasPaid: true, payoutPosition: 4, hasReceivedPayout: true },
       { id: 'm11', name: 'Adaeze O.', hasPaid: true, payoutPosition: 5, hasReceivedPayout: true },
+    ],
+  },
+  {
+    id: 'cir_003', name: 'Youth Empowerment Club', description: 'Weekly startup support circle', amount: 15000, currency: 'NGN', frequency: 'monthly',
+    memberCount: 2, maxMembers: 8, currentCycle: 1, totalCycles: 8, role: 'admin',
+    nextContributionDate: '2026-08-01', nextPayoutDate: '2026-08-05', status: 'pending', payoutType: 'rotation',
+    createdAt: '2026-07-13', startDate: '2026-08-01',
+    members: [
+      { id: 'm12', name: 'Amina B.', hasPaid: false, payoutPosition: 1, hasReceivedPayout: false },
+      { id: 'm13', name: 'David O.', hasPaid: false, payoutPosition: 2, hasReceivedPayout: false },
     ],
   },
 ];
