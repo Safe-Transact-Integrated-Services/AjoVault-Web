@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -12,15 +12,17 @@ import {
   UserPlus,
   TrendingUp,
   PiggyBank,
-  Search
+  Search,
+  Play
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { EmptyTableState } from '@/components/shared/EmptyTableState';
-import { circlesKeys, getCircles } from '@/services/circlesApi';
+import { circlesKeys, getCircles, startCircle } from '@/services/circlesApi';
 import { formatCurrency, formatDate } from '@/services/mockData';
+import { toast } from 'sonner';
 import {
   Pagination,
   PaginationContent,
@@ -59,6 +61,26 @@ const CirclesHome = () => {
       ...prev,
       [id]: !prev[id],
     }));
+  };
+
+  const queryClient = useQueryClient();
+  const [startingCircleId, setStartingCircleId] = useState<string | null>(null);
+
+  const handleStartCircle = async (circleId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setStartingCircleId(circleId);
+    try {
+      await startCircle(circleId);
+      toast.success('Circle started successfully!');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: circlesKeys.list }),
+        queryClient.invalidateQueries({ queryKey: dashboardKeys.summary }),
+      ]);
+    } catch (err) {
+      toast.error('Failed to start circle. Please try again.');
+    } finally {
+      setStartingCircleId(null);
+    }
   };
   const normalizedCode = inviteCode.trim().toUpperCase();
   const itemsPerPage = 5;
@@ -413,10 +435,32 @@ const CirclesHome = () => {
 
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <span className="inline-block text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded-md border border-amber-100 uppercase tracking-wider">
-                      Due: {formatDate(circle.nextContributionDate)}
-                    </span>
+                    {circle.status === 'pending' ? (
+                      <span className="inline-block text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded-md border border-amber-100 uppercase tracking-wider">
+                        Pending
+                      </span>
+                    ) : (
+                      <span className="inline-block text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded-md border border-amber-100 uppercase tracking-wider">
+                        Due: {formatDate(circle.nextContributionDate)}
+                      </span>
+                    )}
                   </div>
+
+                  {circle.status === 'pending' && circle.role === 'admin' && (
+                    <button
+                      onClick={(e) => handleStartCircle(circle.id, e)}
+                      disabled={startingCircleId === circle.id}
+                      className="p-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full transition-all shrink-0 shadow-sm flex items-center justify-center"
+                      title="Start Circle"
+                    >
+                      {startingCircleId === circle.id ? (
+                        <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border border-white border-t-transparent"></span>
+                      ) : (
+                        <Play className="h-3.5 w-3.5 fill-current" />
+                      )}
+                    </button>
+                  )}
+
                   <button
                     onClick={(e) => toggleExpand(circle.id, e)}
                     className="p-1.5 hover:bg-muted rounded-full transition-colors shrink-0"
@@ -513,12 +557,41 @@ const CirclesHome = () => {
                     </div>
 
                     {/* Go to Circle Action */}
-                    <Button 
-                      className="w-full mt-2 h-10 font-bold bg-accent text-accent-foreground"
-                      onClick={() => navigate(`/circles/${circle.id}`)}
-                    >
-                      Go to Circle
-                    </Button>
+                    {circle.status === 'pending' && circle.role === 'admin' ? (
+                      <div className="flex gap-2 mt-2">
+                        <Button 
+                          className="flex-1 h-10 font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center gap-2"
+                          onClick={(e) => handleStartCircle(circle.id, e)}
+                          disabled={startingCircleId === circle.id}
+                        >
+                          {startingCircleId === circle.id ? (
+                            <>
+                              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+                              Starting...
+                            </>
+                          ) : (
+                            <>
+                              <Play className="h-4 w-4 fill-current" />
+                              Start Circle
+                            </>
+                          )}
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          className="flex-1 h-10 font-bold"
+                          onClick={() => navigate(`/circles/${circle.id}`)}
+                        >
+                          Go to Circle
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button 
+                        className="w-full mt-2 h-10 font-bold bg-accent text-accent-foreground"
+                        onClick={() => navigate(`/circles/${circle.id}`)}
+                      >
+                        Go to Circle
+                      </Button>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>

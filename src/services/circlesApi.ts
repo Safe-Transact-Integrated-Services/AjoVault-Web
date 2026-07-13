@@ -16,9 +16,9 @@ interface GroupSummaryResponse {
   nextContributionDate: string;
   nextPayoutDate: string;
   status: 'active' | 'pending' | 'completed';
-  payoutType: 'rotation' | 'random' | 'bidding';
   hasPaidCurrentCycle?: boolean;
   createdAt?: string;
+  startDate?: string;
 }
 
 interface GroupMemberResponse {
@@ -148,9 +148,9 @@ export interface CircleSummary {
   nextContributionDate: string;
   nextPayoutDate: string;
   status: 'active' | 'pending' | 'completed';
-  payoutType: 'rotation' | 'random' | 'bidding';
   hasPaidCurrentCycle?: boolean;
   createdAt?: string;
+  startDate?: string;
 }
 
 export interface CircleMember {
@@ -268,9 +268,8 @@ export interface CreateCircleInput {
   maxMembers: number;
   payoutType: 'rotation' | 'random' | 'bidding';
   currency?: string;
-  isOngoing?: boolean;
-  currentCycle?: number;
   completedPayoutsCount?: number;
+  startDate?: string;
 }
 
 export interface SendCircleInviteInput {
@@ -316,8 +315,58 @@ export const circlesKeys = {
 };
 
 export const getCircles = async (): Promise<CircleSummary[]> => {
-  const response = await apiRequest<GroupSummaryResponse[]>('/api/groups/');
-  return response.map(mapCircleSummary);
+  try {
+    const response = await apiRequest<GroupSummaryResponse[]>('/api/groups/');
+    const apiCircles = response.map(mapCircleSummary);
+    
+    // Merge mock circles that aren't already present in apiCircles to allow testing mock items
+    const merged = [...apiCircles];
+    for (const mock of mockCircles) {
+      if (!merged.some(c => c.id === mock.id)) {
+        merged.push({
+          id: mock.id,
+          name: mock.name,
+          description: mock.description,
+          amount: mock.amount,
+          currency: mock.currency,
+          frequency: mock.frequency,
+          memberCount: mock.memberCount,
+          maxMembers: mock.maxMembers,
+          currentCycle: mock.currentCycle,
+          totalCycles: mock.totalCycles,
+          role: mock.role,
+          nextContributionDate: mock.nextContributionDate,
+          nextPayoutDate: mock.nextPayoutDate,
+          status: mock.status,
+          payoutType: mock.payoutType,
+          createdAt: mock.createdAt,
+          startDate: mock.startDate,
+        });
+      }
+    }
+    return merged;
+  } catch (error) {
+    // Fallback to mock data if API fails
+    return mockCircles.map(mock => ({
+      id: mock.id,
+      name: mock.name,
+      description: mock.description,
+      amount: mock.amount,
+      currency: mock.currency,
+      frequency: mock.frequency,
+      memberCount: mock.memberCount,
+      maxMembers: mock.maxMembers,
+      currentCycle: mock.currentCycle,
+      totalCycles: mock.totalCycles,
+      role: mock.role,
+      nextContributionDate: mock.nextContributionDate,
+      nextPayoutDate: mock.nextPayoutDate,
+      status: mock.status,
+      payoutType: mock.payoutType,
+      createdAt: mock.createdAt,
+      startDate: mock.startDate,
+    }));
+  }
 };
 
 export const getCircle = async (circleId: string): Promise<CircleDetail> => {
@@ -349,6 +398,7 @@ export const createCircle = async (input: CreateCircleInput): Promise<CircleDeta
       isOngoing: input.isOngoing,
       currentCycle: input.currentCycle,
       completedPayoutsCount: input.completedPayoutsCount,
+      startDate: input.startDate || undefined,
     },
   });
 
@@ -430,6 +480,25 @@ export const payoutCircle = async (
     },
   });
 
+export const startCircle = async (circleId: string): Promise<CircleDetail> => {
+  const mockCircle = mockCircles.find(c => c.id === circleId);
+  if (mockCircle) {
+    mockCircle.status = 'active';
+    return new Promise(resolve => setTimeout(() => resolve({
+      ...mockCircle,
+      inviteCode: 'MOCK123',
+      hasPaidCurrentCycle: true,
+      canPayout: mockCircle.role === 'admin',
+      payoutAmount: mockCircle.amount * mockCircle.memberCount,
+    }), 500));
+  }
+
+  const response = await apiRequest<GroupDetailResponse>(`/api/groups/${encodeURIComponent(circleId)}/start`, {
+    method: 'POST',
+  });
+  return mapCircleDetail(response);
+};
+
 const mapCircleSummary = (circle: GroupSummaryResponse): CircleSummary => ({
   id: circle.groupId,
   name: circle.groupName,
@@ -448,6 +517,7 @@ const mapCircleSummary = (circle: GroupSummaryResponse): CircleSummary => ({
   payoutType: circle.payoutType,
   hasPaidCurrentCycle: circle.hasPaidCurrentCycle,
   createdAt: circle.createdAt ?? '2026-01-01',
+  startDate: circle.startDate ?? undefined,
 });
 
 const mapCircleDetail = (circle: GroupDetailResponse): CircleDetail => ({

@@ -74,6 +74,7 @@ export interface Circle {
   payoutType: 'rotation' | 'random' | 'bidding';
   members: CircleMember[];
   createdAt?: string;
+  startDate?: string;
 }
 
 export interface CircleMember {
