@@ -34,6 +34,7 @@ const CreateCircle = () => {
   const [frequency, setFrequency] = useState<'weekly' | 'monthly'>('monthly');
   const [maxMembers, setMaxMembers] = useState('');
   const [payoutType, setPayoutType] = useState<'rotation' | 'random' | 'bidding'>('rotation');
+  const [startDate, setStartDate] = useState('');
   const [circle, setCircle] = useState<CircleDetail | null>(null);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -55,6 +56,7 @@ const CreateCircle = () => {
       setFrequency(template.frequency ?? 'monthly');
       setMaxMembers(template.maxMembers?.toString() ?? '');
       setPayoutType(template.payoutType ?? 'rotation');
+      setStartDate(template.startDate ?? '');
     }
   }, [template]);
 
@@ -83,6 +85,7 @@ const CreateCircle = () => {
         isOngoing,
         currentCycle: currentCycleValue,
         completedPayoutsCount: completedPayoutsValue,
+        startDate: startDate || undefined,
       });
 
       setCircle(createdCircle);
@@ -199,6 +202,11 @@ const CreateCircle = () => {
                 <div className="space-y-2">
                   <Label htmlFor="circle-max-members">Max Members</Label>
                   <Input id="circle-max-members" type="number" value={maxMembers} onChange={event => setMaxMembers(event.target.value.replace(/[^\d]/g, ''))} placeholder="6" className="h-12" />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="circle-start-date">Start Date (Optional)</Label>
+                  <Input id="circle-start-date" type="date" value={startDate} onChange={event => setStartDate(event.target.value)} className="h-12 text-foreground" />
                 </div>
 
                 <div className="pt-2">
