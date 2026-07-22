@@ -37,6 +37,9 @@ export const dashboardKeys = {
   upcomingContributionsAll: ['dashboard', 'upcomingContributions', 'all'] as const,
   upcomingContributions: (page: number, pageSize: number) =>
     ['dashboard', 'upcomingContributions', page, pageSize] as const,
+  upcomingPayoutsPreview: ['dashboard', 'upcomingPayouts', 'preview'] as const,
+  upcomingPayouts: (page: number, pageSize: number, type?: string, name?: string) =>
+    ['dashboard', 'upcomingPayouts', page, pageSize, type ?? '', name ?? ''] as const,
 };
 
 export interface UpcomingContributionItem {
@@ -56,6 +59,25 @@ export interface UpcomingContributionsResponse {
   items: UpcomingContributionItem[];
 }
 
+export interface UpcomingPayoutItem {
+  id: string;
+  date: string;
+  name: string;
+  type: 'circle' | 'group_goal' | string;
+  payoutAmount: number;
+  currency: string;
+  status: 'due' | 'overdue' | 'waiting_for_contributions' | string;
+  payoutUrl: string;
+  note: string;
+}
+
+export interface UpcomingPayoutsResponse {
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  items: UpcomingPayoutItem[];
+}
+
 export const getDashboardSummary = () =>
   apiRequest<DashboardSummaryResponse>('/api/dashboard/me');
 
@@ -63,6 +85,29 @@ export const getUpcomingContributions = (page = 1, pageSize = 10) =>
   apiRequest<UpcomingContributionsResponse>(
     `/api/dashboard/me/upcoming-contributions?page=${page}&pageSize=${pageSize}`,
   );
+
+export const getUpcomingPayouts = (
+  page = 1,
+  pageSize = 10,
+  filters: { type?: string; name?: string } = {},
+) => {
+  const search = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+
+  if (filters.type?.trim()) {
+    search.set('type', filters.type.trim());
+  }
+
+  if (filters.name?.trim()) {
+    search.set('name', filters.name.trim());
+  }
+
+  return apiRequest<UpcomingPayoutsResponse>(
+    `/api/dashboard/me/upcoming-payouts?${search.toString()}`,
+  );
+};
 
 export const compareUpcomingContributionsByDate = (
   a: UpcomingContributionItem,
@@ -136,6 +181,23 @@ export const openUpcomingContribution = (
   }
 
   navigate(resolveUpcomingContributionPath(item));
+};
+
+export const openUpcomingPayout = (
+  item: UpcomingPayoutItem,
+  navigate: (path: string) => void,
+) => {
+  if (item.payoutUrl?.startsWith('/')) {
+    navigate(item.payoutUrl);
+    return;
+  }
+
+  if (item.payoutUrl) {
+    window.location.href = item.payoutUrl;
+    return;
+  }
+
+  navigate(item.type === 'group_goal' ? `/group-goals/${item.id}` : `/circles/${item.id}`);
 };
 
 export const markContributionAsPaid = (entityId: string, queryClient?: any) => {

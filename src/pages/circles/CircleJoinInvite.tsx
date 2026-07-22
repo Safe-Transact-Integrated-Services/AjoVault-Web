@@ -230,7 +230,9 @@ const CircleJoinInvite = () => {
             </div>
             <h2 className="font-display text-xl font-bold">Welcome to {circle.name}!</h2>
             <p className="max-w-xs text-sm text-muted-foreground">
-              Your next contribution of {formatCurrency(circle.amount)} is due on {formatDate(circle.nextContributionDate)}.
+              {circle.nextContributionDate
+                ? `Your next contribution of ${formatCurrency(circle.amount)} is due on ${formatDate(circle.nextContributionDate)}.`
+                : `Your first contribution of ${formatCurrency(circle.amount)} will be due after the circle starts.`}
             </p>
             <Card className="w-full space-y-2 p-4 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Circle</span><span className="font-bold">{circle.name}</span></div>

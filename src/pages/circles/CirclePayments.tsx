@@ -8,6 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { circlesKeys, getCircles, getCircle } from '@/services/circlesApi';
 import { formatCurrency, formatDate } from '@/services/mockData';
 import { useAuth } from '@/contexts/AuthContext';
+import { getApiErrorMessage } from '@/lib/api/http';
+
+const formatCircleScheduleDate = (date?: string | null, fallback = 'Not scheduled') =>
+  date ? formatDate(date) : fallback;
 
 const CircleDetailExpanded = ({ circleId }: { circleId: string }) => {
   const { user } = useAuth();
@@ -16,22 +20,19 @@ const CircleDetailExpanded = ({ circleId }: { circleId: string }) => {
     queryFn: () => getCircle(circleId),
   });
 
-  if (circleQuery.isLoading && !circleId.startsWith('dummy-')) {
+  if (circleQuery.isLoading) {
     return <div className="p-4 text-center text-sm text-muted-foreground">Loading details...</div>;
   }
 
-  // Handle dummy data for preview
-  const circle = circleId.startsWith('dummy-') ? {
-    id: circleId,
-    name: 'Dummy Circle',
-    nextPayoutDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
-    frequency: 'monthly',
-    members: [
-      { id: 'user-1', name: 'John Doe', hasReceivedPayout: true, payoutPosition: 1 },
-      { id: user?.id ?? 'user-2', name: user?.name ?? 'You', hasReceivedPayout: false, payoutPosition: 2 },
-      { id: 'user-3', name: 'Jane Smith', hasReceivedPayout: false, payoutPosition: 3 },
-    ]
-  } as any : circleQuery.data;
+  if (circleQuery.isError) {
+    return (
+      <div className="p-4 text-center text-sm text-destructive">
+        {getApiErrorMessage(circleQuery.error, 'Unable to load circle details.')}
+      </div>
+    );
+  }
+
+  const circle = circleQuery.data;
 
   if (!circle) {
     return <div className="p-4 text-center text-sm text-muted-foreground">Unable to load details.</div>;
@@ -73,7 +74,7 @@ const CircleDetailExpanded = ({ circleId }: { circleId: string }) => {
         </div>
         <div className="space-y-1">
           <p className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="h-3 w-3" /> Scheduled Payout</p>
-          <p className="text-sm font-medium">{formatDate(circle.nextPayoutDate)}</p>
+          <p className="text-sm font-medium">{formatCircleScheduleDate(circle.nextPayoutDate)}</p>
         </div>
         
         <div className="space-y-1">
@@ -126,33 +127,7 @@ const CirclePayments = () => {
     queryFn: getCircles,
   });
 
-  const fetchedCircles = circlesQuery.data?.filter(c => c.status === 'active') ?? [];
-  const circles = fetchedCircles.length > 0 ? fetchedCircles : [
-    {
-      id: 'dummy-1',
-      name: 'December Savings Group',
-      amount: 50000,
-      currency: 'NGN',
-      nextPayoutDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
-      status: 'active'
-    },
-    {
-      id: 'dummy-2',
-      name: 'Family Contribution',
-      amount: 15000,
-      currency: 'NGN',
-      nextPayoutDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-      status: 'active'
-    },
-    {
-      id: 'dummy-3',
-      name: 'Business Setup Ajo',
-      amount: 100000,
-      currency: 'NGN',
-      nextPayoutDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // simulated past date to show "Due"
-      status: 'active'
-    }
-  ] as any[];
+  const circles = circlesQuery.data?.filter(c => c.status === 'active') ?? [];
 
   const toggleExpand = (id: string) => {
     setExpandedCircleId(prev => (prev === id ? null : id));
@@ -176,7 +151,13 @@ const CirclePayments = () => {
           </div>
         )}
 
-        {!circlesQuery.isLoading && circles.length === 0 && (
+        {!circlesQuery.isLoading && circlesQuery.isError && (
+          <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-8 text-center text-sm text-destructive">
+            {getApiErrorMessage(circlesQuery.error, 'Unable to load circles right now.')}
+          </div>
+        )}
+
+        {!circlesQuery.isLoading && !circlesQuery.isError && circles.length === 0 && (
           <div className="rounded-xl border border-border bg-card p-8 text-center">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
               <Banknote className="h-6 w-6 text-muted-foreground" />
@@ -186,11 +167,11 @@ const CirclePayments = () => {
           </div>
         )}
 
-        {circles.map(circle => {
+        {!circlesQuery.isLoading && !circlesQuery.isError && circles.map(circle => {
           const isExpanded = expandedCircleId === circle.id;
           
           // Naive status display for summary view (can be refined based on actual payout progress if we had summary fields)
-          const statusLabel = new Date(circle.nextPayoutDate) <= new Date() ? "Due" : "Upcoming";
+          const statusLabel = circle.nextPayoutDate && new Date(circle.nextPayoutDate) <= new Date() ? "Due" : "Upcoming";
           
           return (
             <div key={circle.id} className="overflow-hidden rounded-xl border border-border bg-card transition-all">

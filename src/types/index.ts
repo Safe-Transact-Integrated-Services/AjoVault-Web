@@ -68,8 +68,8 @@ export interface Circle {
   currentCycle: number;
   totalCycles: number;
   role: 'admin' | 'member';
-  nextContributionDate: string;
-  nextPayoutDate: string;
+  nextContributionDate: string | null;
+  nextPayoutDate: string | null;
   status: 'active' | 'pending' | 'completed';
   payoutType: 'rotation' | 'random' | 'bidding';
   members: CircleMember[];

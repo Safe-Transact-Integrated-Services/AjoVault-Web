@@ -10,6 +10,9 @@ import { shareLink } from '@/lib/share';
 import { formatCurrency, formatDate } from '@/services/mockData';
 import { getApiErrorMessage } from '@/lib/api/http';
 
+const formatCircleScheduleDate = (date?: string | null, fallback = 'Not started') =>
+  date ? formatDate(date) : fallback;
+
 const CircleDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -92,7 +95,7 @@ const CircleDetail = () => {
             <span className="text-xs font-medium">Next Payout</span>
           </div>
           <p className="font-bold text-foreground">{formatCurrency(circle.payoutAmount)}</p>
-          <p className="text-xs text-muted-foreground">{formatDate(circle.nextPayoutDate)}</p>
+          <p className="text-xs text-muted-foreground">{formatCircleScheduleDate(circle.nextPayoutDate)}</p>
         </div>
       </div>
 
@@ -107,7 +110,7 @@ const CircleDetail = () => {
         </div>
         <div className="mt-2 flex justify-between">
           <span className="text-muted-foreground">Next Contribution</span>
-          <span className="font-medium text-foreground">{formatDate(circle.nextContributionDate)}</span>
+          <span className="font-medium text-foreground">{formatCircleScheduleDate(circle.nextContributionDate)}</span>
         </div>
         <div className="mt-2 flex justify-between">
           <span className="text-muted-foreground">Payout Type</span>
@@ -154,7 +157,7 @@ const CircleDetail = () => {
           )}
           {circle.role === 'admin' && (
             <div className="flex gap-2">
-              <Button variant="outline" className="h-11 flex-grow gap-1.5 px-2.5 text-xs font-semibold" onClick={() => navigate(`/circles/${circle.id}/payout`)}>
+              <Button variant="outline" className="h-11 flex-grow gap-1.5 px-2.5 text-xs font-semibold" onClick={() => navigate(`/circles/${circle.id}/payout`)} disabled={circle.status !== 'active'}>
                 <Banknote className="h-4 w-4" /> Payout
               </Button>
             </div>
@@ -166,8 +169,12 @@ const CircleDetail = () => {
               </Button>
             </div>
           )}
-          <Button className="h-12 w-full font-bold" onClick={() => navigate(`/circles/${circle.id}/contribute`)}>
-            {circle.hasPaidCurrentCycle ? 'Contribution posted for this cycle' : `Make Contribution - ${formatCurrency(circle.amount)}`}
+          <Button className="h-12 w-full font-bold" onClick={() => navigate(`/circles/${circle.id}/contribute`)} disabled={circle.status !== 'active'}>
+            {circle.status !== 'active'
+              ? 'Start circle before contributions'
+              : circle.hasPaidCurrentCycle
+                ? 'Contribution posted for this cycle'
+                : `Make Contribution - ${formatCurrency(circle.amount)}`}
           </Button>
         </div>
       </div>

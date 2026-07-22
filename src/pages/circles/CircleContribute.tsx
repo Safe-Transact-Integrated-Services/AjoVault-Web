@@ -50,6 +50,7 @@ const CircleContribute = () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: circlesKeys.detail(circle.id) }),
       queryClient.invalidateQueries({ queryKey: circlesKeys.list }),
+      queryClient.invalidateQueries({ queryKey: circlesKeys.dashboard }),
       queryClient.invalidateQueries({ queryKey: walletKeys.me }),
       queryClient.invalidateQueries({ queryKey: walletKeys.ledger }),
       queryClient.invalidateQueries({ queryKey: dashboardKeys.summary }),
@@ -143,6 +144,13 @@ const CircleContribute = () => {
             </Alert>
           )}
 
+          {circle.status !== 'active' && (
+            <Alert>
+              <AlertTitle>Circle has not started</AlertTitle>
+              <AlertDescription>Contributions open after the circle admin starts this circle.</AlertDescription>
+            </Alert>
+          )}
+
           {error && (
             <Alert variant="destructive">
               <AlertTitle>Unable to continue</AlertTitle>
@@ -157,7 +165,7 @@ const CircleContribute = () => {
               setPinPadKey(current => current + 1);
               setStep('pin');
             }}
-            disabled={circle.hasPaidCurrentCycle}
+            disabled={circle.hasPaidCurrentCycle || circle.status !== 'active'}
           >
             Continue with Wallet
           </Button>

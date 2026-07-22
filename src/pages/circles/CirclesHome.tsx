@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -20,7 +20,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { EmptyTableState } from '@/components/shared/EmptyTableState';
-import { circlesKeys, getCircles, startCircle } from '@/services/circlesApi';
+import {
+  circlesKeys,
+  getCircleDashboard,
+  startCircle,
+  type CircleDashboardFilters,
+} from '@/services/circlesApi';
 import { formatCurrency, formatDate } from '@/services/mockData';
 import { toast } from 'sonner';
 import {
@@ -32,21 +37,29 @@ import {
 } from '@/components/ui/pagination';
 import {
   dashboardKeys,
-  getAllUpcomingContributions,
-  compareUpcomingContributionsByDate,
   filterUpcomingContributions,
   openUpcomingContribution,
-  UpcomingContributionItem
 } from '@/services/dashboardApi';
+
+const ITEMS_PER_PAGE = 5;
+
+const getCircleDashboardFilters = (tab: string): Pick<CircleDashboardFilters, 'role' | 'status'> => {
+  if (tab === 'admin' || tab === 'member') {
+    return { role: tab };
+  }
+
+  if (tab === 'completed') {
+    return { status: 'completed' };
+  }
+
+  return {};
+};
+
+const formatCircleScheduleDate = (date?: string | null, fallback = 'Not started') =>
+  date ? formatDate(date) : fallback;
 
 const CirclesHome = () => {
   const navigate = useNavigate();
-  const circlesQuery = useQuery({
-    queryKey: circlesKeys.list,
-    queryFn: getCircles,
-  });
-
-  const circles = circlesQuery.data ?? [];
   const [currentPage, setCurrentPage] = useState(1);
   const [activeTab, setActiveTab] = useState('all');
   const [search, setSearch] = useState('');
@@ -63,6 +76,27 @@ const CirclesHome = () => {
     }));
   };
 
+  const dashboardFilters = getCircleDashboardFilters(activeTab);
+  const circleDashboardQuery = useQuery({
+    queryKey: circlesKeys.dashboardPage(currentPage, ITEMS_PER_PAGE, activeTab, search, sortBy),
+    queryFn: () => getCircleDashboard({
+      page: currentPage,
+      pageSize: ITEMS_PER_PAGE,
+      name: search,
+      sortBy,
+      ...dashboardFilters,
+    }),
+  });
+
+  const circles = circleDashboardQuery.data?.circles.items ?? [];
+  const metrics = circleDashboardQuery.data?.metrics;
+  const nextDueCircle = circleDashboardQuery.data?.nextDueCircle ?? null;
+  const upcomingCircleContributions = filterUpcomingContributions(
+    circleDashboardQuery.data?.upcomingContributions ?? [],
+  );
+  const totalCount = circleDashboardQuery.data?.circles.totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
+
   const queryClient = useQueryClient();
   const [startingCircleId, setStartingCircleId] = useState<string | null>(null);
 
@@ -73,6 +107,7 @@ const CirclesHome = () => {
       await startCircle(circleId);
       toast.success('Circle started successfully!');
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: circlesKeys.dashboard }),
         queryClient.invalidateQueries({ queryKey: circlesKeys.list }),
         queryClient.invalidateQueries({ queryKey: dashboardKeys.summary }),
       ]);
@@ -83,105 +118,6 @@ const CirclesHome = () => {
     }
   };
   const normalizedCode = inviteCode.trim().toUpperCase();
-  const itemsPerPage = 5;
-
-  const contributionsQuery = useQuery({
-    queryKey: dashboardKeys.upcomingContributionsAll,
-    queryFn: getAllUpcomingContributions,
-  });
-
-  const upcomingCircleContributions = useMemo(() => {
-    const rawItems = contributionsQuery.data?.items ?? [];
-    return filterUpcomingContributions(rawItems)
-      .filter((c: UpcomingContributionItem) => {
-        const status = c.status?.toLowerCase();
-        const type = c.type?.toLowerCase() ?? '';
-        const isNotPaid = status !== 'paid' && status !== 'completed';
-        const isCircle = type.includes('circle') || type.includes('ajo');
-        return isNotPaid && isCircle;
-      })
-      .sort(compareUpcomingContributionsByDate)
-      .slice(0, 3);
-  }, [contributionsQuery.data]);
-
-  // Compute Dashboard Metrics
-  const activeCircles = useMemo(() => {
-    return circles.filter((c: any) => c.status === 'active');
-  }, [circles]);
-
-  const totalPoolValue = useMemo(() => {
-    return activeCircles.reduce((sum: number, c: any) => sum + (c.amount * c.maxMembers), 0);
-  }, [activeCircles]);
-
-  const activeCommitment = useMemo(() => {
-    return activeCircles.reduce((sum: number, c: any) => sum + c.amount, 0);
-  }, [activeCircles]);
-
-  const nextDueCircle = useMemo(() => {
-    if (activeCircles.length === 0) return null;
-    const sorted = [...activeCircles].sort((a: any, b: any) =>
-      new Date(a.nextContributionDate).getTime() - new Date(b.nextContributionDate).getTime()
-    );
-    return sorted[0];
-  }, [activeCircles]);
-
-  // Filtering based on Tabs, Search text, and Sorting
-  const filteredCircles = useMemo(() => {
-    let list = [...circles];
-    
-    // Tab Filter (Role or Completed status)
-    if (activeTab === 'admin') {
-      list = list.filter((c: any) => c.role === 'admin');
-    } else if (activeTab === 'member') {
-      list = list.filter((c: any) => c.role === 'member');
-    } else if (activeTab === 'completed') {
-      list = list.filter((c: any) => c.status === 'completed');
-    }
-
-    // Search term filter (by name/title or description)
-    const term = search.trim().toLowerCase();
-    if (term) {
-      list = list.filter((c: any) => 
-        c.name.toLowerCase().includes(term) || 
-        c.description.toLowerCase().includes(term)
-      );
-    }
-
-    // Sorting by date, name, amount
-    list.sort((a: any, b: any) => {
-      if (sortBy === 'newest') {
-        const dateA = new Date(a.createdAt ?? '2026-01-01').getTime();
-        const dateB = new Date(b.createdAt ?? '2026-01-01').getTime();
-        return dateB - dateA;
-      }
-      if (sortBy === 'oldest') {
-        const dateA = new Date(a.createdAt ?? '2026-01-01').getTime();
-        const dateB = new Date(b.createdAt ?? '2026-01-01').getTime();
-        return dateA - dateB;
-      }
-      if (sortBy === 'alphabetical') {
-        return a.name.localeCompare(b.name);
-      }
-      if (sortBy === 'amount_high') {
-        return b.amount - a.amount;
-      }
-      if (sortBy === 'payout_high') {
-        return (b.amount * b.maxMembers) - (a.amount * a.maxMembers);
-      }
-      return 0;
-    });
-
-    return list;
-  }, [circles, activeTab, search, sortBy]);
-
-  const totalPages = Math.ceil(filteredCircles.length / itemsPerPage);
-
-  const currentCircles = useMemo(() => {
-    return filteredCircles.slice(
-      (currentPage - 1) * itemsPerPage,
-      currentPage * itemsPerPage
-    );
-  }, [filteredCircles, currentPage, itemsPerPage]);
 
   return (
     <div className="px-4 py-6 safe-top">
@@ -203,12 +139,14 @@ const CirclesHome = () => {
         <div className="grid grid-cols-2 gap-4 border-t border-white/10 pt-4 mt-2">
           <div>
             <p className="text-xs text-white/70">Total Projected Payouts</p>
-            <p className="text-2xl font-bold tracking-tight mt-0.5">{formatCurrency(totalPoolValue)}</p>
+            <p className="text-2xl font-bold tracking-tight mt-0.5">
+              {formatCurrency(metrics?.totalProjectedPayouts ?? 0, metrics?.currency ?? 'NGN')}
+            </p>
           </div>
           <div>
             <p className="text-xs text-white/70">Active Commitments</p>
             <p className="text-xl font-bold tracking-tight mt-1">
-              {formatCurrency(activeCommitment)} <span className="text-xs font-normal text-white/80">total</span>
+              {formatCurrency(metrics?.activeCommitment ?? 0, metrics?.currency ?? 'NGN')} <span className="text-xs font-normal text-white/80">total</span>
             </p>
           </div>
         </div>
@@ -218,11 +156,11 @@ const CirclesHome = () => {
             <div className="flex items-center gap-2 min-w-0">
               <Clock className="h-4 w-4 text-emerald-300 shrink-0 animate-pulse" />
               <span className="truncate">
-                Next: <span className="font-semibold text-emerald-200">{formatCurrency(nextDueCircle.amount)}</span> for <span className="font-semibold">{nextDueCircle.name}</span>
+                Next: <span className="font-semibold text-emerald-200">{formatCurrency(nextDueCircle.amount, nextDueCircle.currency)}</span> for <span className="font-semibold">{nextDueCircle.name}</span>
               </span>
             </div>
             <span className="font-medium bg-emerald-500/20 text-emerald-200 px-2.5 py-0.5 rounded-full shrink-0">
-              {formatDate(nextDueCircle.nextContributionDate)}
+              {formatCircleScheduleDate(nextDueCircle.nextContributionDate, 'Not scheduled')}
             </span>
           </div>
         )}
@@ -232,21 +170,17 @@ const CirclesHome = () => {
       <div className="mb-6 grid grid-cols-3 gap-3">
         <div className="rounded-2xl border border-border bg-card p-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
           <p className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Active</p>
-          <p className="text-lg font-bold text-foreground mt-1">{activeCircles.length}</p>
+          <p className="text-lg font-bold text-foreground mt-1">{metrics?.activeCount ?? 0}</p>
           <p className="text-[9px] text-muted-foreground mt-0.5">joined circles</p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
           <p className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Admin Of</p>
-          <p className="text-lg font-bold text-accent mt-1">
-            {circles.filter((c: any) => c.role === 'admin').length}
-          </p>
+          <p className="text-lg font-bold text-accent mt-1">{metrics?.adminCount ?? 0}</p>
           <p className="text-[9px] text-muted-foreground mt-0.5">moderating</p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
           <p className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">Completed</p>
-          <p className="text-lg font-bold text-emerald-600 mt-1">
-            {circles.filter((c: any) => c.status === 'completed').length}
-          </p>
+          <p className="text-lg font-bold text-emerald-600 mt-1">{metrics?.completedCount ?? 0}</p>
           <p className="text-[9px] text-muted-foreground mt-0.5">cycles payout</p>
         </div>
       </div>
@@ -380,21 +314,21 @@ const CirclesHome = () => {
 
       {/* Circles List */}
       <div className="space-y-4">
-        {circlesQuery.isLoading && (
+        {circleDashboardQuery.isLoading && (
           <div className="rounded-2xl border border-border bg-card p-6 text-center text-sm text-muted-foreground shadow-sm">
             <span className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent mb-2"></span>
             <p>Loading circles...</p>
           </div>
         )}
 
-        {circlesQuery.isError && (
+        {circleDashboardQuery.isError && (
           <div className="rounded-2xl border border-border bg-card p-6 text-center text-sm text-muted-foreground shadow-sm">
             <p className="font-semibold text-destructive mb-1">Error loading circles</p>
             <p>Unable to load circles right now. Please try again later.</p>
           </div>
         )}
 
-        {!circlesQuery.isLoading && !circlesQuery.isError && filteredCircles.length === 0 && (
+        {!circleDashboardQuery.isLoading && !circleDashboardQuery.isError && circles.length === 0 && (
           <EmptyTableState
             title="No circles found"
             description={
@@ -405,7 +339,7 @@ const CirclesHome = () => {
           />
         )}
 
-        {!circlesQuery.isLoading && !circlesQuery.isError && currentCircles.map((circle, index) => {
+        {!circleDashboardQuery.isLoading && !circleDashboardQuery.isError && circles.map((circle, index) => {
           const percent = Math.min(100, Math.max(0, (circle.currentCycle / circle.totalCycles) * 100));
           const isExpanded = !!expandedCircles[circle.id];
           return (
@@ -428,7 +362,7 @@ const CirclesHome = () => {
                       {circle.name}
                     </h4>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {formatCurrency(circle.amount)} / {circle.frequency}
+                      {formatCurrency(circle.amount, circle.currency)} / {circle.frequency}
                     </p>
                   </div>
                 </div>
@@ -441,7 +375,7 @@ const CirclesHome = () => {
                       </span>
                     ) : (
                       <span className="inline-block text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded-md border border-amber-100 uppercase tracking-wider">
-                        Due: {formatDate(circle.nextContributionDate)}
+                        {circle.nextContributionDate ? `Due: ${formatDate(circle.nextContributionDate)}` : 'Schedule pending'}
                       </span>
                     )}
                   </div>
@@ -527,7 +461,7 @@ const CirclesHome = () => {
                         <PiggyBank className="h-4 w-4 text-[#126989] shrink-0" />
                         <div>
                           <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Contribution</p>
-                          <p className="font-semibold text-foreground mt-0.5">{formatCurrency(circle.amount)} / {circle.frequency}</p>
+                          <p className="font-semibold text-foreground mt-0.5">{formatCurrency(circle.amount, circle.currency)} / {circle.frequency}</p>
                         </div>
                       </div>
 
@@ -535,7 +469,7 @@ const CirclesHome = () => {
                         <TrendingUp className="h-4 w-4 text-[#126989] shrink-0" />
                         <div>
                           <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Payout Pool</p>
-                          <p className="font-semibold text-foreground mt-0.5">{formatCurrency(circle.amount * circle.maxMembers)}</p>
+                          <p className="font-semibold text-foreground mt-0.5">{formatCurrency(circle.amount * circle.maxMembers, circle.currency)}</p>
                         </div>
                       </div>
 
@@ -543,7 +477,7 @@ const CirclesHome = () => {
                         <Calendar className="h-4 w-4 text-[#126989] shrink-0" />
                         <div>
                           <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Next Due</p>
-                          <p className="font-semibold text-foreground mt-0.5">{formatDate(circle.nextContributionDate)}</p>
+                          <p className="font-semibold text-foreground mt-0.5">{formatCircleScheduleDate(circle.nextContributionDate)}</p>
                         </div>
                       </div>
 
@@ -551,7 +485,7 @@ const CirclesHome = () => {
                         <Clock className="h-4 w-4 text-[#126989] shrink-0" />
                         <div>
                           <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Next Payout</p>
-                          <p className="font-semibold text-foreground mt-0.5">{formatDate(circle.nextPayoutDate)}</p>
+                          <p className="font-semibold text-foreground mt-0.5">{formatCircleScheduleDate(circle.nextPayoutDate)}</p>
                         </div>
                       </div>
                     </div>

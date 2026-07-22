@@ -38,13 +38,15 @@ import { groupGoalsKeys, getGroupGoals } from '@/services/groupGoalsApi';
 import {
   dashboardKeys,
   getDashboardSummary,
+  getUpcomingPayouts,
   getUpcomingContributions,
   openUpcomingContribution,
+  openUpcomingPayout,
   compareUpcomingContributionsByDate,
   filterUpcomingContributions,
+  type UpcomingPayoutItem,
 } from '@/services/dashboardApi';
 import { formatCurrency, formatDate, formatTime } from '@/services/mockData';
-import { mockUpcomingPayments, getStatusClassName, getStatusLabel } from '@/pages/UpcomingPayments';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -94,6 +96,11 @@ const Dashboard = () => {
   const upcomingContributionsQuery = useQuery({
     queryKey: dashboardKeys.upcomingContributionsPreview,
     queryFn: () => getUpcomingContributions(1, 10),
+    enabled: !!user,
+  });
+  const upcomingPayoutsQuery = useQuery({
+    queryKey: dashboardKeys.upcomingPayoutsPreview,
+    queryFn: () => getUpcomingPayouts(1, 3),
     enabled: !!user,
   });
 
@@ -409,29 +416,34 @@ const Dashboard = () => {
         <button onClick={() => navigate('/upcoming-payments')} className="text-[13px] font-medium text-blue-500 hover:text-blue-600">View all</button>
       </div>
       <div className="space-y-3">
-        {mockUpcomingPayments.slice(0, 3).map(payment => {
-          const t = payment.type.toLowerCase();
-          let Icon = CreditCard;
-          if (t.includes('circle') || t.includes('ajo')) Icon = Users;
-          else if (t.includes('goal')) Icon = Target;
-          else if (t.includes('saving') || t.includes('thrift')) Icon = PiggyBank;
+        {upcomingPayoutsQuery.isLoading && (
+          <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+            Loading upcoming payouts...
+          </div>
+        )}
+
+        {!upcomingPayoutsQuery.isLoading && upcomingPayoutsQuery.isError && (
+          <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
+            Unable to load upcoming payouts.
+          </div>
+        )}
+
+        {!upcomingPayoutsQuery.isLoading && !upcomingPayoutsQuery.isError && (upcomingPayoutsQuery.data?.items.length ?? 0) === 0 && (
+          <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+            No payouts due yet.
+          </div>
+        )}
+
+        {!upcomingPayoutsQuery.isLoading && !upcomingPayoutsQuery.isError && upcomingPayoutsQuery.data?.items.map(payment => {
+          const Icon = getPayoutIcon(payment);
 
           return (
             <motion.button
-              key={payment.id}
+              key={`${payment.type}-${payment.id}-${payment.date}`}
               type="button"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              onClick={() => {
-                const pt = payment.type.toLowerCase();
-                if (pt.includes('circle') || pt.includes('ajo')) {
-                  navigate(`/circles/${payment.referenceId}`);
-                } else if (pt.includes('goal')) {
-                  navigate(`/group-goals/${payment.referenceId}`);
-                } else {
-                  navigate(`/savings/${payment.referenceId}`);
-                }
-              }}
+              onClick={() => openUpcomingPayout(payment, navigate)}
               className="w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/30"
             >
               <div className="mb-3 flex items-start justify-between gap-3">
@@ -440,17 +452,24 @@ const Dashboard = () => {
                     <Icon className="h-5 w-5 text-primary" />
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate font-semibold text-foreground">{payment.title}</p>
+                    <p className="truncate font-semibold text-foreground">{payment.name}</p>
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                      {payment.type}
+                      {getPayoutTypeLabel(payment.type)}
                     </p>
                   </div>
                 </div>
+                <Badge className={`${getPayoutStatusClassName(payment.status)} border-none text-[10px] font-bold capitalize`}>
+                  {getPayoutStatusLabel(payment.status)}
+                </Badge>
               </div>
 
-              <div className="text-sm text-right">
-                <p className="text-muted-foreground">
-                  Due date - <span className="font-medium text-foreground">{payment.date}</span>
+              <div className="flex items-end justify-between gap-3 text-sm">
+                <div className="min-w-0">
+                  <p className="font-bold text-foreground">{formatCurrency(payment.payoutAmount, payment.currency)}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{payment.note}</p>
+                </div>
+                <p className="shrink-0 text-right text-xs text-muted-foreground">
+                  Due <span className="font-medium text-foreground">{formatDate(payment.date)}</span>
                 </p>
               </div>
             </motion.button>
@@ -513,6 +532,57 @@ const Dashboard = () => {
       </div>
     </div>
   );
+};
+
+const getPayoutIcon = (payment: Pick<UpcomingPayoutItem, 'type'>) => {
+  const type = payment.type.toLowerCase();
+  if (type.includes('circle') || type.includes('ajo')) {
+    return Users;
+  }
+  if (type.includes('goal')) {
+    return Target;
+  }
+  if (type.includes('saving') || type.includes('thrift')) {
+    return PiggyBank;
+  }
+
+  return CreditCard;
+};
+
+const getPayoutTypeLabel = (type: string) => {
+  const normalized = type.toLowerCase();
+  if (normalized === 'group_goal') {
+    return 'Group Goal';
+  }
+  if (normalized === 'circle') {
+    return 'Circle';
+  }
+
+  return type.replaceAll('_', ' ');
+};
+
+const getPayoutStatusClassName = (status: string) => {
+  const normalized = status.toLowerCase();
+  if (normalized === 'overdue') {
+    return 'bg-destructive/10 text-destructive';
+  }
+  if (normalized === 'waiting_for_contributions') {
+    return 'bg-amber-50 text-amber-800';
+  }
+
+  return 'bg-success/10 text-success';
+};
+
+const getPayoutStatusLabel = (status: string) => {
+  const normalized = status.toLowerCase();
+  if (normalized === 'waiting_for_contributions') {
+    return 'Waiting';
+  }
+  if (normalized === 'overdue') {
+    return 'Overdue';
+  }
+
+  return 'Due';
 };
 
 const isUrgentContribution = (

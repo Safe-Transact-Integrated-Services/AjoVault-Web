@@ -64,7 +64,7 @@ const CirclePayout = () => {
   const isRandom = circle.payoutType === 'random';
   const isBidding = circle.payoutType === 'bidding';
   const selectedMember = eligibleMembers.find(member => member.id === selectedMemberId);
-  const payoutReady = circle.canPayout && eligibleMembers.length > 0 && (!isRotation || !!nextInLine);
+  const payoutReady = circle.status === 'active' && circle.canPayout && eligibleMembers.length > 0 && (!isRotation || !!nextInLine);
   const payoutActionLabel = getCirclePayoutActionLabel(circle.payoutType);
   const confirmSubtitle = isRotation
     ? `${formatCurrency(circle.payoutAmount)} to ${nextInLine?.name ?? 'the next eligible member'}`
@@ -76,6 +76,7 @@ const CirclePayout = () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: circlesKeys.detail(circle.id) }),
       queryClient.invalidateQueries({ queryKey: circlesKeys.list }),
+      queryClient.invalidateQueries({ queryKey: circlesKeys.dashboard }),
       queryClient.invalidateQueries({ queryKey: walletKeys.me }),
       queryClient.invalidateQueries({ queryKey: walletKeys.ledger }),
       queryClient.invalidateQueries({ queryKey: dashboardKeys.summary }),
@@ -215,6 +216,13 @@ const CirclePayout = () => {
               <Alert variant="destructive">
                 <AlertTitle>Unable to continue</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            {circle.status !== 'active' && (
+              <Alert>
+                <AlertTitle>Circle has not started</AlertTitle>
+                <AlertDescription>Payouts become available after the circle admin starts this circle.</AlertDescription>
               </Alert>
             )}
 

@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Users, CreditCard, Target, PiggyBank } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import {
   Pagination,
   PaginationContent,
@@ -10,65 +11,54 @@ import {
   PaginationPrevious,
 } from '@/components/ui/pagination';
 import { Badge } from '@/components/ui/badge';
+import {
+  dashboardKeys,
+  getUpcomingPayouts,
+  openUpcomingPayout,
+  type UpcomingPayoutItem,
+} from '@/services/dashboardApi';
+import { getApiErrorMessage } from '@/lib/api/http';
+import { formatCurrency, formatDate } from '@/services/mockData';
 
 const PAGE_SIZE = 10;
 
-// Mock data since there's no endpoint
-export const mockUpcomingPayments = [
-  { id: 'p1', referenceId: 'sav_001', type: 'Goal', title: 'Hiroko', date: '08 Jun 2026', amount: 15000, status: 'missed' },
-  { id: 'p2', referenceId: 'sav_002', type: 'Goal', title: 'Emily', date: '12 Jun 2026', amount: 25000, status: 'paid' },
-  { id: 'p3', referenceId: 'sav_003', type: 'Goal', title: 'New Macbook', date: '14 Jun 2026', amount: 20000, status: 'paid' },
-  { id: 'p4', referenceId: 'cir_001', type: 'Circle', title: 'Constance Boyer', date: '15 Jun 2026', amount: 50000, status: 'due' },
-  { id: 'p5', referenceId: 'cir_002', type: 'Circle', title: 'Weekend Ajo', date: '16 Jun 2026', amount: 10000, status: 'due' },
-  { id: 'p6', referenceId: 'sav_001', type: 'Goal', title: 'Emergency Fund', date: '20 Jun 2026', amount: 5000, status: 'upcoming' },
-  { id: 'p7', referenceId: 'cir_001', type: 'Circle', title: 'Family Thrift', date: '25 Jun 2026', amount: 12000, status: 'upcoming' },
-  { id: 'p8', referenceId: 'sav_002', type: 'Goal', title: 'Vacation', date: '01 Jul 2026', amount: 30000, status: 'upcoming' },
-  { id: 'p9', referenceId: 'sav_003', type: 'Goal', title: 'Rent', date: '15 Jul 2026', amount: 45000, status: 'upcoming' },
-  { id: 'p10', referenceId: 'cir_002', type: 'Circle', title: 'Colleagues Ajo', date: '30 Jul 2026', amount: 20000, status: 'upcoming' },
-  { id: 'p11', referenceId: 'sav_001', type: 'Goal', title: 'Car Downpayment', date: '15 Aug 2026', amount: 100000, status: 'upcoming' },
-  { id: 'p12', referenceId: 'sav_002', type: 'Goal', title: 'School Fees', date: '01 Sep 2026', amount: 35000, status: 'upcoming' },
-];
-
 export const getStatusClassName = (status: string) => {
   const normalized = status?.toLowerCase();
-  if (normalized === 'missed' || normalized === 'overdue') {
+  if (normalized === 'overdue') {
     return 'bg-destructive/10 text-destructive';
   }
-  if (normalized === 'paid' || normalized === 'completed') {
+  if (normalized === 'due') {
     return 'bg-success/10 text-success';
   }
-  return 'bg-yellow-500/10 text-yellow-700';
+  return 'bg-amber-50 text-amber-800';
 };
 
 export const getStatusLabel = (status: string) => {
   const normalized = status?.toLowerCase();
-  if (normalized === 'upcoming') {
-    return 'Due';
+  if (normalized === 'waiting_for_contributions') {
+    return 'Waiting';
   }
-  return status;
+  if (normalized === 'overdue') {
+    return 'Overdue';
+  }
+  return 'Due';
 };
 
 const UpcomingPayments = () => {
   const navigate = useNavigate();
   const [currentPage, setCurrentPage] = useState(1);
 
-  const totalCount = mockUpcomingPayments.length;
+  const payoutsQuery = useQuery({
+    queryKey: dashboardKeys.upcomingPayouts(currentPage, PAGE_SIZE),
+    queryFn: () => getUpcomingPayouts(currentPage, PAGE_SIZE),
+  });
+
+  const totalCount = payoutsQuery.data?.totalCount ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const payments = payoutsQuery.data?.items ?? [];
 
-  const payments = useMemo(
-    () => mockUpcomingPayments.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
-    [currentPage],
-  );
-
-  const handlePaymentClick = (payment: any) => {
-    const t = payment.type.toLowerCase();
-    if (t.includes('circle') || t.includes('ajo')) {
-      navigate(`/circles/${payment.referenceId}`);
-    } else if (t.includes('goal')) {
-      navigate(`/group-goals/${payment.referenceId}`);
-    } else {
-      navigate(`/savings/${payment.referenceId}`);
-    }
+  const handlePaymentClick = (payment: UpcomingPayoutItem) => {
+    openUpcomingPayout(payment, navigate);
   };
 
   return (
@@ -79,23 +69,36 @@ const UpcomingPayments = () => {
 
       <div className="mb-6">
         <h1 className="font-display text-2xl font-bold text-foreground">Upcoming Payout</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Circle and group-goal payouts currently due to you.
+        </p>
       </div>
 
       <div className="space-y-3">
+        {payoutsQuery.isLoading && (
+          <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+            Loading upcoming payouts...
+          </div>
+        )}
+
+        {!payoutsQuery.isLoading && payoutsQuery.isError && (
+          <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-6 text-center text-sm text-destructive">
+            {getApiErrorMessage(payoutsQuery.error, 'Unable to load upcoming payouts.')}
+          </div>
+        )}
+
+        {!payoutsQuery.isLoading && !payoutsQuery.isError && payments.length === 0 && (
+          <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+            No payouts are due yet.
+          </div>
+        )}
+
         {payments.map((payment, index) => {
-          const t = payment.type.toLowerCase();
-          let Icon = CreditCard;
-          if (t.includes('circle') || t.includes('ajo')) {
-             Icon = Users;
-          } else if (t.includes('goal')) {
-             Icon = Target;
-          } else if (t.includes('saving') || t.includes('thrift')) {
-             Icon = PiggyBank;
-          }
+          const Icon = getPayoutIcon(payment);
 
           return (
             <motion.button
-              key={payment.id}
+              key={`${payment.type}-${payment.id}-${payment.date}`}
               type="button"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -109,17 +112,24 @@ const UpcomingPayments = () => {
                     <Icon className="h-5 w-5 text-primary" />
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate font-semibold text-foreground">{payment.title}</p>
+                    <p className="truncate font-semibold text-foreground">{payment.name}</p>
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                      {payment.type}
+                      {getPayoutTypeLabel(payment.type)}
                     </p>
                   </div>
                 </div>
+                <Badge className={`${getStatusClassName(payment.status)} border-none text-[10px] font-bold capitalize`}>
+                  {getStatusLabel(payment.status)}
+                </Badge>
               </div>
 
-              <div className="text-sm text-right">
-                <p className="text-muted-foreground">
-                  Due date - <span className="font-medium text-foreground">{payment.date}</span>
+              <div className="flex items-end justify-between gap-3 text-sm">
+                <div className="min-w-0">
+                  <p className="font-bold text-foreground">{formatCurrency(payment.payoutAmount, payment.currency)}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{payment.note}</p>
+                </div>
+                <p className="shrink-0 text-right text-muted-foreground">
+                  Due date - <span className="font-medium text-foreground">{formatDate(payment.date)}</span>
                 </p>
               </div>
             </motion.button>
@@ -154,6 +164,33 @@ const UpcomingPayments = () => {
       )}
     </div>
   );
+};
+
+const getPayoutIcon = (payment: Pick<UpcomingPayoutItem, 'type'>) => {
+  const type = payment.type.toLowerCase();
+  if (type.includes('circle') || type.includes('ajo')) {
+    return Users;
+  }
+  if (type.includes('goal')) {
+    return Target;
+  }
+  if (type.includes('saving') || type.includes('thrift')) {
+    return PiggyBank;
+  }
+
+  return CreditCard;
+};
+
+const getPayoutTypeLabel = (type: string) => {
+  const normalized = type.toLowerCase();
+  if (normalized === 'group_goal') {
+    return 'Group Goal';
+  }
+  if (normalized === 'circle') {
+    return 'Circle';
+  }
+
+  return type.replaceAll('_', ' ');
 };
 
 export default UpcomingPayments;

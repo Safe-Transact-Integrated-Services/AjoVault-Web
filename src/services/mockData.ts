@@ -1,4 +1,4 @@
-import type { User, WalletBalance, Transaction, SavingsPlan, Circle, Notification, BillProvider } from '@/types';
+import type { User, WalletBalance, Transaction, SavingsPlan, Notification, BillProvider } from '@/types';
 
 export const mockUser: User = {
   id: 'usr_001',
@@ -38,46 +38,6 @@ export const mockSavingsPlans: SavingsPlan[] = [
   { id: 'sav_001', name: 'Emergency Fund', type: 'flexible', targetAmount: 500000, savedAmount: 185000, currency: 'NGN', frequency: 'weekly', contributionAmount: 10000, startDate: '2025-12-01', endDate: '2026-06-01', status: 'active', interestRate: 8 },
   { id: 'sav_002', name: 'New Laptop', type: 'goal', targetAmount: 350000, savedAmount: 280000, currency: 'NGN', frequency: 'monthly', contributionAmount: 35000, startDate: '2025-09-01', endDate: '2026-05-01', status: 'active', interestRate: 10, goalImage: '💻' },
   { id: 'sav_003', name: 'Rent 2027', type: 'locked', targetAmount: 1200000, savedAmount: 400000, currency: 'NGN', frequency: 'monthly', contributionAmount: 100000, startDate: '2026-01-01', endDate: '2026-12-31', status: 'active', interestRate: 12 },
-];
-
-export const mockCircles: Circle[] = [
-  {
-    id: 'cir_001', name: 'Ajo Family Circle', description: 'Monthly family contribution group', amount: 25000, currency: 'NGN', frequency: 'monthly',
-    memberCount: 6, maxMembers: 6, currentCycle: 3, totalCycles: 6, role: 'admin',
-    nextContributionDate: '2026-04-01', nextPayoutDate: '2026-04-05', status: 'active', payoutType: 'rotation',
-    createdAt: '2026-01-10',
-    members: [
-      { id: 'm1', name: 'Adaeze O.', hasPaid: true, payoutPosition: 1, hasReceivedPayout: true },
-      { id: 'm2', name: 'Chidi N.', hasPaid: true, payoutPosition: 2, hasReceivedPayout: true },
-      { id: 'm3', name: 'Funke A.', hasPaid: false, payoutPosition: 3, hasReceivedPayout: false },
-      { id: 'm4', name: 'Ibrahim M.', hasPaid: true, payoutPosition: 4, hasReceivedPayout: false },
-      { id: 'm5', name: 'Ngozi E.', hasPaid: false, payoutPosition: 5, hasReceivedPayout: false },
-      { id: 'm6', name: 'Yusuf K.', hasPaid: true, payoutPosition: 6, hasReceivedPayout: false },
-    ],
-  },
-  {
-    id: 'cir_002', name: 'Wealth Builders', description: 'Investment-focused savings group', amount: 50000, currency: 'NGN', frequency: 'monthly',
-    memberCount: 5, maxMembers: 12, currentCycle: 5, totalCycles: 12, role: 'member',
-    nextContributionDate: '2026-04-01', nextPayoutDate: '2026-04-10', status: 'active', payoutType: 'rotation',
-    createdAt: '2026-02-15',
-    members: [
-      { id: 'm7', name: 'Amina B.', hasPaid: true, payoutPosition: 1, hasReceivedPayout: true },
-      { id: 'm8', name: 'David O.', hasPaid: true, payoutPosition: 2, hasReceivedPayout: true },
-      { id: 'm9', name: 'Emeka C.', hasPaid: false, payoutPosition: 3, hasReceivedPayout: true },
-      { id: 'm10', name: 'Grace I.', hasPaid: true, payoutPosition: 4, hasReceivedPayout: true },
-      { id: 'm11', name: 'Adaeze O.', hasPaid: true, payoutPosition: 5, hasReceivedPayout: true },
-    ],
-  },
-  {
-    id: 'cir_003', name: 'Youth Empowerment Club', description: 'Weekly startup support circle', amount: 15000, currency: 'NGN', frequency: 'monthly',
-    memberCount: 2, maxMembers: 8, currentCycle: 1, totalCycles: 8, role: 'admin',
-    nextContributionDate: '2026-08-01', nextPayoutDate: '2026-08-05', status: 'pending', payoutType: 'rotation',
-    createdAt: '2026-07-13', startDate: '2026-08-01',
-    members: [
-      { id: 'm12', name: 'Amina B.', hasPaid: false, payoutPosition: 1, hasReceivedPayout: false },
-      { id: 'm13', name: 'David O.', hasPaid: false, payoutPosition: 2, hasReceivedPayout: false },
-    ],
-  },
 ];
 
 export const mockNotifications: Notification[] = [

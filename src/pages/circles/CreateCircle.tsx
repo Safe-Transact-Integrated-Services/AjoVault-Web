@@ -68,6 +68,11 @@ const CreateCircle = () => {
       return;
     }
 
+    if (isOngoing && !startDate) {
+      setError('Set the contribution start date before importing ongoing progress.');
+      return;
+    }
+
     setIsSubmitting(true);
     setError('');
 
@@ -91,6 +96,7 @@ const CreateCircle = () => {
       setCircle(createdCircle);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: circlesKeys.list }),
+        queryClient.invalidateQueries({ queryKey: circlesKeys.dashboard }),
         queryClient.invalidateQueries({ queryKey: dashboardKeys.summary }),
       ]);
       setStep('invite');
@@ -205,8 +211,11 @@ const CreateCircle = () => {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="circle-start-date">Start Date (Optional)</Label>
+                  <Label htmlFor="circle-start-date">Start Date</Label>
                   <Input id="circle-start-date" type="date" value={startDate} onChange={event => setStartDate(event.target.value)} className="h-12 text-foreground" />
+                  <p className="text-[10px] text-muted-foreground">
+                    Leave empty to create this circle as pending. Dates are set when the circle starts.
+                  </p>
                 </div>
 
                 <div className="pt-2">
@@ -226,7 +235,7 @@ const CreateCircle = () => {
                     <span className="text-sm font-semibold text-foreground">Import ongoing progress (offline circle)</span>
                   </label>
                   <p className="text-[11px] text-muted-foreground mt-0.5 ml-6">
-                    Select this if some contributions/payouts have already been processed offline.
+                    Select this if some contributions/payouts have already been processed offline. Requires a start date.
                   </p>
                 </div>
 
