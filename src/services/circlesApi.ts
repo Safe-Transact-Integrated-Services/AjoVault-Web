@@ -16,6 +16,8 @@ interface GroupSummaryResponse {
   nextContributionDate: string;
   nextPayoutDate: string;
   status: 'active' | 'pending' | 'completed';
+  payoutType: 'rotation' | 'random' | 'bidding';
+  completedPayoutsCount?: number;
   hasPaidCurrentCycle?: boolean;
   createdAt?: string;
   startDate?: string;
@@ -59,6 +61,7 @@ interface GroupInvitePreviewResponse {
   payoutAmount: number;
   hasPendingInvitation: boolean;
   invitationStatus?: string | null;
+  completedPayoutsCount?: number;
 }
 
 interface MemberInviteResponse {
@@ -148,6 +151,8 @@ export interface CircleSummary {
   nextContributionDate: string;
   nextPayoutDate: string;
   status: 'active' | 'pending' | 'completed';
+  payoutType: 'rotation' | 'random' | 'bidding';
+  completedPayoutsCount?: number;
   hasPaidCurrentCycle?: boolean;
   createdAt?: string;
   startDate?: string;
@@ -191,6 +196,7 @@ export interface CircleInvitePreview {
   payoutAmount: number;
   hasPendingInvitation: boolean;
   invitationStatus?: string;
+  completedPayoutsCount?: number;
 }
 
 export interface CircleInviteResult {
@@ -268,8 +274,11 @@ export interface CreateCircleInput {
   maxMembers: number;
   payoutType: 'rotation' | 'random' | 'bidding';
   currency?: string;
+  isOngoing?: boolean;
+  currentCycle?: number;
   completedPayoutsCount?: number;
   startDate?: string;
+  totalCycles?: number;
 }
 
 export interface SendCircleInviteInput {
@@ -339,6 +348,7 @@ export const getCircles = async (): Promise<CircleSummary[]> => {
           nextPayoutDate: mock.nextPayoutDate,
           status: mock.status,
           payoutType: mock.payoutType,
+          completedPayoutsCount: mock.completedPayoutsCount,
           createdAt: mock.createdAt,
           startDate: mock.startDate,
         });
@@ -363,6 +373,7 @@ export const getCircles = async (): Promise<CircleSummary[]> => {
       nextPayoutDate: mock.nextPayoutDate,
       status: mock.status,
       payoutType: mock.payoutType,
+      completedPayoutsCount: mock.completedPayoutsCount,
       createdAt: mock.createdAt,
       startDate: mock.startDate,
     }));
@@ -399,6 +410,7 @@ export const createCircle = async (input: CreateCircleInput): Promise<CircleDeta
       currentCycle: input.currentCycle,
       completedPayoutsCount: input.completedPayoutsCount,
       startDate: input.startDate || undefined,
+      totalCycles: input.totalCycles,
     },
   });
 
@@ -428,6 +440,7 @@ export const getCircleInvitePreview = async (code: string): Promise<CircleInvite
     payoutAmount: response.payoutAmount,
     hasPendingInvitation: response.hasPendingInvitation,
     invitationStatus: response.invitationStatus ?? undefined,
+    completedPayoutsCount: response.completedPayoutsCount,
   };
 };
 
@@ -515,6 +528,7 @@ const mapCircleSummary = (circle: GroupSummaryResponse): CircleSummary => ({
   nextPayoutDate: circle.nextPayoutDate,
   status: circle.status,
   payoutType: circle.payoutType,
+  completedPayoutsCount: circle.completedPayoutsCount,
   hasPaidCurrentCycle: circle.hasPaidCurrentCycle,
   createdAt: circle.createdAt ?? '2026-01-01',
   startDate: circle.startDate ?? undefined,
