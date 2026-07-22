@@ -89,12 +89,14 @@ export interface CircleMember {
 export interface Notification {
   id: string;
   type: 'reminder' | 'alert' | 'milestone' | 'info';
-  category?: 'savings' | 'circle' | 'group_goal' | 'system';
+  category?: 'savings' | 'circle' | 'group_goal' | 'group' | 'system';
   title: string;
   message: string;
   read: boolean;
   date: string;
   link?: string;
+  inviteStatus?: 'pending' | 'accepted' | 'rejected';
+  groupId?: string;
 }
 
 export type BillType = 'airtime' | 'data' | 'electricity' | 'cable';

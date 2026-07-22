@@ -154,16 +154,6 @@ const UpcomingContributions = () => {
               onClick={() => openUpcomingContribution(contribution, navigate)}
               className="relative w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/30"
             >
-              {isUrgentContribution(
-                contribution,
-                circlesQuery.data || [],
-                savingsPlansQuery.data || [],
-                groupGoalsQuery.data || []
-              ) && (
-                <Badge className="absolute right-2 top-2 bg-red-500 hover:bg-red-600 text-white border-none text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded shadow-sm">
-                  Urgent
-                </Badge>
-              )}
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
@@ -184,7 +174,7 @@ const UpcomingContributions = () => {
               <div className="space-y-1.5 text-sm">
                 <div className="flex justify-between gap-3">
                   <span className="text-muted-foreground">Amount</span>
-                  <span className="font-medium text-foreground">
+                  <span className="font-medium text-foreground" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
                     {formatCurrency(contribution.contributionAmount, 'NGN')}
                   </span>
                 </div>
