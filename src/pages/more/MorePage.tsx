@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, CreditCard, FileText, HelpCircle, KeyRound, Landmark, LogOut, Shield, User, Wallet } from 'lucide-react';
+import { ChevronRight, CreditCard, FileText, HelpCircle, KeyRound, Landmark, LogOut, Shield, User, Wallet, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 const menuItems = [

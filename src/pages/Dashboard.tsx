@@ -19,7 +19,7 @@ import {
   Users,
   Briefcase,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { getKycProgress } from '@/lib/kyc';
@@ -50,6 +50,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [showBalance, setShowBalance] = useState(true);
+  const [showPopUp, setShowPopUp] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -130,6 +131,20 @@ const Dashboard = () => {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (unreadCount > 0) {
+      // Small delay on mount to look beautiful
+      const delayTimer = setTimeout(() => {
+        setShowPopUp(true);
+        const hideTimer = setTimeout(() => {
+          setShowPopUp(false);
+        }, 3000);
+        return () => clearTimeout(hideTimer);
+      }, 500);
+      return () => clearTimeout(delayTimer);
+    }
+  }, [unreadCount]);
+
   return (
     <div className="px-4 py-6 safe-top">
       <motion.div
@@ -148,12 +163,29 @@ const Dashboard = () => {
               <p className="font-display text-base font-bold text-white">{user?.firstName ?? 'Akinkunmi'}</p>
             </div>
           </div>
-          <button onClick={() => navigate('/notifications')} className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/20 transition-colors hover:bg-white/30">
-            <Bell className="h-5 w-5 text-white" />
-            {unreadCount > 0 && (
-              <span className="absolute right-2.5 top-2.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-red-500 ring-2 ring-[#1a2b4c]"></span>
-            )}
-          </button>
+          <div className="relative flex items-center">
+            <AnimatePresence>
+              {showPopUp && (
+                <motion.div
+                  initial={{ opacity: 0, x: 20, scale: 0.95 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: 10, scale: 0.95 }}
+                  transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+                  className="absolute right-full mr-2.5 px-3 py-1.5 bg-white/95 backdrop-blur-md text-[#1a2b4c] text-[10px] font-extrabold rounded-xl shadow-xl flex items-center gap-1.5 z-50 whitespace-nowrap border border-white/40"
+                >
+                  <span className="flex h-1.5 w-1.5 rounded-full bg-[#126989] animate-ping"></span>
+                  <span>You have new messages</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <button onClick={() => navigate('/notifications')} className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/20 transition-colors hover:bg-white/30">
+              <Bell className="h-5 w-5 text-white" />
+              {unreadCount > 0 && (
+                <span className="absolute right-2.5 top-2.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-red-500 ring-2 ring-[#1a2b4c]"></span>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Wallet Balance */}
@@ -258,7 +290,7 @@ const Dashboard = () => {
                               {activity.type ? `${activity.type} ` : ''}
                             </p>
                             <p className="font-display text-[12px] font-bold text-white mb-0.5 truncate">{activity.name}</p>
-                            <p className="text-lg font-bold tracking-tight text-white mb-2">{formatCurrency(activity.contributionAmount, 'NGN')}</p>
+                            <p className="text-lg font-bold tracking-tight text-white mb-2" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>{formatCurrency(activity.contributionAmount, 'NGN')}</p>
                             <div className={`flex items-center gap-1.5 text-[9px] font-semibold w-fit px-2 py-0.5 rounded-full shadow-sm ${contributionStatusClass}`}>
                               <span className="capitalize">{contributionStatusLabel} {formatDate(activity.date)}</span>
                             </div>
@@ -356,7 +388,7 @@ const Dashboard = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
           onClick={() => navigate('/more/kyc')}
-          className="mb-6 flex w-full items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-left transition-colors hover:bg-amber-100"
+          className="mb-3 flex w-full items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-left transition-colors hover:bg-amber-100"
         >
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
@@ -375,7 +407,7 @@ const Dashboard = () => {
         </motion.button>
       )}
 
-      <button onClick={() => navigate('/credit-passport')} className="mb-6 flex w-full items-center justify-between rounded-xl border border-border bg-card p-4">
+      <button onClick={() => navigate('/credit-passport')} className="mb-3 flex w-full items-center justify-between rounded-xl border border-border bg-card p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
             <TrendingUp className="h-5 w-5 text-accent" />
@@ -434,24 +466,23 @@ const Dashboard = () => {
               }}
               className="w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/30"
             >
-              <div className="mb-3 flex items-start justify-between gap-3">
+              <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
                     <Icon className="h-5 w-5 text-primary" />
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate font-semibold text-foreground">{payment.title}</p>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    <p className="truncate font-semibold text-foreground text-sm">{payment.title}</p>
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground mt-0.5">
                       {payment.type}
                     </p>
                   </div>
                 </div>
-              </div>
-
-              <div className="text-sm text-right">
-                <p className="text-muted-foreground">
-                  Due date - <span className="font-medium text-foreground">{payment.date}</span>
-                </p>
+                <div className="text-xs text-right shrink-0">
+                  <p className="text-muted-foreground">
+                    Due date - <span className="font-medium text-foreground">{payment.date}</span>
+                  </p>
+                </div>
               </div>
             </motion.button>
           );
