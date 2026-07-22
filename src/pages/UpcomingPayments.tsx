@@ -106,7 +106,7 @@ const UpcomingPayments = () => {
               onClick={() => handlePaymentClick(payment)}
               className="w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/30"
             >
-              <div className="mb-3 flex items-start justify-between gap-3">
+              <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
                     <Icon className="h-5 w-5 text-primary" />

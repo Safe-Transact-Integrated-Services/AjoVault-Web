@@ -17,6 +17,7 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -431,20 +432,34 @@ const GroupGoalsHome = () => {
             className="pl-9 h-10 rounded-xl"
           />
         </div>
-        <select
+        <Select
           value={sortBy}
-          onChange={(e) => {
-            setSortBy(e.target.value);
+          onValueChange={(value) => {
+            setSortBy(value);
             setCurrentPage(1);
           }}
-          className="h-10 rounded-xl border border-input bg-background px-3 text-xs font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-accent w-[130px] shrink-0"
         >
-          <option value="newest">Newest Created</option>
-          <option value="oldest">Oldest Created</option>
-          <option value="alphabetical">A-Z Name</option>
-          <option value="amount_high">Target (High-Low)</option>
-          <option value="progress_high">Progress (High-Low)</option>
-        </select>
+          <SelectTrigger className="h-10 w-[170px] rounded-xl border border-border bg-card px-3 text-xs font-bold text-foreground hover:bg-muted/50 hover:border-accent/40 transition-all shrink-0">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent align="end" className="rounded-xl border border-border bg-popover shadow-xl min-w-[170px]">
+            <SelectItem value="newest" className="text-xs font-semibold cursor-pointer">
+              Newest Created
+            </SelectItem>
+            <SelectItem value="oldest" className="text-xs font-semibold cursor-pointer">
+              Oldest Created
+            </SelectItem>
+            <SelectItem value="alphabetical" className="text-xs font-semibold cursor-pointer">
+              A-Z Name
+            </SelectItem>
+            <SelectItem value="amount_high" className="text-xs font-semibold cursor-pointer">
+              Target (High-Low)
+            </SelectItem>
+            <SelectItem value="progress_high" className="text-xs font-semibold cursor-pointer">
+              Progress (High-Low)
+            </SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Goals List */}
