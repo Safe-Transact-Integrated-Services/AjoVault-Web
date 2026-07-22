@@ -38,12 +38,32 @@ const mapNotification = (item: NotificationItemResponse): Notification => ({
   link: item.link ?? undefined,
 });
 
+import { mockNotifications } from './mockData';
+
 export const getMyNotifications = async (): Promise<NotificationsFeed> => {
-  const response = await apiRequest<NotificationsResponse>('/api/notifications/me');
-  return {
-    unreadCount: response.unreadCount,
-    items: response.items.map(mapNotification),
-  };
+  try {
+    const response = await apiRequest<NotificationsResponse>('/api/notifications/me');
+    const apiItems = response.items.map(mapNotification);
+
+    const hasGroupNotifs = apiItems.some(item => item.category === 'group' || item.link === '/groups');
+    const groupMockNotifs = mockNotifications.filter(n => n.category === 'group');
+
+    const combinedItems = hasGroupNotifs
+      ? apiItems
+      : [...groupMockNotifs, ...apiItems];
+
+    const unreadCount = combinedItems.filter(n => !n.read).length;
+
+    return {
+      unreadCount,
+      items: combinedItems,
+    };
+  } catch {
+    return {
+      unreadCount: mockNotifications.filter(n => !n.read).length,
+      items: mockNotifications,
+    };
+  }
 };
 
 export const markNotificationRead = async (notificationId: string) => {

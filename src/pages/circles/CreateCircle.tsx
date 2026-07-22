@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   CIRCLE_PAYOUT_TYPE_METADATA,
   circlesKeys,
@@ -276,18 +277,28 @@ const CreateCircle = () => {
               {/* Section 3: Payout Rules */}
               <div className="space-y-4 rounded-xl border border-border bg-card p-4">
                 <h3 className="font-semibold text-foreground text-sm border-b border-border pb-2">Payout Rules</h3>
-                <div className="space-y-3">
-                  {Object.entries(CIRCLE_PAYOUT_TYPE_METADATA).map(([id, option]) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setPayoutType(id as typeof payoutType)}
-                      className={`flex w-full flex-col rounded-xl border p-4 text-left transition-colors ${payoutType === id ? 'border-accent bg-accent/10 border-accent' : 'border-border bg-card'}`}
-                    >
-                      <span className="font-semibold text-foreground">{option.label}</span>
-                      <span className="mt-0.5 text-xs text-muted-foreground">{option.description}</span>
-                    </button>
-                  ))}
+                <div className="space-y-2">
+                  <Label htmlFor="circle-payout-type">Select Rule</Label>
+                  <Select
+                    value={payoutType}
+                    onValueChange={value => setPayoutType(value as typeof payoutType)}
+                  >
+                    <SelectTrigger id="circle-payout-type" className="h-12 w-full">
+                      <SelectValue placeholder="Select payout rule" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(CIRCLE_PAYOUT_TYPE_METADATA).map(([id, option]) => (
+                        <SelectItem key={id} value={id}>
+                          <div className="flex flex-col text-left py-1">
+                            <span className="font-semibold text-foreground text-sm">{option.label}</span>
+                            <span className="text-xs text-muted-foreground mt-0.5 max-w-[280px] whitespace-normal leading-normal">
+                              {option.description}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs text-muted-foreground">

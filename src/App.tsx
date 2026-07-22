@@ -32,7 +32,6 @@ import Transfer from '@/pages/wallet/Transfer';
 import BillPayment from '@/pages/wallet/BillPayment';
 import TransactionHistory from '@/pages/wallet/TransactionHistory';
 import SavingsHome from '@/pages/savings/SavingsHome';
-import CreateSavings from '@/pages/savings/CreateSavings';
 import SavingsDetail from '@/pages/savings/SavingsDetail';
 import SavingsContribute from '@/pages/savings/SavingsContribute';
 import SavingsInvite from '@/pages/savings/SavingsInvite';
@@ -48,6 +47,7 @@ import CirclePayout from '@/pages/circles/CirclePayout';
 import CirclePayments from '@/pages/circles/CirclePayments';
 import Notifications from '@/pages/Notifications';
 import MorePage from '@/pages/more/MorePage';
+import GroupsHome from '@/pages/groups/GroupsHome';
 import Profile from '@/pages/more/Profile';
 import KycUpgrade from '@/pages/more/KycUpgrade';
 import Settings from '@/pages/more/Settings';
@@ -75,7 +75,6 @@ import CooperativePrograms from '@/pages/cooperative/CooperativePrograms';
 import CooperativeLoans from '@/pages/cooperative/CooperativeLoans';
 
 import GroupGoalsHome from '@/pages/groupgoals/GroupGoalsHome';
-import CreateGroupGoal from '@/pages/groupgoals/CreateGroupGoal';
 import CreateGoalSelect from '@/pages/groupgoals/CreateGoalSelect';
 import JoinGroupGoal from '@/pages/groupgoals/JoinGroupGoal';
 import GroupGoalDetail from '@/pages/groupgoals/GroupGoalDetail';
@@ -153,7 +152,7 @@ const App = () => (
                   <Route path="/upcoming-contributions" element={<UpcomingContributions />} />
                   <Route path="/upcoming-payments" element={<UpcomingPayments />} />
                   <Route path="/savings" element={<SavingsHome />} />
-                  <Route path="/savings/create" element={<CreateSavings />} />
+                  <Route path="/savings/create" element={<CreateGoalSelect />} />
                   <Route path="/savings/invite" element={<SavingsInvite />} />
                   <Route path="/savings/invitations/:id" element={<SavingsInvitationDecision />} />
                   <Route path="/savings/:id" element={<SavingsDetail />} />
@@ -169,12 +168,13 @@ const App = () => (
                   <Route path="/circles/join/:code" element={<CircleJoinInvite />} />
                   <Route path="/group-goals" element={<GroupGoalsHome />} />
                   <Route path="/group-goals/create/select" element={<CreateGoalSelect />} />
-                  <Route path="/group-goals/create" element={<CreateGroupGoal />} />
+                  <Route path="/group-goals/create" element={<CreateGoalSelect />} />
                   <Route path="/group-goals/join" element={<JoinGroupGoal />} />
                   <Route path="/group-goals/join/:code" element={<GroupGoalJoinInvite />} />
                   <Route path="/group-goals/:id" element={<GroupGoalDetail />} />
                   <Route path="/group-goals/:id/contribute" element={<GroupGoalContribute />} />
                   <Route path="/group-goals/:id/invite" element={<GroupGoalInvite />} />
+                  <Route path="/groups" element={<GroupsHome />} />
                   <Route path="/more" element={<MorePage />} />
                   <Route path="/more/profile" element={<Profile />} />
                   <Route path="/more/settings" element={<Settings />} />
