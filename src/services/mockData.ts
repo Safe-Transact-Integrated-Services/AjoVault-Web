@@ -1,4 +1,4 @@
-import type { User, WalletBalance, Transaction, SavingsPlan, Circle, Notification, BillProvider } from '@/types';
+import type { User, WalletBalance, Transaction, SavingsPlan, Notification, BillProvider } from '@/types';
 
 export const mockUser: User = {
   id: 'usr_001',
@@ -40,52 +40,12 @@ export const mockSavingsPlans: SavingsPlan[] = [
   { id: 'sav_003', name: 'Rent 2027', type: 'locked', targetAmount: 1200000, savedAmount: 400000, currency: 'NGN', frequency: 'monthly', contributionAmount: 100000, startDate: '2026-01-01', endDate: '2026-12-31', status: 'active', interestRate: 12 },
 ];
 
-export const mockCircles: Circle[] = [
-  {
-    id: 'cir_001', name: 'Ajo Family Circle', description: 'Monthly family contribution group', amount: 25000, currency: 'NGN', frequency: 'monthly',
-    memberCount: 6, maxMembers: 6, currentCycle: 3, totalCycles: 6, role: 'admin',
-    nextContributionDate: '2026-04-01', nextPayoutDate: '2026-04-05', status: 'active', payoutType: 'rotation',
-    createdAt: '2026-01-10',
-    members: [
-      { id: 'm1', name: 'Adaeze O.', hasPaid: true, payoutPosition: 1, hasReceivedPayout: true },
-      { id: 'm2', name: 'Chidi N.', hasPaid: true, payoutPosition: 2, hasReceivedPayout: true },
-      { id: 'm3', name: 'Funke A.', hasPaid: false, payoutPosition: 3, hasReceivedPayout: false },
-      { id: 'm4', name: 'Ibrahim M.', hasPaid: true, payoutPosition: 4, hasReceivedPayout: false },
-      { id: 'm5', name: 'Ngozi E.', hasPaid: false, payoutPosition: 5, hasReceivedPayout: false },
-      { id: 'm6', name: 'Yusuf K.', hasPaid: true, payoutPosition: 6, hasReceivedPayout: false },
-    ],
-  },
-  {
-    id: 'cir_002', name: 'Wealth Builders', description: 'Investment-focused savings group', amount: 50000, currency: 'NGN', frequency: 'monthly',
-    memberCount: 5, maxMembers: 12, currentCycle: 5, totalCycles: 12, role: 'member',
-    nextContributionDate: '2026-04-01', nextPayoutDate: '2026-04-10', status: 'active', payoutType: 'rotation',
-    createdAt: '2026-02-15',
-    members: [
-      { id: 'm7', name: 'Amina B.', hasPaid: true, payoutPosition: 1, hasReceivedPayout: true },
-      { id: 'm8', name: 'David O.', hasPaid: true, payoutPosition: 2, hasReceivedPayout: true },
-      { id: 'm9', name: 'Emeka C.', hasPaid: false, payoutPosition: 3, hasReceivedPayout: true },
-      { id: 'm10', name: 'Grace I.', hasPaid: true, payoutPosition: 4, hasReceivedPayout: true },
-      { id: 'm11', name: 'Adaeze O.', hasPaid: true, payoutPosition: 5, hasReceivedPayout: true },
-    ],
-  },
-  {
-    id: 'cir_003', name: 'Youth Empowerment Club', description: 'Weekly startup support circle', amount: 15000, currency: 'NGN', frequency: 'monthly',
-    memberCount: 2, maxMembers: 8, currentCycle: 1, totalCycles: 8, role: 'admin',
-    nextContributionDate: '2026-08-01', nextPayoutDate: '2026-08-05', status: 'pending', payoutType: 'rotation',
-    createdAt: '2026-07-13', startDate: '2026-08-01',
-    members: [
-      { id: 'm12', name: 'Amina B.', hasPaid: false, payoutPosition: 1, hasReceivedPayout: false },
-      { id: 'm13', name: 'David O.', hasPaid: false, payoutPosition: 2, hasReceivedPayout: false },
-    ],
-  },
-];
-
 export const mockNotifications: Notification[] = [
-  { id: 'n_grp_1', type: 'info', category: 'group', title: 'Group Invitation', message: 'Yusuf K. invited you to join "Tech Founders Cooperative".', read: false, date: '2026-07-22T12:30:00', link: '/clicks', inviteStatus: 'pending', groupId: 'grp_002' },
-  { id: 'n_grp_2', type: 'milestone', category: 'group', title: 'Invitation Accepted', message: 'Ibrahim M. accepted your invitation to join "Youth Empowerment Club".', read: false, date: '2026-07-22T10:15:00', link: '/clicks' },
+  // { id: 'n_grp_1', type: 'info', category: 'group', title: 'Group Invitation', message: 'Yusuf K. invited you to join "Tech Founders Cooperative".', read: false, date: '2026-07-22T12:30:00', link: '/clicks', inviteStatus: 'pending', groupId: 'grp_002' },
+  // { id: 'n_grp_2', type: 'milestone', category: 'group', title: 'Invitation Accepted', message: 'Ibrahim M. accepted your invitation to join "Youth Empowerment Club".', read: false, date: '2026-07-22T10:15:00', link: '/clicks' },
   { id: 'n1', type: 'reminder', title: 'Contribution Due', message: 'Your Ajo Family Circle contribution of ₦25,000 is due tomorrow.', read: false, date: '2026-03-07T08:00:00', link: '/circles/cir_001' },
   { id: 'n2', type: 'milestone', title: '80% Goal Reached', message: 'Your "New Laptop" savings is at 80%. Keep going!', read: false, date: '2026-03-06T12:00:00', link: '/savings/sav_002' },
-  { id: 'n_grp_3', type: 'info', category: 'group', title: 'New Member Joined', message: 'Adaeze Okafor joined "Lagos Investment Circle".', read: true, date: '2026-03-05T14:30:00', link: '/clicks' },
+  // { id: 'n_grp_3', type: 'info', category: 'group', title: 'New Member Joined', message: 'Adaeze Okafor joined "Lagos Investment Circle".', read: true, date: '2026-03-05T14:30:00', link: '/clicks' },
   { id: 'n3', type: 'alert', title: 'Login from New Device', message: 'A login was detected from a new device. If this wasn\'t you, please change your PIN.', read: true, date: '2026-03-05T09:15:00' },
   { id: 'n4', type: 'info', title: 'KYC Verified', message: 'Your identity has been verified. You now have full access.', read: true, date: '2026-03-03T14:00:00' },
   { id: 'n5', type: 'reminder', title: 'Weekly Savings', message: 'Auto-debit of ₦10,000 for Emergency Fund is scheduled for tomorrow.', read: false, date: '2026-03-07T07:00:00', link: '/savings/sav_001' },

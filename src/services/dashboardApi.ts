@@ -79,6 +79,25 @@ export interface UpcomingContributionsResponse {
   items: UpcomingContributionItem[];
 }
 
+export interface UpcomingPayoutItem {
+  id: string;
+  date: string;
+  name: string;
+  type: 'circle' | 'group_goal' | string;
+  payoutAmount: number;
+  currency: string;
+  status: 'due' | 'overdue' | 'waiting_for_contributions' | string;
+  payoutUrl: string;
+  note: string;
+}
+
+export interface UpcomingPayoutsResponse {
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  items: UpcomingPayoutItem[];
+}
+
 export const getDashboardSummary = () =>
   apiRequest<DashboardSummaryResponse>('/api/dashboard/me');
 
@@ -86,6 +105,29 @@ export const getUpcomingContributions = (page = 1, pageSize = 10) =>
   apiRequest<UpcomingContributionsResponse>(
     `/api/dashboard/me/upcoming-contributions?page=${page}&pageSize=${pageSize}`,
   );
+
+export const getUpcomingPayouts = (
+  page = 1,
+  pageSize = 10,
+  filters: { type?: string; name?: string } = {},
+) => {
+  const search = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+
+  if (filters.type?.trim()) {
+    search.set('type', filters.type.trim());
+  }
+
+  if (filters.name?.trim()) {
+    search.set('name', filters.name.trim());
+  }
+
+  return apiRequest<UpcomingPayoutsResponse>(
+    `/api/dashboard/me/upcoming-payouts?${search.toString()}`,
+  );
+};
 
 export const compareUpcomingContributionsByDate = (
   a: UpcomingContributionItem,
@@ -161,6 +203,45 @@ export const openUpcomingContribution = (
   navigate(resolveUpcomingContributionPath(item));
 };
 
+export const openUpcomingPayout = (
+  item: UpcomingPayoutItem,
+  navigate: (path: string) => void,
+) => {
+  if (item.payoutUrl) {
+    if (item.payoutUrl.startsWith('/')) {
+      navigate(item.payoutUrl);
+      return;
+    }
+    window.location.href = item.payoutUrl;
+    return;
+  }
+
+  const type = item.type?.toLowerCase().trim() ?? '';
+  const id = item.id;
+
+  if (type.includes('circle') || type.includes('ajo')) {
+    navigate(`/circles/${id}`);
+    return;
+  }
+
+  if (type.includes('saving') || type.includes('thrift')) {
+    navigate(`/savings/${id}`);
+    return;
+  }
+
+  if (type.includes('goal')) {
+    navigate(`/group-goals/${id}`);
+    return;
+  }
+
+  if (type.includes('fundraising') || type.includes('fundraiser')) {
+    navigate(`/fundraising/${id}`);
+    return;
+  }
+
+  navigate(`/circles/${id}`);
+};
+
 export const markContributionAsPaid = (entityId: string, queryClient?: any) => {
   const completed = JSON.parse(localStorage.getItem('ajovault_completed_contributions') || '[]');
   
@@ -225,61 +306,4 @@ export const filterUpcomingContributions = (items: UpcomingContributionItem[]): 
     console.error('Error parsing completed contributions:', e);
     return items;
   }
-};
-
-export const getUpcomingPayouts = (
-  page = 1,
-  pageSize = 10,
-  type?: string,
-  name?: string,
-) => {
-  const params = new URLSearchParams({
-    page: page.toString(),
-    pageSize: pageSize.toString(),
-  });
-  if (type) params.append('type', type);
-  if (name) params.append('name', name);
-
-  return apiRequest<UpcomingPayoutsResponse>(
-    `/api/dashboard/me/upcoming-payouts?${params.toString()}`,
-  );
-};
-
-export const openUpcomingPayout = (
-  item: UpcomingPayoutItem,
-  navigate: (path: string) => void,
-) => {
-  if (item.payoutUrl) {
-    if (item.payoutUrl.startsWith('/')) {
-      navigate(item.payoutUrl);
-      return;
-    }
-    window.location.href = item.payoutUrl;
-    return;
-  }
-
-  const type = item.type?.toLowerCase().trim() ?? '';
-  const id = item.id;
-
-  if (type.includes('circle') || type.includes('ajo')) {
-    navigate(`/circles/${id}`);
-    return;
-  }
-
-  if (type.includes('saving') || type.includes('thrift')) {
-    navigate(`/savings/${id}`);
-    return;
-  }
-
-  if (type.includes('goal')) {
-    navigate(`/group-goals/${id}`);
-    return;
-  }
-
-  if (type.includes('fundraising') || type.includes('fundraiser')) {
-    navigate(`/fundraising/${id}`);
-    return;
-  }
-
-  navigate(`/circles/${id}`);
 };

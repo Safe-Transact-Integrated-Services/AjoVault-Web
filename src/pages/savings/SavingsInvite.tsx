@@ -39,7 +39,7 @@ const SavingsInvite = () => {
         onInvite={handleInvite}
         onInviteContact={handleContactInvite}
         showDirectContactInvite
-        actionLabel="Invite on AjoVault"
+        actionLabel="Invite to Circle"
         title="Invite To Savings"
         description="Use one search box to invite AjoVault users or enter an email address or phone number for non-members."
       />

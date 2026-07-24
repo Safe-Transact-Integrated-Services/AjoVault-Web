@@ -1,21 +1,40 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Banknote, Calendar, CheckCircle2, Share2, UserPlus, Wallet, XCircle, Copy, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowUp, Banknote, Calendar, CheckCircle2, Share2, UserPlus, Wallet, XCircle, Copy, ListChecks, Shuffle, Play, Unlock, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { circlesKeys, getCircle, getCirclePayoutTypeDescription, getCirclePayoutTypeLabel, reorderCircleMembers, CircleMember } from '@/services/circlesApi';
+import {
+  circlesKeys,
+  finalizeCirclePayoutOrder,
+  getCircle,
+  getCirclePayoutTypeDescription,
+  getCirclePayoutTypeLabel,
+  previewCirclePayoutOrder,
+  reopenCirclePayoutOrder,
+  reorderCircleMembers,
+  startCircle,
+  type CircleMember,
+} from '@/services/circlesApi';
 import { shareLink } from '@/lib/share';
 import { formatCurrency, formatDate } from '@/services/mockData';
 import { getApiErrorMessage } from '@/lib/api/http';
+
+const formatCircleScheduleDate = (date?: string | null, fallback = 'Not started') =>
+  date ? formatDate(date) : fallback;
 
 const CircleDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
+  const [payoutOrder, setPayoutOrder] = useState<CircleMember[]>([]);
+  const [hasShuffledOrder, setHasShuffledOrder] = useState(false);
+  const [isPreviewingOrder, setIsPreviewingOrder] = useState(false);
+  const [isFinalizingOrder, setIsFinalizingOrder] = useState(false);
+  const [isReopeningOrder, setIsReopeningOrder] = useState(false);
+  const [isStartingCircle, setIsStartingCircle] = useState(false);
   const circleQuery = useQuery({
     queryKey: id ? circlesKeys.detail(id) : circlesKeys.detail('missing'),
     queryFn: () => getCircle(id!),
@@ -24,6 +43,22 @@ const CircleDetail = () => {
 
   const circle = circleQuery.data;
   const [isReorderingMode, setIsReorderingMode] = useState(false);
+
+  useEffect(() => {
+    if (!circle) {
+      setPayoutOrder([]);
+      setHasShuffledOrder(false);
+      return;
+    }
+
+    setPayoutOrder(
+      circle.members
+        .filter(member => member.isContributionParticipant)
+        .slice()
+        .sort((left, right) => left.payoutPosition - right.payoutPosition),
+    );
+    setHasShuffledOrder(false);
+  }, [circle?.id, circle?.isPayoutOrderFinalized, circle?.memberCount]);
 
   if (circleQuery.isLoading) {
     return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading circle...</div>;
@@ -38,8 +73,18 @@ const CircleDetail = () => {
   }
 
   const progress = Math.round((circle.currentCycle / Math.max(1, circle.totalCycles)) * 100);
-  const paidCount = circle.members.filter(member => member.hasPaid).length;
+  const contributionParticipants = circle.members.filter(member => member.isContributionParticipant);
+  const paidCount = contributionParticipants.filter(member => member.hasPaid).length;
   const inviteLink = `${window.location.origin}/circles/join/${circle.inviteCode}`;
+  const adminMember = circle.members.find(member => member.role === 'admin');
+  const currentUserParticipates = circle.role !== 'admin' || adminMember?.isContributionParticipant !== false;
+  const payoutOrderMembers = payoutOrder.length === contributionParticipants.length
+    ? payoutOrder
+    : contributionParticipants.slice().sort((left, right) => left.payoutPosition - right.payoutPosition);
+  const canInviteMembers = circle.role === 'admin'
+    && circle.status === 'pending'
+    && !circle.isPayoutOrderFinalized
+    && circle.memberCount < circle.maxMembers;
 
   // Reordering is allowed specifically for admins BEFORE contribution starts
   const canReorder = circle.role === 'admin' && (circle.status === 'pending' || paidCount === 0 || circle.currentCycle === 1);
@@ -63,66 +108,95 @@ const CircleDetail = () => {
     }
   };
 
-  const handleMoveMember = async (index: number, direction: 'up' | 'down') => {
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= sortedMembers.length) return;
+  const refreshCircleQueries = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: circlesKeys.detail(circle.id) }),
+      queryClient.invalidateQueries({ queryKey: circlesKeys.list }),
+      queryClient.invalidateQueries({ queryKey: circlesKeys.dashboard }),
+    ]);
+    await circleQuery.refetch();
+  };
 
-    const newMembers = [...sortedMembers];
-    const temp = newMembers[index];
-    newMembers[index] = newMembers[targetIndex];
-    newMembers[targetIndex] = temp;
+  const movePayoutMember = (memberId: string, direction: -1 | 1) => {
+    setPayoutOrder(currentOrder => {
+      const currentIndex = currentOrder.findIndex(member => member.id === memberId);
+      const nextIndex = currentIndex + direction;
+      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= currentOrder.length) {
+        return currentOrder;
+      }
 
-    // Recalculate 1-indexed payoutPositions
-    const updatedPositions = newMembers.map((m, idx) => ({
-      ...m,
-      payoutPosition: idx + 1,
-    }));
-
-    // Optimistic UI update
-    queryClient.setQueryData(circlesKeys.detail(circle.id), {
-      ...circle,
-      members: updatedPositions,
+      const nextOrder = [...currentOrder];
+      [nextOrder[currentIndex], nextOrder[nextIndex]] = [nextOrder[nextIndex], nextOrder[currentIndex]];
+      return nextOrder;
     });
+    setHasShuffledOrder(false);
+  };
 
+  const handleShufflePayoutOrder = async () => {
+    setIsPreviewingOrder(true);
     try {
-      await reorderCircleMembers(
-        circle.id,
-        updatedPositions.map(m => ({ memberId: m.id, payoutPosition: m.payoutPosition }))
-      );
-      toast.success(`Moved ${temp.name} to Position #${targetIndex + 1}`);
-    } catch {
-      toast.error('Failed to update payout sequence.');
-      circleQuery.refetch();
+      const preview = await previewCirclePayoutOrder(circle.id, { strategy: 'weighted_random' });
+      const nextOrder = preview.members
+        .map(orderMember => circle.members.find(member => member.id === orderMember.memberId))
+        .filter((member): member is CircleMember => !!member);
+
+      if (nextOrder.length === contributionParticipants.length) {
+        setPayoutOrder(nextOrder);
+        setHasShuffledOrder(true);
+      }
+
+      toast.success('Payout order shuffled. Review and confirm it before starting.');
+    } catch (previewError) {
+      toast.error(getApiErrorMessage(previewError, 'Unable to shuffle payout order.'));
+    } finally {
+      setIsPreviewingOrder(false);
     }
   };
 
-  const handleSetPosition = async (memberId: string, newPos: number) => {
-    const currentMemberIndex = sortedMembers.findIndex(m => m.id === memberId);
-    if (currentMemberIndex === -1 || newPos < 1 || newPos > sortedMembers.length) return;
-
-    const newMembers = [...sortedMembers];
-    const [movedMember] = newMembers.splice(currentMemberIndex, 1);
-    newMembers.splice(newPos - 1, 0, movedMember);
-
-    const updatedPositions = newMembers.map((m, idx) => ({
-      ...m,
-      payoutPosition: idx + 1,
-    }));
-
-    queryClient.setQueryData(circlesKeys.detail(circle.id), {
-      ...circle,
-      members: updatedPositions,
-    });
-
+  const handleFinalizePayoutOrder = async () => {
+    setIsFinalizingOrder(true);
     try {
-      await reorderCircleMembers(
-        circle.id,
-        updatedPositions.map(m => ({ memberId: m.id, payoutPosition: m.payoutPosition }))
-      );
-      toast.success(`Set ${movedMember.name} to Position #${newPos}`);
-    } catch {
-      toast.error('Failed to update payout sequence.');
-      circleQuery.refetch();
+      await finalizeCirclePayoutOrder(circle.id, {
+        strategy: hasShuffledOrder ? 'weighted_random' : 'manual',
+        memberIds: payoutOrderMembers.map(member => member.id),
+      });
+      await refreshCircleQueries();
+      toast.success('Payout order confirmed. You can now start the circle.');
+    } catch (finalizeError) {
+      toast.error(getApiErrorMessage(finalizeError, 'Unable to finalize payout order.'));
+    } finally {
+      setIsFinalizingOrder(false);
+    }
+  };
+
+  const handleReopenPayoutOrder = async () => {
+    setIsReopeningOrder(true);
+    try {
+      await reopenCirclePayoutOrder(circle.id);
+      await refreshCircleQueries();
+      toast.success('Payout order reopened. You can invite or reorder members again.');
+    } catch (reopenError) {
+      toast.error(getApiErrorMessage(reopenError, 'Unable to reopen payout order.'));
+    } finally {
+      setIsReopeningOrder(false);
+    }
+  };
+
+  const handleStartCircle = async () => {
+    if (!circle.isPayoutOrderFinalized) {
+      toast.error('Finalize payout order before starting this circle.');
+      return;
+    }
+
+    setIsStartingCircle(true);
+    try {
+      await startCircle(circle.id);
+      await refreshCircleQueries();
+      toast.success('Circle started successfully.');
+    } catch (startError) {
+      toast.error(getApiErrorMessage(startError, 'Unable to start this circle.'));
+    } finally {
+      setIsStartingCircle(false);
     }
   };
 
@@ -165,7 +239,7 @@ const CircleDetail = () => {
             <span className="text-xs font-medium">Next Payout</span>
           </div>
           <p className="font-bold text-foreground">{formatCurrency(circle.payoutAmount)}</p>
-          <p className="text-xs text-muted-foreground">{formatDate(circle.nextPayoutDate)}</p>
+          <p className="text-xs text-muted-foreground">{formatCircleScheduleDate(circle.nextPayoutDate)}</p>
         </div>
       </div>
 
@@ -180,44 +254,128 @@ const CircleDetail = () => {
         </div>
         <div className="mt-2 flex justify-between">
           <span className="text-muted-foreground">Next Contribution</span>
-          <span className="font-medium text-foreground">{formatDate(circle.nextContributionDate)}</span>
+          <span className="font-medium text-foreground">{formatCircleScheduleDate(circle.nextContributionDate)}</span>
         </div>
-        <div className="mt-2 flex justify-between">
-          <span className="text-muted-foreground">Payout Type</span>
-          <span className="font-medium text-foreground">{getCirclePayoutTypeLabel(circle.payoutType)}</span>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">{getCirclePayoutTypeDescription(circle.payoutType)}</p>
       </div>
 
-      {/* MEMBERS & PAYOUT SEQUENCE REORDER SECTION */}
-      <div className="mb-4">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <div>
-            <h2 className="font-display text-base font-bold text-foreground">
-              Members ({paidCount}/{sortedMembers.length} paid)
-            </h2>
-            {canReorder && (
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                Admin reorder enabled before contribution starts.
+      {circle.role === 'admin' && circle.status === 'pending' && (
+        <div className="mb-4 space-y-3 rounded-xl border border-amber-200 bg-amber-50/40 p-4 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold text-foreground">Payout order</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Arrange members manually or shuffle a suggested order before starting this circle.
               </p>
-            )}
+            </div>
+            <Badge variant={circle.isPayoutOrderFinalized ? 'secondary' : 'outline'} className="shrink-0">
+              {circle.isPayoutOrderFinalized ? 'Finalized' : 'Required'}
+            </Badge>
           </div>
 
-          {canReorder && (
+          <div className={`rounded-xl border p-3 text-xs ${
+            circle.isPayoutOrderFinalized
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              : canInviteMembers
+                ? 'border-blue-200 bg-blue-50 text-blue-800'
+                : 'border-amber-200 bg-white text-amber-800'
+          }`}>
+            {circle.isPayoutOrderFinalized
+              ? 'Invites are locked because the payout order is confirmed. Reopen the order if you still need to invite or change members.'
+              : canInviteMembers
+                ? 'Invites are still open. Confirm the payout order after all expected members have accepted.'
+                : 'This circle is full or not ready for more invites. Confirm payout order to unlock the start action.'}
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Member order</p>
+              <p className="text-xs font-semibold text-foreground">{payoutOrderMembers.length}/{circle.maxMembers}</p>
+            </div>
+
+            {payoutOrderMembers.map((member, index) => (
+              <div key={member.id} className="flex items-center gap-2 rounded-xl border border-border bg-white p-2.5">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/10 text-xs font-bold text-accent">
+                  {index + 1}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-foreground">{member.name}</p>
+                  <p className="text-[10px] text-muted-foreground">Payout position #{index + 1}</p>
+                </div>
+                {!circle.isPayoutOrderFinalized && (
+                  <div className="flex gap-1">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => movePayoutMember(member.id, -1)}
+                      disabled={index === 0 || isFinalizingOrder || isPreviewingOrder}
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => movePayoutMember(member.id, 1)}
+                      disabled={index === payoutOrderMembers.length - 1 || isFinalizingOrder || isPreviewingOrder}
+                    >
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {!circle.isPayoutOrderFinalized && (
             <Button
               variant="outline"
-              size="sm"
-              onClick={() => setIsReorderingMode(!isReorderingMode)}
-              className={`h-8 text-xs font-bold gap-1 rounded-xl transition-all ${
-                isReorderingMode ? 'bg-accent/15 border-accent text-accent' : 'text-muted-foreground'
-              }`}
+              className="h-11 w-full gap-1.5 text-xs font-semibold"
+              onClick={() => void handleShufflePayoutOrder()}
+              disabled={isPreviewingOrder || isFinalizingOrder || payoutOrderMembers.length < 2}
             >
-              <ArrowUpDown className="h-3.5 w-3.5" />
-              {isReorderingMode ? 'Done Reordering' : 'Reorder Sequence'}
+              <Shuffle className="h-4 w-4" />
+              {isPreviewingOrder ? 'Shuffling...' : hasShuffledOrder ? 'Shuffle Again' : 'Shuffle Order'}
             </Button>
           )}
-        </div>
 
+          {!circle.isPayoutOrderFinalized && (
+            <Button
+              className="h-11 w-full gap-1.5 font-bold"
+              onClick={() => void handleFinalizePayoutOrder()}
+              disabled={isFinalizingOrder || isPreviewingOrder}
+            >
+              <ListChecks className="h-4 w-4" />
+              {isFinalizingOrder ? 'Confirming...' : 'Confirm Payout Order'}
+            </Button>
+          )}
+
+          {circle.isPayoutOrderFinalized && (
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                className="h-11 gap-1.5 text-xs font-semibold"
+                onClick={() => void handleReopenPayoutOrder()}
+                disabled={isReopeningOrder || isStartingCircle}
+              >
+                <Unlock className="h-4 w-4" />
+                {isReopeningOrder ? 'Reopening...' : 'Reopen Order'}
+              </Button>
+              <Button
+                className="h-11 gap-1.5 font-bold"
+                onClick={() => void handleStartCircle()}
+                disabled={isStartingCircle || isReopeningOrder}
+              >
+                <Play className="h-4 w-4 fill-current" />
+                {isStartingCircle ? 'Starting...' : 'Start Circle'}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="mb-4">
+        <h2 className="mb-3 font-display text-base font-bold">Members ({paidCount}/{contributionParticipants.length} contributors paid)</h2>
         <div className="space-y-2">
           {sortedMembers.map((member, index) => (
             <div
@@ -229,54 +387,16 @@ const CircleDetail = () => {
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary shrink-0">
                 {member.name.charAt(0)}
               </div>
-
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate">{member.name}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <p className="text-xs text-muted-foreground">Position #{member.payoutPosition}</p>
-                  {canReorder && isReorderingMode && (
-                    <select
-                      value={member.payoutPosition}
-                      onChange={(e) => handleSetPosition(member.id, parseInt(e.target.value, 10))}
-                      className="text-[11px] h-6 rounded-md border border-border bg-background px-1.5 font-bold text-accent focus:outline-none"
-                    >
-                      {sortedMembers.map((_, posIdx) => (
-                        <option key={posIdx + 1} value={posIdx + 1}>
-                          Pos #{posIdx + 1}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  {member.isContributionParticipant ? `Position #${member.payoutPosition}` : 'Manager only'}
+                </p>
               </div>
-
-              {/* Up / Down Controls for Admin before contribution starts */}
-              {canReorder && (
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => handleMoveMember(index, 'up')}
-                    disabled={index === 0}
-                    title="Move up in payout sequence"
-                    className="p-1 rounded-lg border border-border bg-background hover:bg-muted text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                  >
-                    <ChevronUp className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleMoveMember(index, 'down')}
-                    disabled={index === sortedMembers.length - 1}
-                    title="Move down in payout sequence"
-                    className="p-1 rounded-lg border border-border bg-background hover:bg-muted text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                  >
-                    <ChevronDown className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
-
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2">
+                {!member.isContributionParticipant && <Badge variant="outline" className="text-[10px]">No contribution</Badge>}
                 {member.hasReceivedPayout && <Badge variant="secondary" className="text-[10px]">Paid out</Badge>}
-                {member.hasPaid ? <CheckCircle2 className="h-5 w-5 text-success" /> : <XCircle className="h-5 w-5 text-destructive/50" />}
+                {member.isContributionParticipant && (member.hasPaid ? <CheckCircle2 className="h-5 w-5 text-success" /> : <XCircle className="h-5 w-5 text-destructive/50" />)}
               </div>
             </div>
           ))}
@@ -286,27 +406,30 @@ const CircleDetail = () => {
       <div className="fixed bottom-20 left-0 right-0 px-4">
         <div className="mx-auto max-w-lg space-y-2">
           {circle.role === 'admin' && (
-            <>
-              <div className="flex gap-2">
-                <Button variant="outline" className="h-11 flex-grow gap-1.5 px-2.5 text-xs font-semibold" onClick={() => navigate(`/circles/${circle.id}/invite`)}>
-                  <UserPlus className="h-4 w-4" /> Invite
-                </Button>
-                <Button variant="outline" className="h-11 flex-grow gap-1.5 px-2.5 text-xs font-semibold" onClick={() => { void handleShare(); }}>
-                  <Share2 className="h-4 w-4" /> Share
-                </Button>
-                <Button variant="outline" className="h-11 flex-grow gap-1.5 px-2.5 text-xs font-semibold" onClick={() => navigate('/circles/create', { state: { templateCircle: circle } })}>
-                  <Copy className="h-4 w-4" /> Use as Template
-                </Button>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" className="h-11 flex-grow gap-1.5 px-2.5 text-xs font-semibold" onClick={() => navigate(`/circles/${circle.id}/payout`)}>
-                  <Banknote className="h-4 w-4" /> Payout
-                </Button>
-              </div>
-            </>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="h-11 flex-grow gap-1.5 px-2.5 text-xs font-semibold"
+                onClick={() => navigate(`/circles/${circle.id}/invite`)}
+              >
+                <UserPlus className="h-4 w-4" /> Invite
+              </Button>
+              <Button variant="outline" className="h-11 flex-grow gap-1.5 px-2.5 text-xs font-semibold" onClick={() => { void handleShare(); }}>
+                <Share2 className="h-4 w-4" /> Share
+              </Button>
+              <Button variant="outline" className="h-11 flex-grow gap-1.5 px-2.5 text-xs font-semibold" onClick={() => navigate('/circles/create', { state: { templateCircle: circle } })}>
+                <Copy className="h-4 w-4" /> Duplicate
+              </Button>
+            </div>
           )}
-          <Button className="h-12 w-full font-bold" onClick={() => navigate(`/circles/${circle.id}/contribute`)}>
-            {circle.hasPaidCurrentCycle ? 'Contribution posted for this cycle' : `Make Contribution - ${formatCurrency(circle.amount)}`}
+          <Button className="h-12 w-full font-bold" onClick={() => navigate(`/circles/${circle.id}/contribute`)} disabled={circle.status !== 'active' || !currentUserParticipates}>
+            {circle.status !== 'active'
+              ? 'Start circle before contributions'
+              : !currentUserParticipates
+                ? 'Admin is not contributing'
+              : circle.hasPaidCurrentCycle
+                ? 'Contribution posted for this cycle'
+                : `Make Contribution - ${formatCurrency(circle.amount)}`}
           </Button>
         </div>
       </div>

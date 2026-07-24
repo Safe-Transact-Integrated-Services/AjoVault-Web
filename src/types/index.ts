@@ -47,7 +47,7 @@ export interface SavingsPlan {
   targetAmount: number;
   savedAmount: number;
   currency: string;
-  frequency: 'daily' | 'weekly' | 'monthly';
+  frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly';
   contributionAmount: number;
   startDate: string;
   endDate: string;
@@ -62,19 +62,22 @@ export interface Circle {
   description: string;
   amount: number;
   currency: string;
-  frequency: 'daily' | 'weekly' | 'monthly';
+  frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly';
   memberCount: number;
   maxMembers: number;
   currentCycle: number;
   totalCycles: number;
   role: 'admin' | 'member';
-  nextContributionDate: string;
-  nextPayoutDate: string;
+  nextContributionDate: string | null;
+  nextPayoutDate: string | null;
   status: 'active' | 'pending' | 'completed';
-  payoutType: 'rotation' | 'random' | 'bidding';
   members: CircleMember[];
+  completedPayoutsCount?: number;
   createdAt?: string;
   startDate?: string;
+  isPayoutOrderFinalized?: boolean;
+  payoutOrderStrategy?: 'manual' | 'weighted_random' | string | null;
+  payoutOrderFinalizedAt?: string | null;
 }
 
 export interface CircleMember {
@@ -84,6 +87,8 @@ export interface CircleMember {
   hasPaid: boolean;
   payoutPosition: number;
   hasReceivedPayout: boolean;
+  role?: 'admin' | 'member';
+  isContributionParticipant?: boolean;
 }
 
 export interface Notification {

@@ -38,12 +38,13 @@ import { groupGoalsKeys, getGroupGoals } from '@/services/groupGoalsApi';
 import {
   dashboardKeys,
   getDashboardSummary,
-  getUpcomingContributions,
   getUpcomingPayouts,
+  getUpcomingContributions,
   openUpcomingContribution,
   openUpcomingPayout,
   compareUpcomingContributionsByDate,
   filterUpcomingContributions,
+  type UpcomingPayoutItem,
 } from '@/services/dashboardApi';
 import { formatCurrency, formatDate, formatTime } from '@/services/mockData';
 
@@ -461,7 +462,7 @@ const Dashboard = () => {
 
                 return (
                   <motion.button
-                    key={payment.id}
+                    key={`${payment.type}-${payment.id}-${payment.date}`}
                     type="button"
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -474,20 +475,25 @@ const Dashboard = () => {
                           <Icon className="h-5 w-5 text-primary" />
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate font-semibold text-foreground text-sm">{payment.name}</p>
-                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mt-0.5">
-                            {payment.type}
+                          <p className="truncate font-semibold text-foreground">{payment.name}</p>
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                            {getPayoutTypeLabel(payment.type)}
                           </p>
                         </div>
                       </div>
-                      <div className="text-xs text-right shrink-0">
-                        <p className="font-bold text-foreground">
-                          {formatCurrency(payment.payoutAmount, payment.currency ?? 'NGN')}
-                        </p>
-                        <p className="text-muted-foreground mt-0.5">
-                          Due date - <span className="font-medium text-foreground">{formatDate(payment.date)}</span>
-                        </p>
+                      <Badge className={`${getPayoutStatusClassName(payment.status)} border-none text-[10px] font-bold capitalize`}>
+                        {getPayoutStatusLabel(payment.status)}
+                      </Badge>
+                    </div>
+
+                    <div className="flex items-end justify-between gap-3 text-sm">
+                      <div className="min-w-0">
+                        <p className="font-bold text-foreground">{formatCurrency(payment.payoutAmount, payment.currency)}</p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">{payment.note}</p>
                       </div>
+                      <p className="shrink-0 text-right text-xs text-muted-foreground">
+                        Due <span className="font-medium text-foreground">{formatDate(payment.date)}</span>
+                      </p>
                     </div>
                   </motion.button>
                 );
@@ -551,6 +557,57 @@ const Dashboard = () => {
   );
 };
 
+const getPayoutIcon = (payment: Pick<UpcomingPayoutItem, 'type'>) => {
+  const type = payment.type.toLowerCase();
+  if (type.includes('circle') || type.includes('ajo')) {
+    return Users;
+  }
+  if (type.includes('goal')) {
+    return Target;
+  }
+  if (type.includes('saving') || type.includes('thrift')) {
+    return PiggyBank;
+  }
+
+  return CreditCard;
+};
+
+const getPayoutTypeLabel = (type: string) => {
+  const normalized = type.toLowerCase();
+  if (normalized === 'group_goal') {
+    return 'Group Goal';
+  }
+  if (normalized === 'circle') {
+    return 'Circle';
+  }
+
+  return type.replaceAll('_', ' ');
+};
+
+const getPayoutStatusClassName = (status: string) => {
+  const normalized = status.toLowerCase();
+  if (normalized === 'overdue') {
+    return 'bg-destructive/10 text-destructive';
+  }
+  if (normalized === 'waiting_for_contributions') {
+    return 'bg-amber-50 text-amber-800';
+  }
+
+  return 'bg-success/10 text-success';
+};
+
+const getPayoutStatusLabel = (status: string) => {
+  const normalized = status.toLowerCase();
+  if (normalized === 'waiting_for_contributions') {
+    return 'Waiting';
+  }
+  if (normalized === 'overdue') {
+    return 'Overdue';
+  }
+
+  return 'Due';
+};
+
 const isUrgentContribution = (
   activity: any,
   circles: any[] = [],
@@ -594,6 +651,9 @@ const isUrgentContribution = (
   }
   if (frequency === 'weekly') {
     return diffMs <= 2 * 24 * 60 * 60 * 1000;
+  }
+  if (frequency === 'biweekly') {
+    return diffMs <= 4 * 24 * 60 * 60 * 1000;
   }
   if (frequency === 'monthly') {
     return diffMs <= 7 * 24 * 60 * 60 * 1000;
