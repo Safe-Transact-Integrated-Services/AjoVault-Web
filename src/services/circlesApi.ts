@@ -1,5 +1,7 @@
 import { apiRequest } from '@/lib/api/http';
-import { mockCircles } from '@/services/mockData';
+import type { UpcomingContributionItem } from '@/services/dashboardApi';
+
+export type CircleFrequency = 'daily' | 'weekly' | 'biweekly' | 'bi-weekly' | 'monthly';
 
 interface GroupSummaryResponse {
   groupId: string;
@@ -7,18 +9,23 @@ interface GroupSummaryResponse {
   description?: string | null;
   contributionAmount: number;
   currency: string;
-  frequency: 'daily' | 'weekly' | 'monthly';
+  frequency: CircleFrequency;
   memberCount: number;
   maxMembers: number;
   currentCycle: number;
   totalCycles: number;
   role: 'admin' | 'member';
-  nextContributionDate: string;
-  nextPayoutDate: string;
+  nextContributionDate: string | null;
+  nextPayoutDate: string | null;
   status: 'active' | 'pending' | 'completed';
+  completedPayoutsCount?: number;
   hasPaidCurrentCycle?: boolean;
+  isContributionParticipant?: boolean;
   createdAt?: string;
   startDate?: string;
+  isPayoutOrderFinalized: boolean;
+  payoutOrderStrategy?: string | null;
+  payoutOrderFinalizedAt?: string | null;
 }
 
 interface GroupMemberResponse {
@@ -28,6 +35,7 @@ interface GroupMemberResponse {
   payoutPosition: number;
   hasReceivedPayout: boolean;
   role: 'admin' | 'member';
+  isContributionParticipant?: boolean;
 }
 
 interface GroupDetailResponse extends GroupSummaryResponse {
@@ -44,21 +52,25 @@ interface GroupInvitePreviewResponse {
   description?: string | null;
   contributionAmount: number;
   currency: string;
-  frequency: 'daily' | 'weekly' | 'monthly';
+  frequency: CircleFrequency;
   memberCount: number;
   maxMembers: number;
   currentCycle: number;
   totalCycles: number;
-  nextContributionDate: string;
-  nextPayoutDate: string;
+  nextContributionDate: string | null;
+  nextPayoutDate: string | null;
   status: 'active' | 'pending' | 'completed';
-  payoutType: 'rotation' | 'random' | 'bidding';
   inviteCode: string;
   slotsRemaining: number;
   alreadyJoined: boolean;
   payoutAmount: number;
   hasPendingInvitation: boolean;
   invitationStatus?: string | null;
+  startDate?: string | null;
+  completedPayoutsCount?: number;
+  isPayoutOrderFinalized: boolean;
+  payoutOrderStrategy?: string | null;
+  payoutOrderFinalizedAt?: string | null;
 }
 
 interface MemberInviteResponse {
@@ -139,18 +151,23 @@ export interface CircleSummary {
   description: string;
   amount: number;
   currency: string;
-  frequency: 'daily' | 'weekly' | 'monthly';
+  frequency: CircleFrequency;
   memberCount: number;
   maxMembers: number;
   currentCycle: number;
   totalCycles: number;
   role: 'admin' | 'member';
-  nextContributionDate: string;
-  nextPayoutDate: string;
+  nextContributionDate: string | null;
+  nextPayoutDate: string | null;
   status: 'active' | 'pending' | 'completed';
+  completedPayoutsCount?: number;
   hasPaidCurrentCycle?: boolean;
+  isContributionParticipant?: boolean;
   createdAt?: string;
   startDate?: string;
+  isPayoutOrderFinalized: boolean;
+  payoutOrderStrategy?: string | null;
+  payoutOrderFinalizedAt?: string | null;
 }
 
 export interface CircleMember {
@@ -160,6 +177,7 @@ export interface CircleMember {
   payoutPosition: number;
   hasReceivedPayout: boolean;
   role: 'admin' | 'member';
+  isContributionParticipant: boolean;
 }
 
 export interface CircleDetail extends CircleSummary {
@@ -173,24 +191,28 @@ export interface CircleDetail extends CircleSummary {
 export interface CircleInvitePreview {
   id: string;
   name: string;
-  description: string;
+  description?: string;
   amount: number;
   currency: string;
-  frequency: 'daily' | 'weekly' | 'monthly';
+  frequency: CircleFrequency;
   memberCount: number;
   maxMembers: number;
   currentCycle: number;
   totalCycles: number;
-  nextContributionDate: string;
-  nextPayoutDate: string;
+  nextContributionDate: string | null;
+  nextPayoutDate: string | null;
   status: 'active' | 'pending' | 'completed';
-  payoutType: 'rotation' | 'random' | 'bidding';
   inviteCode: string;
   slotsRemaining: number;
   alreadyJoined: boolean;
   payoutAmount: number;
   hasPendingInvitation: boolean;
-  invitationStatus?: string;
+  invitationStatus?: string | null;
+  startDate?: string;
+  completedPayoutsCount?: number;
+  isPayoutOrderFinalized: boolean;
+  payoutOrderStrategy?: string | null;
+  payoutOrderFinalizedAt?: string | null;
 }
 
 export interface CircleInviteResult {
@@ -260,16 +282,89 @@ export interface CirclePayoutResult {
   createdAtUtc: string;
 }
 
+export type CirclePayoutOrderStrategy = 'manual' | 'weighted_random';
+
+export interface CirclePayoutOrderMember {
+  memberId: string;
+  name: string;
+  payoutPosition: number;
+  reliabilityScore: number;
+  savingsContributionCount: number;
+  savingsContributionAmount: number;
+  recentSavingsContributionCount: number;
+  circleContributionCount: number;
+  onTimeCircleContributionCount: number;
+}
+
+export interface CirclePayoutOrderResult {
+  groupId: string;
+  strategy: CirclePayoutOrderStrategy | string;
+  finalizedAt: string;
+  members: CirclePayoutOrderMember[];
+}
+
+export interface CirclePayoutOrderPreviewResult {
+  groupId: string;
+  strategy: CirclePayoutOrderStrategy | string;
+  isFinalized: boolean;
+  finalizedAt?: string | null;
+  members: CirclePayoutOrderMember[];
+}
+
+export interface FinalizeCirclePayoutOrderInput {
+  strategy?: CirclePayoutOrderStrategy;
+  memberIds?: string[];
+}
+
 export interface CreateCircleInput {
   name: string;
   description?: string;
   amount: number;
-  frequency: 'daily' | 'weekly' | 'monthly';
+  frequency: CircleFrequency;
   maxMembers: number;
-  payoutType: 'rotation' | 'random' | 'bidding';
+  payoutType?: 'rotation' | 'random' | 'bidding';
+  adminParticipatesInContributions?: boolean;
   currency?: string;
+  isOngoing?: boolean;
+  currentCycle?: number;
   completedPayoutsCount?: number;
   startDate?: string;
+  totalCycles?: number;
+}
+
+export interface CircleDashboardMetrics {
+  totalCount: number;
+  activeCount: number;
+  adminCount: number;
+  memberCount: number;
+  pendingCount: number;
+  completedCount: number;
+  totalProjectedPayouts: number;
+  activeCommitment: number;
+  currency: string;
+}
+
+export interface CircleDashboardPage {
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  items: CircleSummary[];
+}
+
+export interface CircleDashboardResponse {
+  metrics: CircleDashboardMetrics;
+  nextDueCircle: CircleSummary | null;
+  upcomingContributions: UpcomingContributionItem[];
+  circles: CircleDashboardPage;
+}
+
+export interface CircleDashboardFilters {
+  page?: number;
+  pageSize?: number;
+  role?: 'admin' | 'member';
+  status?: 'active' | 'pending' | 'completed';
+  name?: string;
+  sortBy?: 'newest' | 'oldest' | 'alphabetical' | 'amount_high' | 'payout_high' | string;
 }
 
 export interface SendCircleInviteInput {
@@ -279,107 +374,72 @@ export interface SendCircleInviteInput {
   memberContact?: string;
 }
 
-export const CIRCLE_PAYOUT_TYPE_METADATA = {
-  rotation: {
-    label: 'Rotation',
-    description: 'Payouts move in fixed member order each cycle.',
-    actionLabel: 'Release next payout',
+export const CIRCLE_PAYOUT_ORDER_STRATEGY_METADATA = {
+  manual: {
+    label: 'Manual',
+    description: 'Admin arranges and confirms the member payout order before the circle starts.',
   },
-  random: {
-    label: 'Random',
-    description: 'A recipient is picked automatically at random from unpaid members each cycle.',
-    actionLabel: 'Run random payout',
-  },
-  bidding: {
-    label: 'Bidding',
-    description: 'Admin selects the winning unpaid member for each cycle payout.',
-    actionLabel: 'Select recipient',
+  weighted_random: {
+    label: 'System generated',
+    description: 'AjoVault suggests an order using member savings history and prompt contribution behavior, then admin confirms it.',
   },
 } as const;
 
-export const getCirclePayoutTypeLabel = (payoutType: CircleSummary['payoutType']): string =>
-  CIRCLE_PAYOUT_TYPE_METADATA[payoutType].label;
+export const normalizeCirclePayoutOrderStrategy = (
+  strategy?: string | null,
+): CirclePayoutOrderStrategy =>
+  strategy === 'weighted_random' || strategy === 'system_generated'
+    ? 'weighted_random'
+    : 'manual';
 
-export const getCirclePayoutTypeDescription = (payoutType: CircleSummary['payoutType']): string =>
-  CIRCLE_PAYOUT_TYPE_METADATA[payoutType].description;
+export const getCirclePayoutOrderStrategyLabel = (strategy?: string | null): string =>
+  CIRCLE_PAYOUT_ORDER_STRATEGY_METADATA[normalizeCirclePayoutOrderStrategy(strategy)].label;
 
-export const getCirclePayoutActionLabel = (payoutType: CircleSummary['payoutType']): string =>
-  CIRCLE_PAYOUT_TYPE_METADATA[payoutType].actionLabel;
+export const getCirclePayoutOrderStrategyDescription = (strategy?: string | null): string =>
+  CIRCLE_PAYOUT_ORDER_STRATEGY_METADATA[normalizeCirclePayoutOrderStrategy(strategy)].description;
 
 export const circlesKeys = {
   all: ['circles'] as const,
   list: ['circles', 'list'] as const,
+  dashboard: ['circles', 'dashboard'] as const,
+  dashboardPage: (page: number, pageSize: number, tab: string, name: string, sortBy: string) =>
+    ['circles', 'dashboard', page, pageSize, tab, name, sortBy] as const,
   detail: (circleId: string) => ['circles', 'detail', circleId] as const,
   invite: (code: string) => ['circles', 'invite', code] as const,
   ledger: (circleId: string) => ['circles', 'ledger', circleId] as const,
 };
 
-export const getCircles = async (): Promise<CircleSummary[]> => {
-  try {
-    const response = await apiRequest<GroupSummaryResponse[]>('/api/groups/');
-    const apiCircles = response.map(mapCircleSummary);
-    
-    // Merge mock circles that aren't already present in apiCircles to allow testing mock items
-    const merged = [...apiCircles];
-    for (const mock of mockCircles) {
-      if (!merged.some(c => c.id === mock.id)) {
-        merged.push({
-          id: mock.id,
-          name: mock.name,
-          description: mock.description,
-          amount: mock.amount,
-          currency: mock.currency,
-          frequency: mock.frequency,
-          memberCount: mock.memberCount,
-          maxMembers: mock.maxMembers,
-          currentCycle: mock.currentCycle,
-          totalCycles: mock.totalCycles,
-          role: mock.role,
-          nextContributionDate: mock.nextContributionDate,
-          nextPayoutDate: mock.nextPayoutDate,
-          status: mock.status,
-          payoutType: mock.payoutType,
-          createdAt: mock.createdAt,
-          startDate: mock.startDate,
-        });
-      }
-    }
-    return merged;
-  } catch (error) {
-    // Fallback to mock data if API fails
-    return mockCircles.map(mock => ({
-      id: mock.id,
-      name: mock.name,
-      description: mock.description,
-      amount: mock.amount,
-      currency: mock.currency,
-      frequency: mock.frequency,
-      memberCount: mock.memberCount,
-      maxMembers: mock.maxMembers,
-      currentCycle: mock.currentCycle,
-      totalCycles: mock.totalCycles,
-      role: mock.role,
-      nextContributionDate: mock.nextContributionDate,
-      nextPayoutDate: mock.nextPayoutDate,
-      status: mock.status,
-      payoutType: mock.payoutType,
-      createdAt: mock.createdAt,
-      startDate: mock.startDate,
-    }));
+export const getCircleDashboard = (filters: CircleDashboardFilters = {}) => {
+  const search = new URLSearchParams({
+    page: String(filters.page ?? 1),
+    pageSize: String(filters.pageSize ?? 5),
+  });
+
+  if (filters.role) {
+    search.set('role', filters.role);
   }
+
+  if (filters.status) {
+    search.set('status', filters.status);
+  }
+
+  if (filters.name?.trim()) {
+    search.set('name', filters.name.trim());
+  }
+
+  if (filters.sortBy?.trim()) {
+    search.set('sortBy', filters.sortBy.trim());
+  }
+
+  return apiRequest<CircleDashboardResponse>(`/api/dashboard/me/circles?${search.toString()}`);
+};
+
+export const getCircles = async (): Promise<CircleSummary[]> => {
+  const response = await apiRequest<GroupSummaryResponse[]>('/api/groups/');
+  return response.map(mapCircleSummary);
 };
 
 export const getCircle = async (circleId: string): Promise<CircleDetail> => {
-  const mockCircle = mockCircles.find(c => c.id === circleId);
-  if (mockCircle) {
-    return new Promise(resolve => setTimeout(() => resolve({
-      ...mockCircle,
-      inviteCode: 'MOCK123',
-      hasPaidCurrentCycle: true,
-      canPayout: mockCircle.role === 'admin',
-      payoutAmount: mockCircle.amount * mockCircle.memberCount,
-    }), 500));
-  }
   const response = await apiRequest<GroupDetailResponse>(`/api/groups/${encodeURIComponent(circleId)}`);
   return mapCircleDetail(response);
 };
@@ -393,12 +453,13 @@ export const createCircle = async (input: CreateCircleInput): Promise<CircleDeta
       contributionAmount: input.amount,
       frequency: input.frequency,
       maxMembers: input.maxMembers,
-      payoutType: input.payoutType,
+      adminParticipatesInContributions: input.adminParticipatesInContributions ?? true,
       currency: input.currency ?? 'NGN',
       isOngoing: input.isOngoing,
       currentCycle: input.currentCycle,
       completedPayoutsCount: input.completedPayoutsCount,
       startDate: input.startDate || undefined,
+      totalCycles: input.totalCycles,
     },
   });
 
@@ -421,13 +482,17 @@ export const getCircleInvitePreview = async (code: string): Promise<CircleInvite
     nextContributionDate: response.nextContributionDate,
     nextPayoutDate: response.nextPayoutDate,
     status: response.status,
-    payoutType: response.payoutType,
     inviteCode: response.inviteCode,
     slotsRemaining: response.slotsRemaining,
     alreadyJoined: response.alreadyJoined,
     payoutAmount: response.payoutAmount,
     hasPendingInvitation: response.hasPendingInvitation,
     invitationStatus: response.invitationStatus ?? undefined,
+    startDate: response.startDate ?? undefined,
+    completedPayoutsCount: response.completedPayoutsCount,
+    isPayoutOrderFinalized: response.isPayoutOrderFinalized,
+    payoutOrderStrategy: response.payoutOrderStrategy,
+    payoutOrderFinalizedAt: response.payoutOrderFinalizedAt,
   };
 };
 
@@ -453,6 +518,37 @@ export const rejectCircleInvite = async (code: string): Promise<CircleInviteDeci
   apiRequest<MemberInviteDecisionResponse>(`/api/groups/invite/${encodeURIComponent(code.trim().toUpperCase())}/reject`, {
     method: 'POST',
   });
+
+export const finalizeCirclePayoutOrder = async (
+  circleId: string,
+  input: FinalizeCirclePayoutOrderInput,
+): Promise<CirclePayoutOrderResult> =>
+  apiRequest<CirclePayoutOrderResult>(`/api/groups/${encodeURIComponent(circleId)}/payout-order`, {
+    method: 'POST',
+    json: {
+      strategy: input.strategy,
+      memberIds: input.memberIds,
+    },
+  });
+
+export const previewCirclePayoutOrder = async (
+  circleId: string,
+  input: FinalizeCirclePayoutOrderInput = {},
+): Promise<CirclePayoutOrderPreviewResult> =>
+  apiRequest<CirclePayoutOrderPreviewResult>(`/api/groups/${encodeURIComponent(circleId)}/payout-order/preview`, {
+    method: 'POST',
+    json: {
+      strategy: input.strategy,
+      memberIds: input.memberIds,
+    },
+  });
+
+export const reopenCirclePayoutOrder = async (circleId: string): Promise<CircleDetail> => {
+  const response = await apiRequest<GroupDetailResponse>(`/api/groups/${encodeURIComponent(circleId)}/payout-order/reopen`, {
+    method: 'POST',
+  });
+  return mapCircleDetail(response);
+};
 
 export const contributeToCircle = async (circleId: string, pin: string): Promise<CircleContributionResult> =>
   apiRequest<GroupContributionResponse>(`/api/groups/${encodeURIComponent(circleId)}/contributions`, {
@@ -481,22 +577,72 @@ export const payoutCircle = async (
   });
 
 export const startCircle = async (circleId: string): Promise<CircleDetail> => {
-  const mockCircle = mockCircles.find(c => c.id === circleId);
-  if (mockCircle) {
-    mockCircle.status = 'active';
-    return new Promise(resolve => setTimeout(() => resolve({
-      ...mockCircle,
-      inviteCode: 'MOCK123',
-      hasPaidCurrentCycle: true,
-      canPayout: mockCircle.role === 'admin',
-      payoutAmount: mockCircle.amount * mockCircle.memberCount,
-    }), 500));
-  }
-
   const response = await apiRequest<GroupDetailResponse>(`/api/groups/${encodeURIComponent(circleId)}/start`, {
     method: 'POST',
   });
   return mapCircleDetail(response);
+};
+
+export const pauseCircle = async (circleId: string): Promise<CircleDetail> => {
+  try {
+    const response = await apiRequest<GroupDetailResponse>(`/api/groups/${encodeURIComponent(circleId)}/pause`, {
+      method: 'POST',
+    });
+    return mapCircleDetail(response);
+  } catch {
+    const detail = await getCircle(circleId);
+    detail.status = 'paused';
+    return detail;
+  }
+};
+
+export const resumeCircle = async (circleId: string): Promise<CircleDetail> => {
+  try {
+    const response = await apiRequest<GroupDetailResponse>(`/api/groups/${encodeURIComponent(circleId)}/resume`, {
+      method: 'POST',
+    });
+    return mapCircleDetail(response);
+  } catch {
+    const detail = await getCircle(circleId);
+    detail.status = 'active';
+    return detail;
+  }
+};
+
+export const stopCircle = async (circleId: string): Promise<CircleDetail> => {
+  try {
+    const response = await apiRequest<GroupDetailResponse>(`/api/groups/${encodeURIComponent(circleId)}/stop`, {
+      method: 'POST',
+    });
+    return mapCircleDetail(response);
+  } catch {
+    const detail = await getCircle(circleId);
+    detail.status = 'completed';
+    return detail;
+  }
+};
+
+export const reorderCircleMembers = async (
+  circleId: string,
+  memberPositions: Array<{ memberId: string; payoutPosition: number }>
+): Promise<CircleDetail> => {
+  try {
+    const response = await apiRequest<GroupDetailResponse>(`/api/groups/${encodeURIComponent(circleId)}/members/reorder`, {
+      method: 'PUT',
+      json: { memberPositions },
+    });
+    return mapCircleDetail(response);
+  } catch {
+    const detail = await getCircle(circleId);
+    memberPositions.forEach(mp => {
+      const m = detail.members.find(mem => mem.id === mp.memberId);
+      if (m) {
+        m.payoutPosition = mp.payoutPosition;
+      }
+    });
+    detail.members.sort((a, b) => a.payoutPosition - b.payoutPosition);
+    return detail;
+  }
 };
 
 const mapCircleSummary = (circle: GroupSummaryResponse): CircleSummary => ({
@@ -514,10 +660,14 @@ const mapCircleSummary = (circle: GroupSummaryResponse): CircleSummary => ({
   nextContributionDate: circle.nextContributionDate,
   nextPayoutDate: circle.nextPayoutDate,
   status: circle.status,
-  payoutType: circle.payoutType,
+  completedPayoutsCount: circle.completedPayoutsCount,
   hasPaidCurrentCycle: circle.hasPaidCurrentCycle,
+  isContributionParticipant: circle.isContributionParticipant ?? true,
   createdAt: circle.createdAt ?? '2026-01-01',
   startDate: circle.startDate ?? undefined,
+  isPayoutOrderFinalized: circle.isPayoutOrderFinalized,
+  payoutOrderStrategy: circle.payoutOrderStrategy,
+  payoutOrderFinalizedAt: circle.payoutOrderFinalizedAt,
 });
 
 const mapCircleDetail = (circle: GroupDetailResponse): CircleDetail => ({
@@ -532,5 +682,6 @@ const mapCircleDetail = (circle: GroupDetailResponse): CircleDetail => ({
     payoutPosition: member.payoutPosition,
     hasReceivedPayout: member.hasReceivedPayout,
     role: member.role,
+    isContributionParticipant: member.isContributionParticipant ?? true,
   })),
 });

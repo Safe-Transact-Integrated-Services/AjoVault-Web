@@ -36,6 +36,9 @@ const CircleInvite = () => {
   }
 
   const inviteLink = `${window.location.origin}/circles/join/${circle.inviteCode}`;
+  const canInvite = circle.status === 'pending'
+    && !circle.isPayoutOrderFinalized
+    && circle.memberCount < circle.maxMembers;
 
   const handleShare = async () => {
     try {
@@ -58,6 +61,11 @@ const CircleInvite = () => {
       return;
     }
 
+    if (!canInvite) {
+      toast.error('Reopen the payout order before inviting more members.');
+      return;
+    }
+
     await sendCircleInvite({
       circleId: id,
       channel: 'platform',
@@ -68,6 +76,11 @@ const CircleInvite = () => {
 
   const handleContactInvite = async (contact: string, channel: 'email' | 'sms') => {
     if (!id) {
+      return;
+    }
+
+    if (!canInvite) {
+      toast.error('Reopen the payout order before inviting more members.');
       return;
     }
 
@@ -89,6 +102,16 @@ const CircleInvite = () => {
       <p className="mb-6 text-sm text-muted-foreground">
         {circle.name} - {circle.memberCount}/{circle.maxMembers} members
       </p>
+
+      {!canInvite && (
+        <Card className="mb-5 border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          {circle.isPayoutOrderFinalized
+            ? 'Invites are locked because the payout order is confirmed. Reopen the payout order from the circle page before inviting more members.'
+            : circle.status !== 'pending'
+              ? 'Invites are only available before the circle starts.'
+              : 'This circle has no remaining member slots.'}
+        </Card>
+      )}
 
       <Card className="space-y-4 p-5">
         <div className="flex items-center gap-2 text-sm font-medium text-foreground">
@@ -112,6 +135,7 @@ const CircleInvite = () => {
         className="mt-5"
         onInvite={handleSend}
         onInviteContact={handleContactInvite}
+        disabled={!canInvite}
         showDirectContactInvite
         title="Invite Members"
         description="Use one search box to invite AjoVault users or enter an email address or phone number for non-members."
@@ -120,7 +144,6 @@ const CircleInvite = () => {
       <Card className="mt-5 space-y-2 p-4 text-sm">
         <div className="flex justify-between"><span className="text-muted-foreground">Contribution</span><span className="font-medium">{formatCurrency(circle.amount)} / {circle.frequency}</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">Slots Remaining</span><span className="font-medium">{circle.maxMembers - circle.memberCount}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Payout Type</span><span className="font-medium capitalize">{circle.payoutType}</span></div>
       </Card>
     </div>
   );

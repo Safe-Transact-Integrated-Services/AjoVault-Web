@@ -76,7 +76,7 @@ const Notifications = () => {
     await markNotificationRead(notification.id);
     toast.success('Invitation accepted! You joined the group.');
     setTimeout(() => {
-      navigate(notification.link || '/groups');
+      navigate(notification.link || '/clicks');
     }, 800);
   };
 
@@ -84,7 +84,7 @@ const Notifications = () => {
     e.stopPropagation();
     setInviteStatusMap(prev => ({ ...prev, [notificationId]: 'rejected' }));
     await markNotificationRead(notificationId);
-    toast.info('Group invitation declined.');
+    toast.info('Click invitation declined.');
   };
 
   return (

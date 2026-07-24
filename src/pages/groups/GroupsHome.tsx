@@ -101,7 +101,6 @@ interface Group {
   nextContributionDate: string;
   nextPayoutDate: string;
   status: 'active' | 'pending' | 'completed';
-  payoutType: 'rotation' | 'random' | 'bidding';
   createdAt: string;
   members: GroupMember[];
 }
@@ -122,7 +121,6 @@ const initialGroups: Group[] = [
     nextContributionDate: '2026-07-25',
     nextPayoutDate: '2026-07-28',
     status: 'active',
-    payoutType: 'rotation',
     createdAt: '2026-07-01',
     members: [
       { id: 'm1', name: 'Adaeze Okafor', email: 'adaeze@email.com', phone: '+234 802 111 2222', contact: 'adaeze@email.com', role: 'admin', hasPaid: true, payoutPosition: 1 },
@@ -147,7 +145,6 @@ const initialGroups: Group[] = [
     nextContributionDate: '2026-08-01',
     nextPayoutDate: '2026-08-05',
     status: 'active',
-    payoutType: 'bidding',
     createdAt: '2026-07-15',
     members: [
       { id: 'm10', name: 'Yusuf K.', email: 'yusuf@email.com', phone: '+234 812 345 6789', contact: 'yusuf@email.com', role: 'admin', hasPaid: true, payoutPosition: 1 },
@@ -171,7 +168,6 @@ const initialGroups: Group[] = [
     nextContributionDate: '2026-08-10',
     nextPayoutDate: '2026-08-15',
     status: 'pending',
-    payoutType: 'bidding',
     createdAt: '2026-07-20',
     members: [
       { id: 'm20', name: 'Adaeze Okafor', email: 'adaeze@email.com', phone: '+234 802 111 2222', contact: 'adaeze@email.com', role: 'admin', hasPaid: false, payoutPosition: 1 },
@@ -262,15 +258,16 @@ const initialNotifications: GroupNotification[] = [
 interface PhoneContact {
   name: string;
   contact: string;
+  circleName?: string;
 }
 
 const mockPhoneContacts: PhoneContact[] = [
-  { name: 'Chinedu O.', contact: 'chinedu@email.com' },
-  { name: 'Tunde W.', contact: 'tunde@email.com' },
-  { name: 'Zainab B.', contact: 'zainab@email.com' },
-  { name: 'Bisi A.', contact: 'bisi@email.com' },
-  { name: 'Kunle S.', contact: '+234 803 111 2222' },
-  { name: 'Halima F.', contact: 'halima@email.com' },
+  { name: 'Chinedu O.', contact: 'chinedu@email.com', circleName: 'Youth Empowerment Club' },
+  { name: 'Tunde W.', contact: 'tunde@email.com', circleName: 'Tech Founders Cooperative' },
+  { name: 'Zainab B.', contact: 'zainab@email.com', circleName: 'Youth Empowerment Club' },
+  { name: 'Bisi A.', contact: 'bisi@email.com', circleName: 'Lagos Investment Circle' },
+  { name: 'Kunle S.', contact: '+234 803 111 2222', circleName: 'Tech Founders Cooperative' },
+  { name: 'Halima F.', contact: 'halima@email.com', circleName: 'Youth Empowerment Club' },
 ];
 
 const GroupsHome = () => {
@@ -311,7 +308,6 @@ const GroupsHome = () => {
   const [newGroupAmount, setNewGroupAmount] = useState('');
   const [newGroupFreq, setNewGroupFreq] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
   const [newGroupMaxMembers, setNewGroupMaxMembers] = useState('10');
-  const [newGroupPayoutType, setNewGroupPayoutType] = useState<'rotation' | 'random' | 'bidding'>('rotation');
 
   // Group creation members state
   const [addedGroupMembers, setAddedGroupMembers] = useState<Array<{ name: string; contact: string }>>([]);
@@ -319,6 +315,24 @@ const GroupsHome = () => {
   const [isManualAddOpen, setIsManualAddOpen] = useState(false);
   const [manualName, setManualName] = useState('');
   const [manualContact, setManualContact] = useState('');
+
+  // Platform User Import Modal states
+  const [importSearchQuery, setImportSearchQuery] = useState('');
+  const [selectedCircleFilter, setSelectedCircleFilter] = useState('all');
+
+  const filteredPhoneContacts = useMemo(() => {
+    return mockPhoneContacts.filter(contact => {
+      const q = importSearchQuery.trim().toLowerCase();
+      const matchesSearch = !q ||
+        contact.name.toLowerCase().includes(q) ||
+        contact.contact.toLowerCase().includes(q);
+      
+      const matchesCircle = selectedCircleFilter === 'all' ||
+        contact.circleName === selectedCircleFilter;
+
+      return matchesSearch && matchesCircle;
+    });
+  }, [importSearchQuery, selectedCircleFilter]);
 
   // Derive receivedInvites dynamically from unresolved invite notifications
   const receivedInvites = useMemo(() => {
@@ -444,7 +458,6 @@ const GroupsHome = () => {
       nextContributionDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       nextPayoutDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       status: 'pending',
-      payoutType: newGroupPayoutType,
       createdAt: new Date().toISOString().split('T')[0],
       members: mappedMembers
     };
@@ -459,7 +472,6 @@ const GroupsHome = () => {
     setNewGroupAmount('');
     setNewGroupFreq('weekly');
     setNewGroupMaxMembers('10');
-    setNewGroupPayoutType('rotation');
     setAddedGroupMembers([]);
 
     toast.success(`Group "${createdGroup.name}" created successfully!`);
@@ -472,7 +484,6 @@ const GroupsHome = () => {
     setNewGroupAmount(group.amount.toString());
     setNewGroupFreq(group.frequency);
     setNewGroupMaxMembers(group.maxMembers.toString());
-    setNewGroupPayoutType(group.payoutType);
     setIsCreateModalOpen(true);
     toast.info('Autofilled form with previous group data.');
   };
@@ -808,7 +819,6 @@ const GroupsHome = () => {
       nextContributionDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       nextPayoutDate: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       status: 'active',
-      payoutType: 'rotation',
       createdAt: new Date().toISOString().split('T')[0],
       members: [
         { id: 'm1', name: invite.creatorName || 'Chidi N.', contact: 'creator@email.com', role: 'admin', hasPaid: true, payoutPosition: 1 },
@@ -956,8 +966,8 @@ const GroupsHome = () => {
         <div className="w-full space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="font-display text-2xl font-bold text-foreground">Groups</h1>
-              <p className="text-xs text-muted-foreground mt-0.5">Manage contribution groups and invitation requests.</p>
+              <h1 className="font-display text-2xl font-bold text-foreground">Clics</h1>
+              <p className="text-xs text-muted-foreground mt-0.5">Manage contribution clics and invitation requests.</p>
             </div>
             <div className="flex items-center gap-2">
               {/* Create Group Button */}
@@ -965,7 +975,7 @@ const GroupsHome = () => {
                 onClick={() => setIsCreateModalOpen(true)}
                 className="flex items-center gap-1.5 rounded-xl bg-accent px-3 py-2 text-xs font-bold text-accent-foreground shadow-sm transition-all hover:bg-accent/90"
               >
-                <Plus className="h-4 w-4" /> Create Group
+                <Plus className="h-4 w-4" /> Create Clic
               </button>
             </div>
           </div>
@@ -1013,7 +1023,7 @@ const GroupsHome = () => {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="Search groups..."
+                placeholder="Search clicks..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 h-10 rounded-xl"
@@ -1039,7 +1049,7 @@ const GroupsHome = () => {
           <div className="space-y-3">
             {filteredGroups.length === 0 ? (
               <div className="rounded-2xl border border-border bg-card p-6 text-center text-sm text-muted-foreground shadow-sm">
-                No groups found. Create one to get started!
+                No clicks found. Create one to get started!
               </div>
             ) : (
               filteredGroups.map(group => {
@@ -1543,16 +1553,16 @@ const GroupsHome = () => {
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
         <DialogContent className="w-[92%] max-w-[450px] rounded-3xl p-6 gap-5 bg-card">
           <DialogHeader className="text-left font-display">
-            <DialogTitle className="text-xl font-bold text-foreground">Create New Group</DialogTitle>
+            <DialogTitle className="text-xl font-bold text-foreground">Create New Clic</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground mt-1">
-              Start a new peer-to-peer contribution group with custom frequencies and rules.
+              Start a new peer-to-peer contribution group with custom contribution details.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleCreateGroup} className="space-y-4">
             
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Group Name</label>
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Clic Name</label>
               <Input
                 placeholder="e.g. Lagos Investors Guild"
                 value={newGroupName}
@@ -1620,7 +1630,7 @@ const GroupsHome = () => {
                 type="submit"
                 className="h-11 flex-1 rounded-xl font-bold bg-accent text-accent-foreground"
               >
-                Create Group
+                Create Clic
               </Button>
             </div>
 
@@ -1855,48 +1865,104 @@ const GroupsHome = () => {
 
       {/* GROUP CREATION: IMPORT PLATFORM USERS DIALOG */}
       <Dialog open={isGroupContactDialogOpen} onOpenChange={setIsGroupContactDialogOpen}>
-        <DialogContent className="w-[90%] max-w-[400px] rounded-3xl p-6 bg-card gap-4">
+        <DialogContent className="w-[90%] max-w-[420px] rounded-3xl p-6 bg-card gap-4">
           <DialogHeader className="text-left font-display">
             <DialogTitle className="text-lg font-bold text-foreground">Import Platform Users</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Select existing registered users from the system to import into the group.
+              Select existing registered users from the system or your admin circles to import into the click.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-            {mockPhoneContacts.map((contact, idx) => {
-              const isAdded = addedGroupMembers.some(m => m.contact === contact.contact);
-              return (
-                <div
-                  key={idx}
-                  onClick={() => {
-                    if (isAdded) {
-                      setAddedGroupMembers(prev => prev.filter(m => m.contact !== contact.contact));
-                    } else {
-                      setAddedGroupMembers(prev => [...prev, { name: contact.name, contact: contact.contact }]);
-                    }
-                  }}
-                  className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all text-xs ${
-                    isAdded
-                      ? 'border-accent bg-accent/5'
-                      : 'border-border bg-card hover:border-accent hover:bg-accent/5'
-                  }`}
-                >
-                  <div>
-                    <p className="font-semibold text-foreground">{contact.name}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{contact.contact}</p>
+          {/* Search Input Box */}
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Search platform users..."
+              value={importSearchQuery}
+              onChange={(e) => setImportSearchQuery(e.target.value)}
+              className="pl-9 pr-8 h-10 rounded-xl text-xs"
+            />
+            {importSearchQuery && (
+              <button
+                type="button"
+                onClick={() => setImportSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Admin Circles Filter Badges */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+            {['all', 'Youth Empowerment Club', 'Tech Founders Cooperative', 'Lagos Investment Circle'].map((circleName) => (
+              <button
+                key={circleName}
+                type="button"
+                onClick={() => setSelectedCircleFilter(circleName)}
+                className={`px-3 py-1 text-[10px] font-bold rounded-full whitespace-nowrap transition-all ${
+                  selectedCircleFilter === circleName
+                    ? 'bg-accent text-accent-foreground shadow-sm'
+                    : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                {circleName === 'all' ? 'All' : circleName}
+              </button>
+            ))}
+          </div>
+
+          {/* User List */}
+          <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1.5 thin-scrollbar">
+            {filteredPhoneContacts.length === 0 ? (
+              <div className="py-8 text-center text-xs text-muted-foreground">
+                No platform users found matching your search.
+              </div>
+            ) : (
+              filteredPhoneContacts.map((contact, idx) => {
+                const isAdded = addedGroupMembers.some(m => m.contact === contact.contact);
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      if (isAdded) {
+                        setAddedGroupMembers(prev => prev.filter(m => m.contact !== contact.contact));
+                      } else {
+                        setAddedGroupMembers(prev => [...prev, { name: contact.name, contact: contact.contact }]);
+                      }
+                    }}
+                    className={`flex items-center justify-between p-3.5 rounded-2xl border cursor-pointer transition-all text-xs ${
+                      isAdded
+                        ? 'border-accent bg-accent/5 ring-1 ring-accent/30'
+                        : 'border-border bg-card hover:border-accent/40 hover:shadow-sm'
+                    }`}
+                  >
+                    <div className="min-w-0 pr-2">
+                      <p className="font-bold text-foreground truncate">{contact.name}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{contact.contact}</p>
+                      {contact.circleName && (
+                        <p className="text-[9px] text-accent/80 font-medium mt-0.5 truncate">Circle: {contact.circleName}</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className={`h-8 px-3.5 text-[10px] font-extrabold uppercase tracking-wider rounded-full border transition-all shrink-0 ${
+                        isAdded
+                          ? 'bg-accent text-accent-foreground border-accent shadow-sm'
+                          : 'bg-background hover:bg-muted text-foreground border-border'
+                      }`}
+                    >
+                      {isAdded ? 'Selected' : 'Select'}
+                    </button>
                   </div>
-                  <Badge variant={isAdded ? "default" : "outline"} className="text-[9px] uppercase tracking-wide">
-                    {isAdded ? 'Added' : 'Select'}
-                  </Badge>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
 
           <Button
             onClick={() => setIsGroupContactDialogOpen(false)}
-            className="w-full h-11 rounded-xl text-xs font-bold bg-accent text-accent-foreground mt-2"
+            className="w-full h-11 rounded-xl text-xs font-bold bg-accent text-accent-foreground mt-1 shadow-md"
           >
             Done
           </Button>

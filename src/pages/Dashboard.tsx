@@ -38,13 +38,15 @@ import { groupGoalsKeys, getGroupGoals } from '@/services/groupGoalsApi';
 import {
   dashboardKeys,
   getDashboardSummary,
+  getUpcomingPayouts,
   getUpcomingContributions,
   openUpcomingContribution,
+  openUpcomingPayout,
   compareUpcomingContributionsByDate,
   filterUpcomingContributions,
+  type UpcomingPayoutItem,
 } from '@/services/dashboardApi';
 import { formatCurrency, formatDate, formatTime } from '@/services/mockData';
-import { mockUpcomingPayments, getStatusClassName, getStatusLabel } from '@/pages/UpcomingPayments';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -95,6 +97,11 @@ const Dashboard = () => {
   const upcomingContributionsQuery = useQuery({
     queryKey: dashboardKeys.upcomingContributionsPreview,
     queryFn: () => getUpcomingContributions(1, 10),
+    enabled: !!user,
+  });
+  const upcomingPayoutsQuery = useQuery({
+    queryKey: dashboardKeys.upcomingPayoutsPreview,
+    queryFn: () => getUpcomingPayouts(1, 3),
     enabled: !!user,
   });
 
@@ -262,12 +269,14 @@ const Dashboard = () => {
                     const isOverdue = activityDate < today && contributionStatus !== 'paid' && contributionStatus !== 'completed';
 
                     const isOverdueContribution = contributionStatus === 'missed' || contributionStatus === 'overdue' || isOverdue;
+                    const typeName = (activity.type || 'circle').toLowerCase();
+                    const ctaText = isOverdueContribution
+                      ? `Your ${typeName} contribution was due on ${formatDate(activity.date)} — Pay now`
+                      : `Your ${typeName} contribution is due by ${formatDate(activity.date)}`;
+
                     const contributionStatusClass = isOverdueContribution
-                      ? 'bg-red-50 text-red-700 ring-1 ring-red-200'
-                      : 'bg-amber-50 text-amber-800 ring-1 ring-amber-200';
-                    const contributionStatusLabel = isOverdueContribution
-                      ? 'Overdue'
-                      : contributionStatus === 'upcoming' ? 'Due' : activity.status;
+                      ? 'bg-red-500/30 text-red-100 ring-1 ring-red-400/50'
+                      : 'bg-white/20 text-white ring-1 ring-white/30';
 
                     return (
                       <CarouselItem key={activity.id} className={`${sortedUpcomingActivities.length === 1 ? 'basis-full' : 'basis-1/2'} pl-2`}>
@@ -290,9 +299,9 @@ const Dashboard = () => {
                               {activity.type ? `${activity.type} ` : ''}
                             </p>
                             <p className="font-display text-[12px] font-bold text-white mb-0.5 truncate">{activity.name}</p>
-                            <p className="text-lg font-bold tracking-tight text-white mb-2" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>{formatCurrency(activity.contributionAmount, 'NGN')}</p>
-                            <div className={`flex items-center gap-1.5 text-[9px] font-semibold w-fit px-2 py-0.5 rounded-full shadow-sm ${contributionStatusClass}`}>
-                              <span className="capitalize">{contributionStatusLabel} {formatDate(activity.date)}</span>
+                            <p className="text-lg font-bold tracking-tight text-white mb-1.5" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>{formatCurrency(activity.contributionAmount, 'NGN')}</p>
+                            <div className={`mt-1 flex items-center gap-1.5 text-[10px] font-semibold w-full px-2 py-1 rounded-lg shadow-sm ${contributionStatusClass}`}>
+                              <span className="truncate">{ctaText}</span>
                             </div>
                           </div>
                         </div>
@@ -337,7 +346,7 @@ const Dashboard = () => {
           <div className="flex items-center justify-between mt-auto">
             <div className="min-w-0 pr-1">
               <p className="text-xs font-semibold text-blue-700 truncate">Circles (Ajo)</p>
-              <p className="text-[9px] text-muted-foreground truncate mt-0.5">Manage community Groups</p>
+              <p className="text-[9px] text-muted-foreground truncate mt-0.5">Manage community Clics</p>
             </div>
             <ArrowRight className="h-3.5 w-3.5 shrink-0 text-blue-700" />
           </div>
@@ -435,115 +444,184 @@ const Dashboard = () => {
         <ArrowRight className="h-4 w-4 text-muted-foreground" />
       </button>
 
-      {/* <div className="mb-6 rounded-[20px] bg-white p-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-border/50"> */}
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-display text-sm font-bold text-[#1a2b4c]">Upcoming Payout</h2>
-        <button onClick={() => navigate('/upcoming-payments')} className="text-[13px] font-medium text-blue-500 hover:text-blue-600">View all</button>
-      </div>
-      <div className="space-y-3">
-        {mockUpcomingPayments.slice(0, 3).map(payment => {
-          const t = payment.type.toLowerCase();
-          let Icon = CreditCard;
-          if (t.includes('circle') || t.includes('ajo')) Icon = Users;
-          else if (t.includes('goal')) Icon = Target;
-          else if (t.includes('saving') || t.includes('thrift')) Icon = PiggyBank;
-
-          return (
-            <motion.button
-              key={payment.id}
-              type="button"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              onClick={() => {
-                const pt = payment.type.toLowerCase();
-                if (pt.includes('circle') || pt.includes('ajo')) {
-                  navigate(`/circles/${payment.referenceId}`);
-                } else if (pt.includes('goal')) {
-                  navigate(`/group-goals/${payment.referenceId}`);
-                } else {
-                  navigate(`/savings/${payment.referenceId}`);
-                }
-              }}
-              className="w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/30"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                    <Icon className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold text-foreground text-sm">{payment.title}</p>
-                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground mt-0.5">
-                      {payment.type}
-                    </p>
-                  </div>
+      {/* Combined Upcoming Payout & Recent Transaction Card */}
+      {((upcomingPayoutsQuery.isLoading || (upcomingPayoutsQuery.data?.items ?? []).length > 0) || (dashboardQuery.isLoading || recentActivities.length > 0)) && (
+        <div className="pt-4 pb-8">
+          <div className="rounded-[20px] bg-white p-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-border/50 space-y-6">
+            
+            {/* Upcoming Payout Sub-Section */}
+            {(upcomingPayoutsQuery.isLoading || (upcomingPayoutsQuery.data?.items ?? []).length > 0) && (
+              <div>
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="font-display text-[15px] font-bold text-[#1a2b4c]">Upcoming Payout</h2>
+                  <button onClick={() => navigate('/upcoming-payments')} className="text-[13px] font-medium text-blue-500 hover:text-blue-600">View all</button>
                 </div>
-                <div className="text-xs text-right shrink-0">
-                  <p className="text-muted-foreground">
-                    Due date - <span className="font-medium text-foreground">{payment.date}</span>
-                  </p>
-                </div>
-              </div>
-            </motion.button>
-          );
-        })}
-      </div>
-      {/* </div> */}
+                <div className="divide-y divide-border/50">
+                  {upcomingPayoutsQuery.isLoading ? (
+                    <div className="py-3 text-sm text-muted-foreground">Loading upcoming payouts...</div>
+                  ) : (
+                    (upcomingPayoutsQuery.data?.items ?? []).slice(0, 3).map(payment => {
+                      const t = (payment.type || '').toLowerCase();
+                      let Icon = CreditCard;
+                      if (t.includes('circle') || t.includes('ajo')) Icon = Users;
+                      else if (t.includes('goal')) Icon = Target;
+                      else if (t.includes('saving') || t.includes('thrift')) Icon = PiggyBank;
 
-      <div className='pt-8 pb-8'>
-        <div className="rounded-[20px] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-border/50 p-4">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-display text-[15px] font-bold text-[#1a2b4c]">Recent Transaction</h2>
-            <button onClick={() => navigate('/transactions')} className="text-[13px] font-medium text-blue-500 hover:text-blue-600">See all</button>
-          </div>
+                      return (
+                        <div
+                          key={`${payment.type}-${payment.id}-${payment.date}`}
+                          onClick={() => openUpcomingPayout(payment, navigate)}
+                          className="flex cursor-pointer items-start justify-between gap-3 py-3 first:pt-0 last:pb-0 transition-colors hover:bg-muted/30 rounded-xl px-1"
+                        >
+                          <div className="flex min-w-0 flex-1 items-start gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary mt-0.5">
+                              <Icon className="h-5 w-5" />
+                            </div>
+                            <div className="flex min-w-0 flex-col">
+                              <div className="flex items-center gap-2">
+                                <p className="truncate font-semibold text-foreground text-[14px]">{payment.name}</p>
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                                  {getPayoutTypeLabel(payment.type)}
+                                </span>
+                              </div>
+                              {payment.note && (
+                                <p className="mt-1 text-xs text-muted-foreground line-clamp-1">{payment.note}</p>
+                              )}
+                            </div>
+                          </div>
 
-          <div className="flex flex-col">
-            {dashboardQuery.isLoading && (
-              <div className="py-3 text-sm text-muted-foreground">Loading recent transactions...</div>
-            )}
-
-            {!dashboardQuery.isLoading && recentActivities.length === 0 && (
-              <div className="py-3 text-sm text-muted-foreground">No transactions yet.</div>
-            )}
-
-            {recentActivities.slice(0, 3).map(transaction => (
-              <div key={transaction.activityId} className="flex items-start justify-between gap-3 border-b border-border/50 py-3 last:border-0 last:pb-0">
-                <div className="flex flex-1 items-start gap-3 min-w-0">
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full mt-0.5 ${transaction.type === 'credit' ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
-                    {transaction.type === 'credit'
-                      ? <ArrowDownLeft className="h-5 w-5" />
-                      : <ArrowUpRight className="h-5 w-5" />}
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <p className={`text-[14px] font-semibold truncate ${transaction.type === 'credit' ? 'text-success' : 'text-destructive'}`}>
-                      {transaction.type === 'credit' ? 'Deposited' : 'Withdrawal'}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                      {formatDate(transaction.date)} - {formatTime(transaction.date)}
-                    </p>
-
-                    <div className="mt-2 space-y-0.5">
-                      <p className="text-[12px] text-muted-foreground truncate">
-                        <span className="font-medium text-[#1a2b4c]">{transaction.type === 'credit' ? 'From:' : 'To:'}</span> AjoVault {transaction.category.charAt(0).toUpperCase() + transaction.category.slice(1)}
-                      </p>
-                      <p className="text-[12px] text-muted-foreground truncate">
-                        <span className="font-medium text-[#1a2b4c]">Desc:</span> {transaction.description}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="text-right shrink-0 ml-2">
-                  <p className={`text-[14px] font-bold whitespace-nowrap ${transaction.type === 'credit' ? 'text-success' : 'text-destructive'}`}>
-                    {transaction.type === 'credit' ? '+' : '-'}{formatCurrency(transaction.amount)}
-                  </p>
+                          <div className="flex shrink-0 flex-col items-end text-right">
+                            <p className="font-bold text-foreground text-[14px]">
+                              {formatCurrency(payment.payoutAmount, payment.currency)}
+                            </p>
+                            <div className="mt-1">
+                              <Badge className={`${getPayoutStatusClassName(payment.status)} border-none text-[10px] font-bold capitalize`}>
+                                {getPayoutStatusLabel(payment.status)}
+                              </Badge>
+                            </div>
+                            <p className="mt-1 text-[11px] text-muted-foreground">
+                              Due <span className="font-medium text-foreground">{formatDate(payment.date)}</span>
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
-            ))}
+            )}
+
+            {/* Divider if both sections exist */}
+            {(upcomingPayoutsQuery.isLoading || (upcomingPayoutsQuery.data?.items ?? []).length > 0) && (dashboardQuery.isLoading || recentActivities.length > 0) && (
+              <hr className="border-border/50 my-2" />
+            )}
+
+            {/* Recent Transaction Sub-Section */}
+            {(dashboardQuery.isLoading || recentActivities.length > 0) && (
+              <div>
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="font-display text-[15px] font-bold text-[#1a2b4c]">Recent Transaction</h2>
+                  <button onClick={() => navigate('/transactions')} className="text-[13px] font-medium text-blue-500 hover:text-blue-600">See all</button>
+                </div>
+
+                <div className="flex flex-col">
+                  {dashboardQuery.isLoading ? (
+                    <div className="py-3 text-sm text-muted-foreground">Loading recent transactions...</div>
+                  ) : (
+                    recentActivities.slice(0, 3).map(transaction => (
+                      <div key={transaction.activityId} className="flex items-start justify-between gap-3 border-b border-border/50 py-3 last:border-0 last:pb-0">
+                        <div className="flex flex-1 items-start gap-3 min-w-0">
+                          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full mt-0.5 ${transaction.type === 'credit' ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
+                            {transaction.type === 'credit'
+                              ? <ArrowDownLeft className="h-5 w-5" />
+                              : <ArrowUpRight className="h-5 w-5" />}
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <p className={`text-[14px] font-semibold truncate ${transaction.type === 'credit' ? 'text-success' : 'text-destructive'}`}>
+                              {transaction.type === 'credit' ? 'Deposited' : 'Withdrawal'}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                              {formatDate(transaction.date)} - {formatTime(transaction.date)}
+                            </p>
+
+                            <div className="mt-2 space-y-0.5">
+                              <p className="text-[12px] text-muted-foreground truncate">
+                                <span className="font-medium text-[#1a2b4c]">{transaction.type === 'credit' ? 'From:' : 'To:'}</span> AjoVault {transaction.category.charAt(0).toUpperCase() + transaction.category.slice(1)}
+                              </p>
+                              <p className="text-[12px] text-muted-foreground truncate">
+                                <span className="font-medium text-[#1a2b4c]">Desc:</span> {transaction.description}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 ml-2">
+                          <p className={`text-[14px] font-bold whitespace-nowrap ${transaction.type === 'credit' ? 'text-success' : 'text-destructive'}`}>
+                            {transaction.type === 'credit' ? '+' : '-'}{formatCurrency(transaction.amount)}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
+};
+
+const getPayoutIcon = (payment: Pick<UpcomingPayoutItem, 'type'>) => {
+  const type = payment.type.toLowerCase();
+  if (type.includes('circle') || type.includes('ajo')) {
+    return Users;
+  }
+  if (type.includes('goal')) {
+    return Target;
+  }
+  if (type.includes('saving') || type.includes('thrift')) {
+    return PiggyBank;
+  }
+
+  return CreditCard;
+};
+
+const getPayoutTypeLabel = (type: string) => {
+  const normalized = type.toLowerCase();
+  if (normalized === 'group_goal') {
+    return 'Group Goal';
+  }
+  if (normalized === 'circle') {
+    return 'Circle';
+  }
+
+  return type.replaceAll('_', ' ');
+};
+
+const getPayoutStatusClassName = (status: string) => {
+  const normalized = status.toLowerCase();
+  if (normalized === 'overdue') {
+    return 'bg-destructive/10 text-destructive';
+  }
+  if (normalized === 'waiting_for_contributions') {
+    return 'bg-amber-50 text-amber-800';
+  }
+
+  return 'bg-success/10 text-success';
+};
+
+const getPayoutStatusLabel = (status: string) => {
+  const normalized = status.toLowerCase();
+  if (normalized === 'waiting_for_contributions') {
+    return 'Waiting';
+  }
+  if (normalized === 'overdue') {
+    return 'Overdue';
+  }
+
+  return 'Due';
 };
 
 const isUrgentContribution = (
@@ -589,6 +667,9 @@ const isUrgentContribution = (
   }
   if (frequency === 'weekly') {
     return diffMs <= 2 * 24 * 60 * 60 * 1000;
+  }
+  if (frequency === 'biweekly') {
+    return diffMs <= 4 * 24 * 60 * 60 * 1000;
   }
   if (frequency === 'monthly') {
     return diffMs <= 7 * 24 * 60 * 60 * 1000;

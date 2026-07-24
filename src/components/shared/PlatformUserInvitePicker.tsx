@@ -26,7 +26,7 @@ interface PlatformUserInvitePickerProps {
 const PlatformUserInvitePicker = ({
   title = 'Invite Platform Users',
   description = 'Search by name, email, or phone number, then send an in-app invite.',
-  actionLabel = 'Invite on AjoVault',
+  actionLabel = 'Invite to Circle',
   disabled = false,
   directInviteTitle = 'Invite Non-Members',
   directInviteDescription = 'If the person is not on AjoVault yet, send an email or SMS invite.',

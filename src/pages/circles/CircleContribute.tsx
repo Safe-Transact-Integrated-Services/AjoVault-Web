@@ -46,10 +46,14 @@ const CircleContribute = () => {
     );
   }
 
+  const adminMember = circle.members.find(member => member.role === 'admin');
+  const currentUserParticipates = circle.role !== 'admin' || adminMember?.isContributionParticipant !== false;
+
   const refreshQueries = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: circlesKeys.detail(circle.id) }),
       queryClient.invalidateQueries({ queryKey: circlesKeys.list }),
+      queryClient.invalidateQueries({ queryKey: circlesKeys.dashboard }),
       queryClient.invalidateQueries({ queryKey: walletKeys.me }),
       queryClient.invalidateQueries({ queryKey: walletKeys.ledger }),
       queryClient.invalidateQueries({ queryKey: dashboardKeys.summary }),
@@ -143,6 +147,20 @@ const CircleContribute = () => {
             </Alert>
           )}
 
+          {!currentUserParticipates && (
+            <Alert>
+              <AlertTitle>Admin is not contributing</AlertTitle>
+              <AlertDescription>This circle was created with the admin as manager only, so no contribution is required from this account.</AlertDescription>
+            </Alert>
+          )}
+
+          {circle.status !== 'active' && (
+            <Alert>
+              <AlertTitle>Circle has not started</AlertTitle>
+              <AlertDescription>Contributions open after the circle admin starts this circle.</AlertDescription>
+            </Alert>
+          )}
+
           {error && (
             <Alert variant="destructive">
               <AlertTitle>Unable to continue</AlertTitle>
@@ -157,7 +175,7 @@ const CircleContribute = () => {
               setPinPadKey(current => current + 1);
               setStep('pin');
             }}
-            disabled={circle.hasPaidCurrentCycle}
+            disabled={!currentUserParticipates || circle.hasPaidCurrentCycle || circle.status !== 'active'}
           >
             Continue with Wallet
           </Button>

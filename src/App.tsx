@@ -38,12 +38,10 @@ import SavingsInvite from '@/pages/savings/SavingsInvite';
 import SavingsInvitationDecision from '@/pages/savings/SavingsInvitationDecision';
 import CirclesHome from '@/pages/circles/CirclesHome';
 import CreateCircle from '@/pages/circles/CreateCircle';
-import JoinCircle from '@/pages/circles/JoinCircle';
 import CircleDetail from '@/pages/circles/CircleDetail';
 import CircleContribute from '@/pages/circles/CircleContribute';
 import CircleInvite from '@/pages/circles/CircleInvite';
 import CircleJoinInvite from '@/pages/circles/CircleJoinInvite';
-import CirclePayout from '@/pages/circles/CirclePayout';
 import CirclePayments from '@/pages/circles/CirclePayments';
 import Notifications from '@/pages/Notifications';
 import MorePage from '@/pages/more/MorePage';
@@ -159,12 +157,10 @@ const App = () => (
                   <Route path="/savings/:id/contribute" element={<SavingsContribute />} />
                   <Route path="/circles" element={<CirclesHome />} />
                   <Route path="/circles/create" element={<CreateCircle />} />
-                  <Route path="/circles/join" element={<JoinCircle />} />
                   <Route path="/circles/payments" element={<CirclePayments />} />
                   <Route path="/circles/:id" element={<CircleDetail />} />
                   <Route path="/circles/:id/contribute" element={<CircleContribute />} />
                   <Route path="/circles/:id/invite" element={<CircleInvite />} />
-                  <Route path="/circles/:id/payout" element={<CirclePayout />} />
                   <Route path="/circles/join/:code" element={<CircleJoinInvite />} />
                   <Route path="/group-goals" element={<GroupGoalsHome />} />
                   <Route path="/group-goals/create/select" element={<CreateGoalSelect />} />
@@ -174,7 +170,8 @@ const App = () => (
                   <Route path="/group-goals/:id" element={<GroupGoalDetail />} />
                   <Route path="/group-goals/:id/contribute" element={<GroupGoalContribute />} />
                   <Route path="/group-goals/:id/invite" element={<GroupGoalInvite />} />
-                  <Route path="/groups" element={<GroupsHome />} />
+                  <Route path="/clicks" element={<GroupsHome />} />
+                  <Route path="/groups" element={<Navigate to="/clicks" replace />} />
                   <Route path="/more" element={<MorePage />} />
                   <Route path="/more/profile" element={<Profile />} />
                   <Route path="/more/settings" element={<Settings />} />

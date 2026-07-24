@@ -260,6 +260,9 @@ const isUrgentContribution = (
   if (frequency === 'weekly') {
     return diffMs <= 2 * 24 * 60 * 60 * 1000;
   }
+  if (frequency === 'biweekly') {
+    return diffMs <= 4 * 24 * 60 * 60 * 1000;
+  }
   if (frequency === 'monthly') {
     return diffMs <= 7 * 24 * 60 * 60 * 1000;
   }
