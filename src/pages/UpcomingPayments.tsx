@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Users, CreditCard, Target, PiggyBank } from 'lucide-react';
 import { motion } from 'framer-motion';
 import {
@@ -9,25 +10,15 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
-import { Badge } from '@/components/ui/badge';
+import {
+  dashboardKeys,
+  getUpcomingPayouts,
+  openUpcomingPayout,
+  UpcomingPayoutItem,
+} from '@/services/dashboardApi';
+import { formatCurrency, formatDate } from '@/services/mockData';
 
 const PAGE_SIZE = 10;
-
-// Mock data since there's no endpoint
-export const mockUpcomingPayments = [
-  { id: 'p1', referenceId: 'sav_001', type: 'Goal', title: 'Hiroko', date: '08 Jun 2026', amount: 15000, status: 'missed' },
-  { id: 'p2', referenceId: 'sav_002', type: 'Goal', title: 'Emily', date: '12 Jun 2026', amount: 25000, status: 'paid' },
-  { id: 'p3', referenceId: 'sav_003', type: 'Goal', title: 'New Macbook', date: '14 Jun 2026', amount: 20000, status: 'paid' },
-  { id: 'p4', referenceId: 'cir_001', type: 'Circle', title: 'Constance Boyer', date: '15 Jun 2026', amount: 50000, status: 'due' },
-  { id: 'p5', referenceId: 'cir_002', type: 'Circle', title: 'Weekend Ajo', date: '16 Jun 2026', amount: 10000, status: 'due' },
-  { id: 'p6', referenceId: 'sav_001', type: 'Goal', title: 'Emergency Fund', date: '20 Jun 2026', amount: 5000, status: 'upcoming' },
-  { id: 'p7', referenceId: 'cir_001', type: 'Circle', title: 'Family Thrift', date: '25 Jun 2026', amount: 12000, status: 'upcoming' },
-  { id: 'p8', referenceId: 'sav_002', type: 'Goal', title: 'Vacation', date: '01 Jul 2026', amount: 30000, status: 'upcoming' },
-  { id: 'p9', referenceId: 'sav_003', type: 'Goal', title: 'Rent', date: '15 Jul 2026', amount: 45000, status: 'upcoming' },
-  { id: 'p10', referenceId: 'cir_002', type: 'Circle', title: 'Colleagues Ajo', date: '30 Jul 2026', amount: 20000, status: 'upcoming' },
-  { id: 'p11', referenceId: 'sav_001', type: 'Goal', title: 'Car Downpayment', date: '15 Aug 2026', amount: 100000, status: 'upcoming' },
-  { id: 'p12', referenceId: 'sav_002', type: 'Goal', title: 'School Fees', date: '01 Sep 2026', amount: 35000, status: 'upcoming' },
-];
 
 export const getStatusClassName = (status: string) => {
   const normalized = status?.toLowerCase();
@@ -52,24 +43,14 @@ const UpcomingPayments = () => {
   const navigate = useNavigate();
   const [currentPage, setCurrentPage] = useState(1);
 
-  const totalCount = mockUpcomingPayments.length;
+  const upcomingPayoutsQuery = useQuery({
+    queryKey: dashboardKeys.upcomingPayouts(currentPage, PAGE_SIZE),
+    queryFn: () => getUpcomingPayouts(currentPage, PAGE_SIZE),
+  });
+
+  const totalCount = upcomingPayoutsQuery.data?.totalCount ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-
-  const payments = useMemo(
-    () => mockUpcomingPayments.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
-    [currentPage],
-  );
-
-  const handlePaymentClick = (payment: any) => {
-    const t = payment.type.toLowerCase();
-    if (t.includes('circle') || t.includes('ajo')) {
-      navigate(`/circles/${payment.referenceId}`);
-    } else if (t.includes('goal')) {
-      navigate(`/group-goals/${payment.referenceId}`);
-    } else {
-      navigate(`/savings/${payment.referenceId}`);
-    }
-  };
+  const payments: UpcomingPayoutItem[] = upcomingPayoutsQuery.data?.items ?? [];
 
   return (
     <div className="min-h-screen px-4 py-6 safe-top bg-[#FAFAFA]">
@@ -81,50 +62,65 @@ const UpcomingPayments = () => {
         <h1 className="font-display text-2xl font-bold text-foreground">Upcoming Payout</h1>
       </div>
 
-      <div className="space-y-3">
-        {payments.map((payment, index) => {
-          const t = payment.type.toLowerCase();
-          let Icon = CreditCard;
-          if (t.includes('circle') || t.includes('ajo')) {
-             Icon = Users;
-          } else if (t.includes('goal')) {
-             Icon = Target;
-          } else if (t.includes('saving') || t.includes('thrift')) {
-             Icon = PiggyBank;
-          }
+      {upcomingPayoutsQuery.isLoading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="h-20 w-full animate-pulse rounded-xl bg-muted/50" />
+          ))}
+        </div>
+      ) : payments.length === 0 ? (
+        <div className="flex h-40 w-full items-center justify-center rounded-xl border border-dashed border-border bg-card p-6 text-center text-muted-foreground">
+          <p className="text-sm font-medium">No upcoming payouts scheduled</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {payments.map((payment, index) => {
+            const t = (payment.type || '').toLowerCase();
+            let Icon = CreditCard;
+            if (t.includes('circle') || t.includes('ajo')) {
+              Icon = Users;
+            } else if (t.includes('goal')) {
+              Icon = Target;
+            } else if (t.includes('saving') || t.includes('thrift')) {
+              Icon = PiggyBank;
+            }
 
-          return (
-            <motion.button
-              key={payment.id}
-              type="button"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.04 }}
-              onClick={() => handlePaymentClick(payment)}
-              className="w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/30"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                    <Icon className="h-5 w-5 text-primary" />
+            return (
+              <motion.button
+                key={payment.id}
+                type="button"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.04 }}
+                onClick={() => openUpcomingPayout(payment, navigate)}
+                className="w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/30"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                      <Icon className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-foreground text-sm">{payment.name}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mt-0.5">
+                        {payment.type}
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold text-foreground text-sm">{payment.title}</p>
-                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground mt-0.5">
-                      {payment.type}
+                  <div className="text-xs text-right shrink-0">
+                    <p className="font-bold text-foreground">
+                      {formatCurrency(payment.payoutAmount, payment.currency ?? 'NGN')}
+                    </p>
+                    <p className="text-muted-foreground mt-0.5">
+                      Due date - <span className="font-medium text-foreground">{formatDate(payment.date)}</span>
                     </p>
                   </div>
                 </div>
-                <div className="text-xs text-right shrink-0">
-                  <p className="text-muted-foreground">
-                    Due date - <span className="font-medium text-foreground">{payment.date}</span>
-                  </p>
-                </div>
-              </div>
-            </motion.button>
-          );
-        })}
-      </div>
+              </motion.button>
+            );
+          })}
+        </div>
+      )}
 
       {totalPages > 1 && (
         <div className="mt-6">

@@ -45,7 +45,7 @@ export const getMyNotifications = async (): Promise<NotificationsFeed> => {
     const response = await apiRequest<NotificationsResponse>('/api/notifications/me');
     const apiItems = response.items.map(mapNotification);
 
-    const hasGroupNotifs = apiItems.some(item => item.category === 'group' || item.link === '/groups');
+    const hasGroupNotifs = apiItems.some(item => item.category === 'group' || item.link === '/groups' || item.link === '/clicks');
     const groupMockNotifs = mockNotifications.filter(n => n.category === 'group');
 
     const combinedItems = hasGroupNotifs

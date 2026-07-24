@@ -39,12 +39,13 @@ import {
   dashboardKeys,
   getDashboardSummary,
   getUpcomingContributions,
+  getUpcomingPayouts,
   openUpcomingContribution,
+  openUpcomingPayout,
   compareUpcomingContributionsByDate,
   filterUpcomingContributions,
 } from '@/services/dashboardApi';
 import { formatCurrency, formatDate, formatTime } from '@/services/mockData';
-import { mockUpcomingPayments, getStatusClassName, getStatusLabel } from '@/pages/UpcomingPayments';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -95,6 +96,11 @@ const Dashboard = () => {
   const upcomingContributionsQuery = useQuery({
     queryKey: dashboardKeys.upcomingContributionsPreview,
     queryFn: () => getUpcomingContributions(1, 10),
+    enabled: !!user,
+  });
+  const upcomingPayoutsQuery = useQuery({
+    queryKey: dashboardKeys.upcomingPayoutsPreview,
+    queryFn: () => getUpcomingPayouts(1, 3),
     enabled: !!user,
   });
 
@@ -337,7 +343,7 @@ const Dashboard = () => {
           <div className="flex items-center justify-between mt-auto">
             <div className="min-w-0 pr-1">
               <p className="text-xs font-semibold text-blue-700 truncate">Circles (Ajo)</p>
-              <p className="text-[9px] text-muted-foreground truncate mt-0.5">Manage community Groups</p>
+              <p className="text-[9px] text-muted-foreground truncate mt-0.5">Manage community Clicks</p>
             </div>
             <ArrowRight className="h-3.5 w-3.5 shrink-0 text-blue-700" />
           </div>
@@ -435,113 +441,112 @@ const Dashboard = () => {
         <ArrowRight className="h-4 w-4 text-muted-foreground" />
       </button>
 
-      {/* <div className="mb-6 rounded-[20px] bg-white p-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-border/50"> */}
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-display text-sm font-bold text-[#1a2b4c]">Upcoming Payout</h2>
-        <button onClick={() => navigate('/upcoming-payments')} className="text-[13px] font-medium text-blue-500 hover:text-blue-600">View all</button>
-      </div>
-      <div className="space-y-3">
-        {mockUpcomingPayments.slice(0, 3).map(payment => {
-          const t = payment.type.toLowerCase();
-          let Icon = CreditCard;
-          if (t.includes('circle') || t.includes('ajo')) Icon = Users;
-          else if (t.includes('goal')) Icon = Target;
-          else if (t.includes('saving') || t.includes('thrift')) Icon = PiggyBank;
-
-          return (
-            <motion.button
-              key={payment.id}
-              type="button"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              onClick={() => {
-                const pt = payment.type.toLowerCase();
-                if (pt.includes('circle') || pt.includes('ajo')) {
-                  navigate(`/circles/${payment.referenceId}`);
-                } else if (pt.includes('goal')) {
-                  navigate(`/group-goals/${payment.referenceId}`);
-                } else {
-                  navigate(`/savings/${payment.referenceId}`);
-                }
-              }}
-              className="w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/30"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                    <Icon className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold text-foreground text-sm">{payment.title}</p>
-                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground mt-0.5">
-                      {payment.type}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-xs text-right shrink-0">
-                  <p className="text-muted-foreground">
-                    Due date - <span className="font-medium text-foreground">{payment.date}</span>
-                  </p>
-                </div>
-              </div>
-            </motion.button>
-          );
-        })}
-      </div>
-      {/* </div> */}
-
-      <div className='pt-8 pb-8'>
-        <div className="rounded-[20px] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-border/50 p-4">
+      {/* Upcoming Payout Section */}
+      {(upcomingPayoutsQuery.isLoading || (upcomingPayoutsQuery.data?.items ?? []).length > 0) && (
+        <div className="mb-6">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-display text-[15px] font-bold text-[#1a2b4c]">Recent Transaction</h2>
-            <button onClick={() => navigate('/transactions')} className="text-[13px] font-medium text-blue-500 hover:text-blue-600">See all</button>
+            <h2 className="font-display text-sm font-bold text-[#1a2b4c]">Upcoming Payout</h2>
+            <button onClick={() => navigate('/upcoming-payments')} className="text-[13px] font-medium text-blue-500 hover:text-blue-600">View all</button>
           </div>
+          <div className="space-y-3">
+            {upcomingPayoutsQuery.isLoading ? (
+              <div className="py-3 text-sm text-muted-foreground">Loading upcoming payouts...</div>
+            ) : (
+              (upcomingPayoutsQuery.data?.items ?? []).slice(0, 3).map(payment => {
+                const t = (payment.type || '').toLowerCase();
+                let Icon = CreditCard;
+                if (t.includes('circle') || t.includes('ajo')) Icon = Users;
+                else if (t.includes('goal')) Icon = Target;
+                else if (t.includes('saving') || t.includes('thrift')) Icon = PiggyBank;
 
-          <div className="flex flex-col">
-            {dashboardQuery.isLoading && (
-              <div className="py-3 text-sm text-muted-foreground">Loading recent transactions...</div>
+                return (
+                  <motion.button
+                    key={payment.id}
+                    type="button"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    onClick={() => openUpcomingPayout(payment, navigate)}
+                    className="w-full rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/30"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                          <Icon className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-foreground text-sm">{payment.name}</p>
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mt-0.5">
+                            {payment.type}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-xs text-right shrink-0">
+                        <p className="font-bold text-foreground">
+                          {formatCurrency(payment.payoutAmount, payment.currency ?? 'NGN')}
+                        </p>
+                        <p className="text-muted-foreground mt-0.5">
+                          Due date - <span className="font-medium text-foreground">{formatDate(payment.date)}</span>
+                        </p>
+                      </div>
+                    </div>
+                  </motion.button>
+                );
+              })
             )}
+          </div>
+        </div>
+      )}
 
-            {!dashboardQuery.isLoading && recentActivities.length === 0 && (
-              <div className="py-3 text-sm text-muted-foreground">No transactions yet.</div>
-            )}
+      {(dashboardQuery.isLoading || recentActivities.length > 0) && (
+        <div className="pt-8 pb-8">
+          <div className="rounded-[20px] bg-white shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-border/50 p-4">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-display text-[15px] font-bold text-[#1a2b4c]">Recent Transaction</h2>
+              <button onClick={() => navigate('/transactions')} className="text-[13px] font-medium text-blue-500 hover:text-blue-600">See all</button>
+            </div>
 
-            {recentActivities.slice(0, 3).map(transaction => (
-              <div key={transaction.activityId} className="flex items-start justify-between gap-3 border-b border-border/50 py-3 last:border-0 last:pb-0">
-                <div className="flex flex-1 items-start gap-3 min-w-0">
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full mt-0.5 ${transaction.type === 'credit' ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
-                    {transaction.type === 'credit'
-                      ? <ArrowDownLeft className="h-5 w-5" />
-                      : <ArrowUpRight className="h-5 w-5" />}
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <p className={`text-[14px] font-semibold truncate ${transaction.type === 'credit' ? 'text-success' : 'text-destructive'}`}>
-                      {transaction.type === 'credit' ? 'Deposited' : 'Withdrawal'}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                      {formatDate(transaction.date)} - {formatTime(transaction.date)}
-                    </p>
+            <div className="flex flex-col">
+              {dashboardQuery.isLoading ? (
+                <div className="py-3 text-sm text-muted-foreground">Loading recent transactions...</div>
+              ) : (
+                recentActivities.slice(0, 3).map(transaction => (
+                  <div key={transaction.activityId} className="flex items-start justify-between gap-3 border-b border-border/50 py-3 last:border-0 last:pb-0">
+                    <div className="flex flex-1 items-start gap-3 min-w-0">
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full mt-0.5 ${transaction.type === 'credit' ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
+                        {transaction.type === 'credit'
+                          ? <ArrowDownLeft className="h-5 w-5" />
+                          : <ArrowUpRight className="h-5 w-5" />}
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <p className={`text-[14px] font-semibold truncate ${transaction.type === 'credit' ? 'text-success' : 'text-destructive'}`}>
+                          {transaction.type === 'credit' ? 'Deposited' : 'Withdrawal'}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                          {formatDate(transaction.date)} - {formatTime(transaction.date)}
+                        </p>
 
-                    <div className="mt-2 space-y-0.5">
-                      <p className="text-[12px] text-muted-foreground truncate">
-                        <span className="font-medium text-[#1a2b4c]">{transaction.type === 'credit' ? 'From:' : 'To:'}</span> AjoVault {transaction.category.charAt(0).toUpperCase() + transaction.category.slice(1)}
-                      </p>
-                      <p className="text-[12px] text-muted-foreground truncate">
-                        <span className="font-medium text-[#1a2b4c]">Desc:</span> {transaction.description}
+                        <div className="mt-2 space-y-0.5">
+                          <p className="text-[12px] text-muted-foreground truncate">
+                            <span className="font-medium text-[#1a2b4c]">{transaction.type === 'credit' ? 'From:' : 'To:'}</span> AjoVault {transaction.category.charAt(0).toUpperCase() + transaction.category.slice(1)}
+                          </p>
+                          <p className="text-[12px] text-muted-foreground truncate">
+                            <span className="font-medium text-[#1a2b4c]">Desc:</span> {transaction.description}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0 ml-2">
+                      <p className={`text-[14px] font-bold whitespace-nowrap ${transaction.type === 'credit' ? 'text-success' : 'text-destructive'}`}>
+                        {transaction.type === 'credit' ? '+' : '-'}{formatCurrency(transaction.amount)}
                       </p>
                     </div>
                   </div>
-                </div>
-                <div className="text-right shrink-0 ml-2">
-                  <p className={`text-[14px] font-bold whitespace-nowrap ${transaction.type === 'credit' ? 'text-success' : 'text-destructive'}`}>
-                    {transaction.type === 'credit' ? '+' : '-'}{formatCurrency(transaction.amount)}
-                  </p>
-                </div>
-              </div>
-            ))}
+                ))
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

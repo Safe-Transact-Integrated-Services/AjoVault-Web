@@ -8,13 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  CIRCLE_PAYOUT_TYPE_METADATA,
   circlesKeys,
   createCircle,
-  getCirclePayoutTypeDescription,
-  getCirclePayoutTypeLabel,
   sendCircleInvite,
   type CircleDetail,
 } from '@/services/circlesApi';
@@ -32,9 +28,9 @@ const CreateCircle = () => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
-  const [frequency, setFrequency] = useState<'weekly' | 'monthly'>('monthly');
+  const [frequency, setFrequency] = useState<'daily' | 'weekly' | 'bi-weekly' | 'monthly'>('monthly');
   const [maxMembers, setMaxMembers] = useState('');
-  const [payoutType, setPayoutType] = useState<'rotation' | 'random' | 'bidding'>('rotation');
+  const [payoutType] = useState<'rotation' | 'random' | 'bidding'>('rotation');
   const [startDate, setStartDate] = useState('');
   const [circle, setCircle] = useState<CircleDetail | null>(null);
   const [error, setError] = useState('');
@@ -56,7 +52,6 @@ const CreateCircle = () => {
       setAmount(template.amount?.toString() ?? '');
       setFrequency(template.frequency ?? 'monthly');
       setMaxMembers(template.maxMembers?.toString() ?? '');
-      setPayoutType(template.payoutType ?? 'rotation');
       setStartDate(template.startDate ?? '');
     }
   }, [template]);
@@ -187,8 +182,8 @@ const CreateCircle = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>Frequency</Label>
-                  <div className="flex gap-2">
-                    {(['weekly', 'monthly'] as const).map(value => (
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {(['daily', 'weekly', 'bi-weekly', 'monthly'] as const).map(value => (
                       <button
                         key={value}
                         type="button"
@@ -224,7 +219,7 @@ const CreateCircle = () => {
                       }}
                       className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent accent-accent"
                     />
-                    <span className="text-sm font-semibold text-foreground">Import ongoing progress (offline circle)</span>
+                    <span className="text-sm font-semibold text-foreground">Import group contribution (offline circle)</span>
                   </label>
                   <p className="text-[11px] text-muted-foreground mt-0.5 ml-6">
                     Select this if some contributions/payouts have already been processed offline.
@@ -272,38 +267,6 @@ const CreateCircle = () => {
                     </div>
                   </motion.div>
                 )}
-              </div>
-
-              {/* Section 3: Payout Rules */}
-              <div className="space-y-4 rounded-xl border border-border bg-card p-4">
-                <h3 className="font-semibold text-foreground text-sm border-b border-border pb-2">Payout Rules</h3>
-                <div className="space-y-2">
-                  <Label htmlFor="circle-payout-type">Select Rule</Label>
-                  <Select
-                    value={payoutType}
-                    onValueChange={value => setPayoutType(value as typeof payoutType)}
-                  >
-                    <SelectTrigger id="circle-payout-type" className="h-12 w-full">
-                      <SelectValue placeholder="Select payout rule" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(CIRCLE_PAYOUT_TYPE_METADATA).map(([id, option]) => (
-                        <SelectItem key={id} value={id}>
-                          <div className="flex flex-col text-left py-1">
-                            <span className="font-semibold text-foreground text-sm">{option.label}</span>
-                            <span className="text-xs text-muted-foreground mt-0.5 max-w-[280px] whitespace-normal leading-normal">
-                              {option.description}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-                  {getCirclePayoutTypeDescription(payoutType)}
-                </div>
               </div>
 
               {error && (
@@ -355,7 +318,6 @@ const CreateCircle = () => {
                 <div className="flex justify-between"><span className="text-muted-foreground">Name</span><span className="font-medium text-foreground">{circle.name}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Amount</span><span className="font-medium text-foreground">₦{Number(amount || 0).toLocaleString()} / {frequency}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Max Members</span><span className="font-medium text-foreground">{maxMembers}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Payout</span><span className="font-medium text-foreground">{getCirclePayoutTypeLabel(payoutType)}</span></div>
               </div>
 
               <Button className="h-12 w-full" onClick={() => navigate(`/circles/${circle.id}`)}>

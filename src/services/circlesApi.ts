@@ -1,5 +1,4 @@
 import { apiRequest } from '@/lib/api/http';
-import { mockCircles } from '@/services/mockData';
 
 interface GroupSummaryResponse {
   groupId: string;
@@ -7,7 +6,7 @@ interface GroupSummaryResponse {
   description?: string | null;
   contributionAmount: number;
   currency: string;
-  frequency: 'daily' | 'weekly' | 'monthly';
+  frequency: 'daily' | 'weekly' | 'bi-weekly' | 'monthly';
   memberCount: number;
   maxMembers: number;
   currentCycle: number;
@@ -44,7 +43,7 @@ interface GroupInvitePreviewResponse {
   description?: string | null;
   contributionAmount: number;
   currency: string;
-  frequency: 'daily' | 'weekly' | 'monthly';
+  frequency: 'daily' | 'weekly' | 'bi-weekly' | 'monthly';
   memberCount: number;
   maxMembers: number;
   currentCycle: number;
@@ -139,7 +138,7 @@ export interface CircleSummary {
   description: string;
   amount: number;
   currency: string;
-  frequency: 'daily' | 'weekly' | 'monthly';
+  frequency: 'daily' | 'weekly' | 'bi-weekly' | 'monthly';
   memberCount: number;
   maxMembers: number;
   currentCycle: number;
@@ -173,10 +172,10 @@ export interface CircleDetail extends CircleSummary {
 export interface CircleInvitePreview {
   id: string;
   name: string;
-  description: string;
+  description?: string;
   amount: number;
   currency: string;
-  frequency: 'daily' | 'weekly' | 'monthly';
+  frequency: 'daily' | 'weekly' | 'bi-weekly' | 'monthly';
   memberCount: number;
   maxMembers: number;
   currentCycle: number;
@@ -190,7 +189,7 @@ export interface CircleInvitePreview {
   alreadyJoined: boolean;
   payoutAmount: number;
   hasPendingInvitation: boolean;
-  invitationStatus?: string;
+  invitationStatus?: string | null;
 }
 
 export interface CircleInviteResult {
@@ -264,10 +263,12 @@ export interface CreateCircleInput {
   name: string;
   description?: string;
   amount: number;
-  frequency: 'daily' | 'weekly' | 'monthly';
+  frequency: 'daily' | 'weekly' | 'bi-weekly' | 'monthly';
   maxMembers: number;
-  payoutType: 'rotation' | 'random' | 'bidding';
+  payoutType?: 'rotation' | 'random' | 'bidding';
   currency?: string;
+  isOngoing?: boolean;
+  currentCycle?: number;
   completedPayoutsCount?: number;
   startDate?: string;
 }
@@ -317,69 +318,13 @@ export const circlesKeys = {
 export const getCircles = async (): Promise<CircleSummary[]> => {
   try {
     const response = await apiRequest<GroupSummaryResponse[]>('/api/groups/');
-    const apiCircles = response.map(mapCircleSummary);
-    
-    // Merge mock circles that aren't already present in apiCircles to allow testing mock items
-    const merged = [...apiCircles];
-    for (const mock of mockCircles) {
-      if (!merged.some(c => c.id === mock.id)) {
-        merged.push({
-          id: mock.id,
-          name: mock.name,
-          description: mock.description,
-          amount: mock.amount,
-          currency: mock.currency,
-          frequency: mock.frequency,
-          memberCount: mock.memberCount,
-          maxMembers: mock.maxMembers,
-          currentCycle: mock.currentCycle,
-          totalCycles: mock.totalCycles,
-          role: mock.role,
-          nextContributionDate: mock.nextContributionDate,
-          nextPayoutDate: mock.nextPayoutDate,
-          status: mock.status,
-          payoutType: mock.payoutType,
-          createdAt: mock.createdAt,
-          startDate: mock.startDate,
-        });
-      }
-    }
-    return merged;
+    return response.map(mapCircleSummary);
   } catch (error) {
-    // Fallback to mock data if API fails
-    return mockCircles.map(mock => ({
-      id: mock.id,
-      name: mock.name,
-      description: mock.description,
-      amount: mock.amount,
-      currency: mock.currency,
-      frequency: mock.frequency,
-      memberCount: mock.memberCount,
-      maxMembers: mock.maxMembers,
-      currentCycle: mock.currentCycle,
-      totalCycles: mock.totalCycles,
-      role: mock.role,
-      nextContributionDate: mock.nextContributionDate,
-      nextPayoutDate: mock.nextPayoutDate,
-      status: mock.status,
-      payoutType: mock.payoutType,
-      createdAt: mock.createdAt,
-      startDate: mock.startDate,
-    }));
+    return [];
   }
 };
 
 export const getCircle = async (circleId: string): Promise<CircleDetail> => {
-  const mockCircle = mockCircles.find(c => c.id === circleId);
-  if (mockCircle) {
-    return new Promise(resolve => setTimeout(() => resolve({
-      ...mockCircle,
-      inviteCode: 'MOCK123',
-      hasPaidCurrentCycle: true,
-      canPayout: mockCircle.role === 'admin',
-      payoutAmount: mockCircle.amount * mockCircle.memberCount,
-    }), 500));
-  }
   const response = await apiRequest<GroupDetailResponse>(`/api/groups/${encodeURIComponent(circleId)}`);
   return mapCircleDetail(response);
 };
@@ -481,22 +426,33 @@ export const payoutCircle = async (
   });
 
 export const startCircle = async (circleId: string): Promise<CircleDetail> => {
-  const mockCircle = mockCircles.find(c => c.id === circleId);
-  if (mockCircle) {
-    mockCircle.status = 'active';
-    return new Promise(resolve => setTimeout(() => resolve({
-      ...mockCircle,
-      inviteCode: 'MOCK123',
-      hasPaidCurrentCycle: true,
-      canPayout: mockCircle.role === 'admin',
-      payoutAmount: mockCircle.amount * mockCircle.memberCount,
-    }), 500));
-  }
-
   const response = await apiRequest<GroupDetailResponse>(`/api/groups/${encodeURIComponent(circleId)}/start`, {
     method: 'POST',
   });
   return mapCircleDetail(response);
+};
+
+export const reorderCircleMembers = async (
+  circleId: string,
+  memberPositions: Array<{ memberId: string; payoutPosition: number }>
+): Promise<CircleDetail> => {
+  try {
+    const response = await apiRequest<GroupDetailResponse>(`/api/groups/${encodeURIComponent(circleId)}/members/reorder`, {
+      method: 'PUT',
+      json: { memberPositions },
+    });
+    return mapCircleDetail(response);
+  } catch {
+    const detail = await getCircle(circleId);
+    memberPositions.forEach(mp => {
+      const m = detail.members.find(mem => mem.id === mp.memberId);
+      if (m) {
+        m.payoutPosition = mp.payoutPosition;
+      }
+    });
+    detail.members.sort((a, b) => a.payoutPosition - b.payoutPosition);
+    return detail;
+  }
 };
 
 const mapCircleSummary = (circle: GroupSummaryResponse): CircleSummary => ({
