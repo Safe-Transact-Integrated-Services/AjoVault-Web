@@ -39,17 +39,19 @@ const CircleDetailExpanded = ({ circleId }: { circleId: string }) => {
   }
 
   const currentUserMember = circle.members.find(m => m.id === user?.id || m.name === user?.name);
+  const currentUserParticipates = currentUserMember?.isContributionParticipant !== false;
   
   // Calculate next member to receive payout
-  const eligibleMembers = circle.members.filter(member => !member.hasReceivedPayout);
+  const contributionParticipants = circle.members.filter(member => member.isContributionParticipant);
+  const eligibleMembers = contributionParticipants.filter(member => !member.hasReceivedPayout);
   const nextInLine = eligibleMembers.slice().sort((a, b) => a.payoutPosition - b.payoutPosition)[0];
   
-  const hasPaid = currentUserMember?.hasReceivedPayout;
+  const hasPaid = currentUserParticipates && currentUserMember?.hasReceivedPayout;
   const isNext = nextInLine?.id === currentUserMember?.id;
 
   // Estimate expected payout date for current user
   let expectedPayoutDateStr = 'Unknown';
-  if (!hasPaid && currentUserMember && nextInLine && circle.nextPayoutDate) {
+  if (currentUserParticipates && !hasPaid && currentUserMember && nextInLine && circle.nextPayoutDate) {
     const positionDiff = currentUserMember.payoutPosition - nextInLine.payoutPosition;
     if (positionDiff === 0) {
       expectedPayoutDateStr = formatDate(circle.nextPayoutDate);
@@ -58,6 +60,7 @@ const CircleDetailExpanded = ({ circleId }: { circleId: string }) => {
       let daysToAdd = 0;
       if (circle.frequency === 'daily') daysToAdd = positionDiff;
       if (circle.frequency === 'weekly') daysToAdd = positionDiff * 7;
+      if (circle.frequency === 'biweekly') daysToAdd = positionDiff * 14;
       if (circle.frequency === 'monthly') daysToAdd = positionDiff * 30;
       
       const expectedDate = addDays(baseDate, daysToAdd);
@@ -79,10 +82,17 @@ const CircleDetailExpanded = ({ circleId }: { circleId: string }) => {
         
         <div className="space-y-1">
           <p className="text-xs text-muted-foreground flex items-center gap-1"><User className="h-3 w-3" /> Your Position</p>
-          <p className="text-sm font-medium">#{currentUserMember?.payoutPosition ?? '?'}</p>
+          <p className="text-sm font-medium">
+            {currentUserParticipates ? `#${currentUserMember?.payoutPosition ?? '?'}` : 'Manager only'}
+          </p>
         </div>
 
-        {hasPaid ? (
+        {!currentUserParticipates ? (
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground flex items-center gap-1"><Banknote className="h-3 w-3" /> Payout Status</p>
+            <p className="text-sm font-medium text-muted-foreground">Not included</p>
+          </div>
+        ) : hasPaid ? (
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground flex items-center gap-1"><Banknote className="h-3 w-3" /> Payout Received</p>
             <p className="text-sm font-medium text-success">Completed</p>
@@ -96,7 +106,12 @@ const CircleDetailExpanded = ({ circleId }: { circleId: string }) => {
       </div>
 
       <div className="rounded-lg bg-background p-3 border border-border">
-        {hasPaid ? (
+        {!currentUserParticipates ? (
+          <div className="flex flex-col items-center">
+            <p className="text-sm font-medium text-muted-foreground">Status: Manager only</p>
+            <p className="text-xs text-muted-foreground mt-1">You manage this circle without contributing or receiving payout.</p>
+          </div>
+        ) : hasPaid ? (
           <div className="flex flex-col items-center">
             <p className="text-sm font-medium text-success">Status: Paid</p>
             {/* If we had the exact date, we could show it here */}

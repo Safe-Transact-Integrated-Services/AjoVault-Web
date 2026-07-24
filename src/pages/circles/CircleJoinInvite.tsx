@@ -45,6 +45,12 @@ const CircleJoinInvite = () => {
     );
   }
 
+  const inviteClosed = circle.status !== 'pending' || circle.isPayoutOrderFinalized;
+  const joinDisabled = circle.alreadyJoined
+    || inviteClosed
+    || circle.slotsRemaining <= 0
+    || circle.invitationStatus?.toLowerCase() === 'rejected';
+
   const handleJoin = async (pin: string) => {
     if (!code) {
       return;
@@ -155,8 +161,8 @@ const CircleJoinInvite = () => {
                 <div className="flex items-center gap-2">
                   <Shield className="h-4 w-4 text-primary" />
                   <div>
-                    <p className="text-xs text-muted-foreground">Payout</p>
-                    <p className="text-sm font-bold capitalize">{circle.payoutType}</p>
+                    <p className="text-xs text-muted-foreground">Security</p>
+                    <p className="text-sm font-bold">Verified order</p>
                   </div>
                 </div>
               </div>
@@ -183,6 +189,13 @@ const CircleJoinInvite = () => {
               </Alert>
             )}
 
+            {inviteClosed && !circle.alreadyJoined && circle.invitationStatus?.toLowerCase() !== 'rejected' && (
+              <Alert>
+                <AlertTitle>Invite closed</AlertTitle>
+                <AlertDescription>The admin has already confirmed this circle payout order or started the circle.</AlertDescription>
+              </Alert>
+            )}
+
             <Button
               className="h-12 w-full"
               onClick={() => {
@@ -190,11 +203,13 @@ const CircleJoinInvite = () => {
                 setPinPadKey(current => current + 1);
                 setStep('confirm');
               }}
-              disabled={circle.alreadyJoined || circle.slotsRemaining <= 0 || circle.invitationStatus?.toLowerCase() === 'rejected'}
+              disabled={joinDisabled}
             >
               {circle.invitationStatus?.toLowerCase() === 'rejected'
                 ? 'Invite declined'
-                : circle.slotsRemaining <= 0
+                : inviteClosed
+                  ? 'Invite closed'
+                  : circle.slotsRemaining <= 0
                   ? 'Circle is full'
                   : 'Join This Circle'}
             </Button>

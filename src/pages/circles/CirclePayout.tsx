@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Banknote, CheckCircle, Users } from 'lucide-react';
+import { ArrowLeft, Banknote } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PinPad from '@/components/shared/PinPad';
 import Receipt from '@/components/shared/Receipt';
@@ -12,8 +12,6 @@ import { Card } from '@/components/ui/card';
 import {
   circlesKeys,
   getCircle,
-  getCirclePayoutActionLabel,
-  getCirclePayoutTypeLabel,
   payoutCircle,
   type CirclePayoutResult,
 } from '@/services/circlesApi';
@@ -23,14 +21,13 @@ import { formatCurrency } from '@/services/mockData';
 import { walletKeys } from '@/services/walletApi';
 import { toast } from 'sonner';
 
-type Step = 'overview' | 'select' | 'confirm' | 'receipt';
+type Step = 'overview' | 'confirm' | 'receipt';
 
 const CirclePayout = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>('overview');
-  const [selectedMemberId, setSelectedMemberId] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pinPadKey, setPinPadKey] = useState(0);
@@ -56,21 +53,13 @@ const CirclePayout = () => {
     );
   }
 
-  const paidCount = circle.members.filter(member => member.hasPaid).length;
-  const allPaid = paidCount === circle.members.length && circle.members.length > 0;
-  const eligibleMembers = circle.members.filter(member => !member.hasReceivedPayout);
+  const contributionParticipants = circle.members.filter(member => member.isContributionParticipant);
+  const paidCount = contributionParticipants.filter(member => member.hasPaid).length;
+  const allPaid = paidCount === contributionParticipants.length && contributionParticipants.length > 0;
+  const eligibleMembers = contributionParticipants.filter(member => !member.hasReceivedPayout);
   const nextInLine = eligibleMembers.slice().sort((left, right) => left.payoutPosition - right.payoutPosition)[0];
-  const isRotation = circle.payoutType === 'rotation';
-  const isRandom = circle.payoutType === 'random';
-  const isBidding = circle.payoutType === 'bidding';
-  const selectedMember = eligibleMembers.find(member => member.id === selectedMemberId);
-  const payoutReady = circle.status === 'active' && circle.canPayout && eligibleMembers.length > 0 && (!isRotation || !!nextInLine);
-  const payoutActionLabel = getCirclePayoutActionLabel(circle.payoutType);
-  const confirmSubtitle = isRotation
-    ? `${formatCurrency(circle.payoutAmount)} to ${nextInLine?.name ?? 'the next eligible member'}`
-    : isRandom
-      ? `${formatCurrency(circle.payoutAmount)} to a randomly selected eligible member`
-      : `${formatCurrency(circle.payoutAmount)} to ${selectedMember?.name ?? 'the selected member'}`;
+  const payoutReady = circle.status === 'active' && circle.canPayout && !!nextInLine;
+  const confirmSubtitle = `${formatCurrency(circle.payoutAmount)} to ${nextInLine?.name ?? 'the next eligible member'}`;
 
   const refreshQueries = async () => {
     await Promise.all([
@@ -84,8 +73,8 @@ const CirclePayout = () => {
   };
 
   const handlePayout = async (pin: string) => {
-    const recipientMemberId = isBidding ? selectedMemberId : isRotation ? nextInLine?.id : undefined;
-    if (!id || (isBidding && !selectedMemberId)) {
+    const recipientMemberId = nextInLine?.id;
+    if (!id || !recipientMemberId) {
       return;
     }
 
@@ -137,7 +126,7 @@ const CirclePayout = () => {
             }
 
             if (step === 'confirm') {
-              setStep(isBidding ? 'select' : 'overview');
+              setStep('overview');
               return;
             }
 
@@ -166,7 +155,7 @@ const CirclePayout = () => {
               <h3 className="text-sm font-medium">Collection Status</h3>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Members Paid</span>
-                <span className="font-bold">{paidCount}/{circle.members.length}</span>
+                <span className="font-bold">{paidCount}/{contributionParticipants.length}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Eligibility</span>
@@ -174,9 +163,9 @@ const CirclePayout = () => {
               </div>
             </Card>
 
-            {isRotation && nextInLine && (
+            {nextInLine && (
               <Card className="p-4">
-                <p className="mb-2 text-xs text-muted-foreground">{getCirclePayoutTypeLabel(circle.payoutType)} payout</p>
+                <p className="mb-2 text-xs text-muted-foreground">Next payout recipient</p>
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/10 text-sm font-bold text-accent">
                     {nextInLine.name.charAt(0)}
@@ -187,28 +176,6 @@ const CirclePayout = () => {
                   </div>
                   <Badge variant="secondary" className="ml-auto">Next</Badge>
                 </div>
-              </Card>
-            )}
-
-            {isRandom && (
-              <Card className="space-y-2 p-4">
-                <p className="text-sm font-medium">Random payout</p>
-                <p className="text-sm text-muted-foreground">
-                  AjoVault will automatically choose one unpaid member at random when you confirm this payout.
-                </p>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Eligible members</span>
-                  <span className="font-medium text-foreground">{eligibleMembers.length}</span>
-                </div>
-              </Card>
-            )}
-
-            {isBidding && (
-              <Card className="space-y-2 p-4">
-                <p className="text-sm font-medium">Bidding payout</p>
-                <p className="text-sm text-muted-foreground">
-                  Choose the unpaid member who won this cycle before authorizing the payout.
-                </p>
               </Card>
             )}
 
@@ -231,51 +198,11 @@ const CirclePayout = () => {
               onClick={() => {
                 setError('');
                 setPinPadKey(current => current + 1);
-                setStep(isBidding ? 'select' : 'confirm');
+                setStep('confirm');
               }}
               disabled={!payoutReady}
             >
-              {payoutReady ? payoutActionLabel : 'Payout not ready'}
-            </Button>
-          </motion.div>
-        )}
-
-        {step === 'select' && isBidding && (
-          <motion.div key="select" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="space-y-5">
-            <h1 className="font-display text-xl font-bold">Select Recipient</h1>
-            <p className="text-sm text-muted-foreground">Choose the unpaid member who receives {formatCurrency(circle.payoutAmount)} this cycle.</p>
-
-            <div className="space-y-2">
-              {eligibleMembers.map(member => (
-                <button
-                  key={member.id}
-                  onClick={() => setSelectedMemberId(member.id)}
-                  className={`flex w-full items-center gap-3 rounded-xl border p-4 text-left transition-colors ${
-                    selectedMemberId === member.id ? 'border-accent bg-accent/5' : 'border-border bg-card'
-                  }`}
-                >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                    {member.name.charAt(0)}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-foreground">{member.name}</p>
-                    <p className="text-xs text-muted-foreground">Position #{member.payoutPosition}</p>
-                  </div>
-                  <div className={`h-5 w-5 rounded-full border-2 ${selectedMemberId === member.id ? 'border-accent bg-accent' : 'border-muted-foreground/30'}`} />
-                </button>
-              ))}
-            </div>
-
-            <Button
-              className="h-12 w-full"
-              onClick={() => {
-                setError('');
-                setPinPadKey(current => current + 1);
-                setStep('confirm');
-              }}
-              disabled={!selectedMemberId}
-            >
-              Continue
+              {payoutReady ? 'Release payout' : 'Payout not ready'}
             </Button>
           </motion.div>
         )}

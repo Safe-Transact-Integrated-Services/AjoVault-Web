@@ -101,7 +101,6 @@ interface Group {
   nextContributionDate: string;
   nextPayoutDate: string;
   status: 'active' | 'pending' | 'completed';
-  payoutType: 'rotation' | 'random' | 'bidding';
   createdAt: string;
   members: GroupMember[];
 }
@@ -122,7 +121,6 @@ const initialGroups: Group[] = [
     nextContributionDate: '2026-07-25',
     nextPayoutDate: '2026-07-28',
     status: 'active',
-    payoutType: 'rotation',
     createdAt: '2026-07-01',
     members: [
       { id: 'm1', name: 'Adaeze Okafor', email: 'adaeze@email.com', phone: '+234 802 111 2222', contact: 'adaeze@email.com', role: 'admin', hasPaid: true, payoutPosition: 1 },
@@ -147,7 +145,6 @@ const initialGroups: Group[] = [
     nextContributionDate: '2026-08-01',
     nextPayoutDate: '2026-08-05',
     status: 'active',
-    payoutType: 'bidding',
     createdAt: '2026-07-15',
     members: [
       { id: 'm10', name: 'Yusuf K.', email: 'yusuf@email.com', phone: '+234 812 345 6789', contact: 'yusuf@email.com', role: 'admin', hasPaid: true, payoutPosition: 1 },
@@ -171,7 +168,6 @@ const initialGroups: Group[] = [
     nextContributionDate: '2026-08-10',
     nextPayoutDate: '2026-08-15',
     status: 'pending',
-    payoutType: 'bidding',
     createdAt: '2026-07-20',
     members: [
       { id: 'm20', name: 'Adaeze Okafor', email: 'adaeze@email.com', phone: '+234 802 111 2222', contact: 'adaeze@email.com', role: 'admin', hasPaid: false, payoutPosition: 1 },
@@ -311,7 +307,6 @@ const GroupsHome = () => {
   const [newGroupAmount, setNewGroupAmount] = useState('');
   const [newGroupFreq, setNewGroupFreq] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
   const [newGroupMaxMembers, setNewGroupMaxMembers] = useState('10');
-  const [newGroupPayoutType, setNewGroupPayoutType] = useState<'rotation' | 'random' | 'bidding'>('rotation');
 
   // Group creation members state
   const [addedGroupMembers, setAddedGroupMembers] = useState<Array<{ name: string; contact: string }>>([]);
@@ -444,7 +439,6 @@ const GroupsHome = () => {
       nextContributionDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       nextPayoutDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       status: 'pending',
-      payoutType: newGroupPayoutType,
       createdAt: new Date().toISOString().split('T')[0],
       members: mappedMembers
     };
@@ -459,7 +453,6 @@ const GroupsHome = () => {
     setNewGroupAmount('');
     setNewGroupFreq('weekly');
     setNewGroupMaxMembers('10');
-    setNewGroupPayoutType('rotation');
     setAddedGroupMembers([]);
 
     toast.success(`Group "${createdGroup.name}" created successfully!`);
@@ -472,7 +465,6 @@ const GroupsHome = () => {
     setNewGroupAmount(group.amount.toString());
     setNewGroupFreq(group.frequency);
     setNewGroupMaxMembers(group.maxMembers.toString());
-    setNewGroupPayoutType(group.payoutType);
     setIsCreateModalOpen(true);
     toast.info('Autofilled form with previous group data.');
   };
@@ -808,7 +800,6 @@ const GroupsHome = () => {
       nextContributionDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       nextPayoutDate: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       status: 'active',
-      payoutType: 'rotation',
       createdAt: new Date().toISOString().split('T')[0],
       members: [
         { id: 'm1', name: invite.creatorName || 'Chidi N.', contact: 'creator@email.com', role: 'admin', hasPaid: true, payoutPosition: 1 },
@@ -1545,7 +1536,7 @@ const GroupsHome = () => {
           <DialogHeader className="text-left font-display">
             <DialogTitle className="text-xl font-bold text-foreground">Create New Group</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground mt-1">
-              Start a new peer-to-peer contribution group with custom frequencies and rules.
+              Start a new peer-to-peer contribution group with custom contribution details.
             </DialogDescription>
           </DialogHeader>
 

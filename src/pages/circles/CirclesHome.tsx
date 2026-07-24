@@ -13,6 +13,7 @@ import {
   TrendingUp,
   PiggyBank,
   Search,
+  ListChecks,
   Play
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -24,6 +25,7 @@ import {
   circlesKeys,
   getCircleDashboard,
   startCircle,
+  type CircleSummary,
   type CircleDashboardFilters,
 } from '@/services/circlesApi';
 import { formatCurrency, formatDate } from '@/services/mockData';
@@ -100,8 +102,15 @@ const CirclesHome = () => {
   const queryClient = useQueryClient();
   const [startingCircleId, setStartingCircleId] = useState<string | null>(null);
 
-  const handleStartCircle = async (circleId: string, e: React.MouseEvent) => {
+  const handleStartCircle = async (circle: CircleSummary, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!circle.isPayoutOrderFinalized) {
+      navigate(`/circles/${circle.id}`);
+      toast.info('Confirm the payout order before starting this circle.');
+      return;
+    }
+
+    const circleId = circle.id;
     setStartingCircleId(circleId);
     try {
       await startCircle(circleId);
@@ -382,15 +391,17 @@ const CirclesHome = () => {
 
                   {circle.status === 'pending' && circle.role === 'admin' && (
                     <button
-                      onClick={(e) => handleStartCircle(circle.id, e)}
+                      onClick={(e) => handleStartCircle(circle, e)}
                       disabled={startingCircleId === circle.id}
                       className="p-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-full transition-all shrink-0 shadow-sm flex items-center justify-center"
-                      title="Start Circle"
+                      title={circle.isPayoutOrderFinalized ? 'Start Circle' : 'Confirm payout order'}
                     >
                       {startingCircleId === circle.id ? (
                         <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border border-white border-t-transparent"></span>
-                      ) : (
+                      ) : circle.isPayoutOrderFinalized ? (
                         <Play className="h-3.5 w-3.5 fill-current" />
+                      ) : (
+                        <ListChecks className="h-3.5 w-3.5" />
                       )}
                     </button>
                   )}
@@ -419,8 +430,6 @@ const CirclesHome = () => {
                     <div className="flex items-center justify-between text-xs">
                       <p className="text-xs text-muted-foreground flex items-center gap-1.5 font-medium">
                         <span>{circle.memberCount}/{circle.maxMembers} members</span>
-                        <span className="inline-block h-1 w-1 rounded-full bg-muted-foreground/50" />
-                        <span className="capitalize">{circle.payoutType} layout</span>
                       </p>
                       
                       <div className="flex items-center gap-1.5">
@@ -495,7 +504,7 @@ const CirclesHome = () => {
                       <div className="flex gap-2 mt-2">
                         <Button 
                           className="flex-1 h-10 font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center gap-2"
-                          onClick={(e) => handleStartCircle(circle.id, e)}
+                          onClick={(e) => handleStartCircle(circle, e)}
                           disabled={startingCircleId === circle.id}
                         >
                           {startingCircleId === circle.id ? (
@@ -505,8 +514,12 @@ const CirclesHome = () => {
                             </>
                           ) : (
                             <>
-                              <Play className="h-4 w-4 fill-current" />
-                              Start Circle
+                              {circle.isPayoutOrderFinalized ? (
+                                <Play className="h-4 w-4 fill-current" />
+                              ) : (
+                                <ListChecks className="h-4 w-4" />
+                              )}
+                              {circle.isPayoutOrderFinalized ? 'Start Circle' : 'Confirm Order'}
                             </>
                           )}
                         </Button>

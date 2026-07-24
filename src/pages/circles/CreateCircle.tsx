@@ -8,15 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  CIRCLE_PAYOUT_TYPE_METADATA,
   circlesKeys,
   createCircle,
-  getCirclePayoutTypeDescription,
-  getCirclePayoutTypeLabel,
   sendCircleInvite,
   type CircleDetail,
+  type CircleFrequency,
 } from '@/services/circlesApi';
 import { dashboardKeys } from '@/services/dashboardApi';
 import { getApiErrorMessage } from '@/lib/api/http';
@@ -25,6 +22,13 @@ import { toast } from 'sonner';
 
 type Step = 'form' | 'invite';
 
+const CIRCLE_FREQUENCY_OPTIONS: { value: CircleFrequency; label: string }[] = [
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'biweekly', label: 'Biweekly' },
+  { value: 'monthly', label: 'Monthly' },
+];
+
 const CreateCircle = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -32,9 +36,9 @@ const CreateCircle = () => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
-  const [frequency, setFrequency] = useState<'weekly' | 'monthly'>('monthly');
+  const [frequency, setFrequency] = useState<CircleFrequency>('monthly');
   const [maxMembers, setMaxMembers] = useState('');
-  const [payoutType, setPayoutType] = useState<'rotation' | 'random' | 'bidding'>('rotation');
+  const [adminParticipatesInContributions, setAdminParticipatesInContributions] = useState(true);
   const [startDate, setStartDate] = useState('');
   const [circle, setCircle] = useState<CircleDetail | null>(null);
   const [error, setError] = useState('');
@@ -56,7 +60,10 @@ const CreateCircle = () => {
       setAmount(template.amount?.toString() ?? '');
       setFrequency(template.frequency ?? 'monthly');
       setMaxMembers(template.maxMembers?.toString() ?? '');
-      setPayoutType(template.payoutType ?? 'rotation');
+      setAdminParticipatesInContributions(
+        template.members?.find((member: { role?: string; isContributionParticipant?: boolean }) => member.role === 'admin')
+          ?.isContributionParticipant ?? true,
+      );
       setStartDate(template.startDate ?? '');
     }
   }, [template]);
@@ -87,7 +94,7 @@ const CreateCircle = () => {
         amount: amountValue,
         frequency,
         maxMembers: maxMembersValue,
-        payoutType,
+        adminParticipatesInContributions,
         isOngoing,
         currentCycle: currentCycleValue,
         completedPayoutsCount: completedPayoutsValue,
@@ -193,15 +200,15 @@ const CreateCircle = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>Frequency</Label>
-                  <div className="flex gap-2">
-                    {(['weekly', 'monthly'] as const).map(value => (
+                  <div className="grid grid-cols-2 gap-2">
+                    {CIRCLE_FREQUENCY_OPTIONS.map(option => (
                       <button
-                        key={value}
+                        key={option.value}
                         type="button"
-                        onClick={() => setFrequency(value)}
-                        className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${frequency === value ? 'border-accent bg-accent/10 text-accent' : 'border-border text-foreground'}`}
+                        onClick={() => setFrequency(option.value)}
+                        className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${frequency === option.value ? 'border-accent bg-accent/10 text-accent' : 'border-border text-foreground'}`}
                       >
-                        {value}
+                        {option.label}
                       </button>
                     ))}
                   </div>
@@ -209,6 +216,43 @@ const CreateCircle = () => {
                 <div className="space-y-2">
                   <Label htmlFor="circle-max-members">Max Members</Label>
                   <Input id="circle-max-members" type="number" value={maxMembers} onChange={event => setMaxMembers(event.target.value.replace(/[^\d]/g, ''))} placeholder="6" className="h-12" />
+                  <p className="text-[10px] text-muted-foreground">
+                    This is the number of people contributing and receiving payouts.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Admin contribution</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAdminParticipatesInContributions(true)}
+                      className={`rounded-xl border p-3 text-left transition-colors ${
+                        adminParticipatesInContributions
+                          ? 'border-accent bg-accent/10 text-accent'
+                          : 'border-border bg-background text-foreground'
+                      }`}
+                    >
+                      <span className="block text-sm font-bold">Include admin</span>
+                      <span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground">
+                        Admin contributes and receives a payout slot.
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdminParticipatesInContributions(false)}
+                      className={`rounded-xl border p-3 text-left transition-colors ${
+                        !adminParticipatesInContributions
+                          ? 'border-accent bg-accent/10 text-accent'
+                          : 'border-border bg-background text-foreground'
+                      }`}
+                    >
+                      <span className="block text-sm font-bold">Exclude admin</span>
+                      <span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground">
+                        Admin manages only and does not pay or receive payout.
+                      </span>
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="space-y-2">
@@ -283,38 +327,6 @@ const CreateCircle = () => {
                 )}
               </div>
 
-              {/* Section 3: Payout Rules */}
-              <div className="space-y-4 rounded-xl border border-border bg-card p-4">
-                <h3 className="font-semibold text-foreground text-sm border-b border-border pb-2">Payout Rules</h3>
-                <div className="space-y-2">
-                  <Label htmlFor="circle-payout-type">Select Rule</Label>
-                  <Select
-                    value={payoutType}
-                    onValueChange={value => setPayoutType(value as typeof payoutType)}
-                  >
-                    <SelectTrigger id="circle-payout-type" className="h-12 w-full">
-                      <SelectValue placeholder="Select payout rule" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(CIRCLE_PAYOUT_TYPE_METADATA).map(([id, option]) => (
-                        <SelectItem key={id} value={id}>
-                          <div className="flex flex-col text-left py-1">
-                            <span className="font-semibold text-foreground text-sm">{option.label}</span>
-                            <span className="text-xs text-muted-foreground mt-0.5 max-w-[280px] whitespace-normal leading-normal">
-                              {option.description}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-                  {getCirclePayoutTypeDescription(payoutType)}
-                </div>
-              </div>
-
               {error && (
                 <Alert variant="destructive">
                   <AlertTitle>Unable to continue</AlertTitle>
@@ -364,7 +376,7 @@ const CreateCircle = () => {
                 <div className="flex justify-between"><span className="text-muted-foreground">Name</span><span className="font-medium text-foreground">{circle.name}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Amount</span><span className="font-medium text-foreground">₦{Number(amount || 0).toLocaleString()} / {frequency}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Max Members</span><span className="font-medium text-foreground">{maxMembers}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Payout</span><span className="font-medium text-foreground">{getCirclePayoutTypeLabel(payoutType)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Admin</span><span className="font-medium text-foreground">{adminParticipatesInContributions ? 'Included' : 'Manager only'}</span></div>
               </div>
 
               <Button className="h-12 w-full" onClick={() => navigate(`/circles/${circle.id}`)}>

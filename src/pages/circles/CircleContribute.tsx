@@ -46,6 +46,9 @@ const CircleContribute = () => {
     );
   }
 
+  const adminMember = circle.members.find(member => member.role === 'admin');
+  const currentUserParticipates = circle.role !== 'admin' || adminMember?.isContributionParticipant !== false;
+
   const refreshQueries = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: circlesKeys.detail(circle.id) }),
@@ -144,6 +147,13 @@ const CircleContribute = () => {
             </Alert>
           )}
 
+          {!currentUserParticipates && (
+            <Alert>
+              <AlertTitle>Admin is not contributing</AlertTitle>
+              <AlertDescription>This circle was created with the admin as manager only, so no contribution is required from this account.</AlertDescription>
+            </Alert>
+          )}
+
           {circle.status !== 'active' && (
             <Alert>
               <AlertTitle>Circle has not started</AlertTitle>
@@ -165,7 +175,7 @@ const CircleContribute = () => {
               setPinPadKey(current => current + 1);
               setStep('pin');
             }}
-            disabled={circle.hasPaidCurrentCycle || circle.status !== 'active'}
+            disabled={!currentUserParticipates || circle.hasPaidCurrentCycle || circle.status !== 'active'}
           >
             Continue with Wallet
           </Button>

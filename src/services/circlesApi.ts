@@ -1,13 +1,15 @@
 import { apiRequest } from '@/lib/api/http';
 import type { UpcomingContributionItem } from '@/services/dashboardApi';
 
+export type CircleFrequency = 'daily' | 'weekly' | 'biweekly' | 'monthly';
+
 interface GroupSummaryResponse {
   groupId: string;
   groupName: string;
   description?: string | null;
   contributionAmount: number;
   currency: string;
-  frequency: 'daily' | 'weekly' | 'monthly';
+  frequency: CircleFrequency;
   memberCount: number;
   maxMembers: number;
   currentCycle: number;
@@ -16,11 +18,14 @@ interface GroupSummaryResponse {
   nextContributionDate: string | null;
   nextPayoutDate: string | null;
   status: 'active' | 'pending' | 'completed';
-  payoutType: 'rotation' | 'random' | 'bidding';
   completedPayoutsCount?: number;
   hasPaidCurrentCycle?: boolean;
+  isContributionParticipant?: boolean;
   createdAt?: string;
   startDate?: string;
+  isPayoutOrderFinalized: boolean;
+  payoutOrderStrategy?: string | null;
+  payoutOrderFinalizedAt?: string | null;
 }
 
 interface GroupMemberResponse {
@@ -30,6 +35,7 @@ interface GroupMemberResponse {
   payoutPosition: number;
   hasReceivedPayout: boolean;
   role: 'admin' | 'member';
+  isContributionParticipant?: boolean;
 }
 
 interface GroupDetailResponse extends GroupSummaryResponse {
@@ -46,7 +52,7 @@ interface GroupInvitePreviewResponse {
   description?: string | null;
   contributionAmount: number;
   currency: string;
-  frequency: 'daily' | 'weekly' | 'monthly';
+  frequency: CircleFrequency;
   memberCount: number;
   maxMembers: number;
   currentCycle: number;
@@ -54,7 +60,6 @@ interface GroupInvitePreviewResponse {
   nextContributionDate: string | null;
   nextPayoutDate: string | null;
   status: 'active' | 'pending' | 'completed';
-  payoutType: 'rotation' | 'random' | 'bidding';
   inviteCode: string;
   slotsRemaining: number;
   alreadyJoined: boolean;
@@ -63,6 +68,9 @@ interface GroupInvitePreviewResponse {
   invitationStatus?: string | null;
   startDate?: string | null;
   completedPayoutsCount?: number;
+  isPayoutOrderFinalized: boolean;
+  payoutOrderStrategy?: string | null;
+  payoutOrderFinalizedAt?: string | null;
 }
 
 interface MemberInviteResponse {
@@ -143,7 +151,7 @@ export interface CircleSummary {
   description: string;
   amount: number;
   currency: string;
-  frequency: 'daily' | 'weekly' | 'monthly';
+  frequency: CircleFrequency;
   memberCount: number;
   maxMembers: number;
   currentCycle: number;
@@ -152,11 +160,14 @@ export interface CircleSummary {
   nextContributionDate: string | null;
   nextPayoutDate: string | null;
   status: 'active' | 'pending' | 'completed';
-  payoutType: 'rotation' | 'random' | 'bidding';
   completedPayoutsCount?: number;
   hasPaidCurrentCycle?: boolean;
+  isContributionParticipant?: boolean;
   createdAt?: string;
   startDate?: string;
+  isPayoutOrderFinalized: boolean;
+  payoutOrderStrategy?: string | null;
+  payoutOrderFinalizedAt?: string | null;
 }
 
 export interface CircleMember {
@@ -166,6 +177,7 @@ export interface CircleMember {
   payoutPosition: number;
   hasReceivedPayout: boolean;
   role: 'admin' | 'member';
+  isContributionParticipant: boolean;
 }
 
 export interface CircleDetail extends CircleSummary {
@@ -182,7 +194,7 @@ export interface CircleInvitePreview {
   description: string;
   amount: number;
   currency: string;
-  frequency: 'daily' | 'weekly' | 'monthly';
+  frequency: CircleFrequency;
   memberCount: number;
   maxMembers: number;
   currentCycle: number;
@@ -190,7 +202,6 @@ export interface CircleInvitePreview {
   nextContributionDate: string | null;
   nextPayoutDate: string | null;
   status: 'active' | 'pending' | 'completed';
-  payoutType: 'rotation' | 'random' | 'bidding';
   inviteCode: string;
   slotsRemaining: number;
   alreadyJoined: boolean;
@@ -199,6 +210,9 @@ export interface CircleInvitePreview {
   invitationStatus?: string;
   startDate?: string;
   completedPayoutsCount?: number;
+  isPayoutOrderFinalized: boolean;
+  payoutOrderStrategy?: string | null;
+  payoutOrderFinalizedAt?: string | null;
 }
 
 export interface CircleInviteResult {
@@ -268,13 +282,47 @@ export interface CirclePayoutResult {
   createdAtUtc: string;
 }
 
+export type CirclePayoutOrderStrategy = 'manual' | 'weighted_random';
+
+export interface CirclePayoutOrderMember {
+  memberId: string;
+  name: string;
+  payoutPosition: number;
+  reliabilityScore: number;
+  savingsContributionCount: number;
+  savingsContributionAmount: number;
+  recentSavingsContributionCount: number;
+  circleContributionCount: number;
+  onTimeCircleContributionCount: number;
+}
+
+export interface CirclePayoutOrderResult {
+  groupId: string;
+  strategy: CirclePayoutOrderStrategy | string;
+  finalizedAt: string;
+  members: CirclePayoutOrderMember[];
+}
+
+export interface CirclePayoutOrderPreviewResult {
+  groupId: string;
+  strategy: CirclePayoutOrderStrategy | string;
+  isFinalized: boolean;
+  finalizedAt?: string | null;
+  members: CirclePayoutOrderMember[];
+}
+
+export interface FinalizeCirclePayoutOrderInput {
+  strategy?: CirclePayoutOrderStrategy;
+  memberIds?: string[];
+}
+
 export interface CreateCircleInput {
   name: string;
   description?: string;
   amount: number;
-  frequency: 'daily' | 'weekly' | 'monthly';
+  frequency: CircleFrequency;
   maxMembers: number;
-  payoutType: 'rotation' | 'random' | 'bidding';
+  adminParticipatesInContributions?: boolean;
   currency?: string;
   isOngoing?: boolean;
   currentCycle?: number;
@@ -325,32 +373,29 @@ export interface SendCircleInviteInput {
   memberContact?: string;
 }
 
-export const CIRCLE_PAYOUT_TYPE_METADATA = {
-  rotation: {
-    label: 'Rotation',
-    description: 'Payouts move in fixed member order each cycle.',
-    actionLabel: 'Release next payout',
+export const CIRCLE_PAYOUT_ORDER_STRATEGY_METADATA = {
+  manual: {
+    label: 'Manual',
+    description: 'Admin arranges and confirms the member payout order before the circle starts.',
   },
-  random: {
-    label: 'Random',
-    description: 'A recipient is picked automatically at random from unpaid members each cycle.',
-    actionLabel: 'Run random payout',
-  },
-  bidding: {
-    label: 'Bidding',
-    description: 'Admin selects the winning unpaid member for each cycle payout.',
-    actionLabel: 'Select recipient',
+  weighted_random: {
+    label: 'System generated',
+    description: 'AjoVault suggests an order using member savings history and prompt contribution behavior, then admin confirms it.',
   },
 } as const;
 
-export const getCirclePayoutTypeLabel = (payoutType: CircleSummary['payoutType']): string =>
-  CIRCLE_PAYOUT_TYPE_METADATA[payoutType].label;
+export const normalizeCirclePayoutOrderStrategy = (
+  strategy?: string | null,
+): CirclePayoutOrderStrategy =>
+  strategy === 'weighted_random' || strategy === 'system_generated'
+    ? 'weighted_random'
+    : 'manual';
 
-export const getCirclePayoutTypeDescription = (payoutType: CircleSummary['payoutType']): string =>
-  CIRCLE_PAYOUT_TYPE_METADATA[payoutType].description;
+export const getCirclePayoutOrderStrategyLabel = (strategy?: string | null): string =>
+  CIRCLE_PAYOUT_ORDER_STRATEGY_METADATA[normalizeCirclePayoutOrderStrategy(strategy)].label;
 
-export const getCirclePayoutActionLabel = (payoutType: CircleSummary['payoutType']): string =>
-  CIRCLE_PAYOUT_TYPE_METADATA[payoutType].actionLabel;
+export const getCirclePayoutOrderStrategyDescription = (strategy?: string | null): string =>
+  CIRCLE_PAYOUT_ORDER_STRATEGY_METADATA[normalizeCirclePayoutOrderStrategy(strategy)].description;
 
 export const circlesKeys = {
   all: ['circles'] as const,
@@ -407,7 +452,7 @@ export const createCircle = async (input: CreateCircleInput): Promise<CircleDeta
       contributionAmount: input.amount,
       frequency: input.frequency,
       maxMembers: input.maxMembers,
-      payoutType: input.payoutType,
+      adminParticipatesInContributions: input.adminParticipatesInContributions ?? true,
       currency: input.currency ?? 'NGN',
       isOngoing: input.isOngoing,
       currentCycle: input.currentCycle,
@@ -436,7 +481,6 @@ export const getCircleInvitePreview = async (code: string): Promise<CircleInvite
     nextContributionDate: response.nextContributionDate,
     nextPayoutDate: response.nextPayoutDate,
     status: response.status,
-    payoutType: response.payoutType,
     inviteCode: response.inviteCode,
     slotsRemaining: response.slotsRemaining,
     alreadyJoined: response.alreadyJoined,
@@ -445,6 +489,9 @@ export const getCircleInvitePreview = async (code: string): Promise<CircleInvite
     invitationStatus: response.invitationStatus ?? undefined,
     startDate: response.startDate ?? undefined,
     completedPayoutsCount: response.completedPayoutsCount,
+    isPayoutOrderFinalized: response.isPayoutOrderFinalized,
+    payoutOrderStrategy: response.payoutOrderStrategy,
+    payoutOrderFinalizedAt: response.payoutOrderFinalizedAt,
   };
 };
 
@@ -470,6 +517,37 @@ export const rejectCircleInvite = async (code: string): Promise<CircleInviteDeci
   apiRequest<MemberInviteDecisionResponse>(`/api/groups/invite/${encodeURIComponent(code.trim().toUpperCase())}/reject`, {
     method: 'POST',
   });
+
+export const finalizeCirclePayoutOrder = async (
+  circleId: string,
+  input: FinalizeCirclePayoutOrderInput,
+): Promise<CirclePayoutOrderResult> =>
+  apiRequest<CirclePayoutOrderResult>(`/api/groups/${encodeURIComponent(circleId)}/payout-order`, {
+    method: 'POST',
+    json: {
+      strategy: input.strategy,
+      memberIds: input.memberIds,
+    },
+  });
+
+export const previewCirclePayoutOrder = async (
+  circleId: string,
+  input: FinalizeCirclePayoutOrderInput = {},
+): Promise<CirclePayoutOrderPreviewResult> =>
+  apiRequest<CirclePayoutOrderPreviewResult>(`/api/groups/${encodeURIComponent(circleId)}/payout-order/preview`, {
+    method: 'POST',
+    json: {
+      strategy: input.strategy,
+      memberIds: input.memberIds,
+    },
+  });
+
+export const reopenCirclePayoutOrder = async (circleId: string): Promise<CircleDetail> => {
+  const response = await apiRequest<GroupDetailResponse>(`/api/groups/${encodeURIComponent(circleId)}/payout-order/reopen`, {
+    method: 'POST',
+  });
+  return mapCircleDetail(response);
+};
 
 export const contributeToCircle = async (circleId: string, pin: string): Promise<CircleContributionResult> =>
   apiRequest<GroupContributionResponse>(`/api/groups/${encodeURIComponent(circleId)}/contributions`, {
@@ -519,11 +597,14 @@ const mapCircleSummary = (circle: GroupSummaryResponse): CircleSummary => ({
   nextContributionDate: circle.nextContributionDate,
   nextPayoutDate: circle.nextPayoutDate,
   status: circle.status,
-  payoutType: circle.payoutType,
   completedPayoutsCount: circle.completedPayoutsCount,
   hasPaidCurrentCycle: circle.hasPaidCurrentCycle,
+  isContributionParticipant: circle.isContributionParticipant ?? true,
   createdAt: circle.createdAt ?? '2026-01-01',
   startDate: circle.startDate ?? undefined,
+  isPayoutOrderFinalized: circle.isPayoutOrderFinalized,
+  payoutOrderStrategy: circle.payoutOrderStrategy,
+  payoutOrderFinalizedAt: circle.payoutOrderFinalizedAt,
 });
 
 const mapCircleDetail = (circle: GroupDetailResponse): CircleDetail => ({
@@ -538,5 +619,6 @@ const mapCircleDetail = (circle: GroupDetailResponse): CircleDetail => ({
     payoutPosition: member.payoutPosition,
     hasReceivedPayout: member.hasReceivedPayout,
     role: member.role,
+    isContributionParticipant: member.isContributionParticipant ?? true,
   })),
 });
