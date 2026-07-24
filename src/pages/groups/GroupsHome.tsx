@@ -966,8 +966,8 @@ const GroupsHome = () => {
         <div className="w-full space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="font-display text-2xl font-bold text-foreground">Clicks</h1>
-              <p className="text-xs text-muted-foreground mt-0.5">Manage contribution clicks and invitation requests.</p>
+              <h1 className="font-display text-2xl font-bold text-foreground">Clics</h1>
+              <p className="text-xs text-muted-foreground mt-0.5">Manage contribution clics and invitation requests.</p>
             </div>
             <div className="flex items-center gap-2">
               {/* Create Group Button */}
@@ -975,7 +975,7 @@ const GroupsHome = () => {
                 onClick={() => setIsCreateModalOpen(true)}
                 className="flex items-center gap-1.5 rounded-xl bg-accent px-3 py-2 text-xs font-bold text-accent-foreground shadow-sm transition-all hover:bg-accent/90"
               >
-                <Plus className="h-4 w-4" /> Create Click
+                <Plus className="h-4 w-4" /> Create Clic
               </button>
             </div>
           </div>
@@ -1553,7 +1553,7 @@ const GroupsHome = () => {
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
         <DialogContent className="w-[92%] max-w-[450px] rounded-3xl p-6 gap-5 bg-card">
           <DialogHeader className="text-left font-display">
-            <DialogTitle className="text-xl font-bold text-foreground">Create New Click</DialogTitle>
+            <DialogTitle className="text-xl font-bold text-foreground">Create New Clic</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground mt-1">
               Start a new peer-to-peer contribution group with custom contribution details.
             </DialogDescription>
@@ -1562,7 +1562,7 @@ const GroupsHome = () => {
           <form onSubmit={handleCreateGroup} className="space-y-4">
             
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Click Name</label>
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Clic Name</label>
               <Input
                 placeholder="e.g. Lagos Investors Guild"
                 value={newGroupName}
@@ -1630,7 +1630,7 @@ const GroupsHome = () => {
                 type="submit"
                 className="h-11 flex-1 rounded-xl font-bold bg-accent text-accent-foreground"
               >
-                Create Click
+                Create Clic
               </Button>
             </div>
 

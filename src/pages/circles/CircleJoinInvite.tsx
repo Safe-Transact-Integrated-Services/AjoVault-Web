@@ -112,7 +112,7 @@ const CircleJoinInvite = () => {
               return;
             }
 
-            navigate('/circles/join');
+            navigate('/circles');
           }}
           className="mb-6 flex items-center gap-1 text-sm text-muted-foreground"
         >

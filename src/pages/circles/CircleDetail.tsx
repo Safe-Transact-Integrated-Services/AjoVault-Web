@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowLeft, ArrowUp, Banknote, Calendar, CheckCircle2, Share2, UserPlus, Wallet, XCircle, Copy, ListChecks, Shuffle, Play, Unlock, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowUp, Banknote, Calendar, CheckCircle2, Share2, UserPlus, Wallet, XCircle, Copy, ListChecks, Shuffle, Play, Unlock, ChevronUp, ChevronDown, ArrowUpDown, Pause, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,15 +12,24 @@ import {
   getCircle,
   getCirclePayoutTypeDescription,
   getCirclePayoutTypeLabel,
+  pauseCircle,
+  payoutCircle,
   previewCirclePayoutOrder,
   reopenCirclePayoutOrder,
   reorderCircleMembers,
+  resumeCircle,
   startCircle,
+  stopCircle,
   type CircleMember,
+  type CirclePayoutResult,
 } from '@/services/circlesApi';
 import { shareLink } from '@/lib/share';
 import { formatCurrency, formatDate } from '@/services/mockData';
 import { getApiErrorMessage } from '@/lib/api/http';
+import { walletKeys } from '@/services/walletApi';
+import { dashboardKeys } from '@/services/dashboardApi';
+import PinPad from '@/components/shared/PinPad';
+import Receipt from '@/components/shared/Receipt';
 
 const formatCircleScheduleDate = (date?: string | null, fallback = 'Not started') =>
   date ? formatDate(date) : fallback;
@@ -35,6 +44,17 @@ const CircleDetail = () => {
   const [isFinalizingOrder, setIsFinalizingOrder] = useState(false);
   const [isReopeningOrder, setIsReopeningOrder] = useState(false);
   const [isStartingCircle, setIsStartingCircle] = useState(false);
+  const [isReorderingMode, setIsReorderingMode] = useState(false);
+  const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false);
+  const [payoutStep, setPayoutStep] = useState<'pin' | 'receipt'>('pin');
+  const [payoutPinError, setPayoutPinError] = useState('');
+  const [isSubmittingPayout, setIsSubmittingPayout] = useState(false);
+  const [payoutReceipt, setPayoutReceipt] = useState<CirclePayoutResult | null>(null);
+  const [pinPadKey, setPinPadKey] = useState(0);
+  const [isPausingCircle, setIsPausingCircle] = useState(false);
+  const [isResumingCircle, setIsResumingCircle] = useState(false);
+  const [isStoppingCircle, setIsStoppingCircle] = useState(false);
+
   const circleQuery = useQuery({
     queryKey: id ? circlesKeys.detail(id) : circlesKeys.detail('missing'),
     queryFn: () => getCircle(id!),
@@ -42,7 +62,6 @@ const CircleDetail = () => {
   });
 
   const circle = circleQuery.data;
-  const [isReorderingMode, setIsReorderingMode] = useState(false);
 
   useEffect(() => {
     if (!circle) {
@@ -77,6 +96,55 @@ const CircleDetail = () => {
   const paidCount = contributionParticipants.filter(member => member.hasPaid).length;
   const inviteLink = `${window.location.origin}/circles/join/${circle.inviteCode}`;
   const adminMember = circle.members.find(member => member.role === 'admin');
+
+  const eligibleMembers = contributionParticipants.filter(member => !member.hasReceivedPayout);
+  const nextInLine = eligibleMembers.slice().sort((left, right) => left.payoutPosition - right.payoutPosition)[0];
+  const allPaid = paidCount === contributionParticipants.length && contributionParticipants.length > 0;
+  const payoutReady = circle.status === 'active' && circle.canPayout && !!nextInLine;
+
+  const handleOpenPayoutModal = () => {
+    if (!payoutReady) {
+      if (circle.status !== 'active') {
+        toast.error('Start circle before disbursing payouts.');
+      } else if (!allPaid) {
+        toast.error('Waiting for all members to complete contributions for this cycle.');
+      } else {
+        toast.error('Payout not ready for this cycle.');
+      }
+      return;
+    }
+    setPayoutPinError('');
+    setPinPadKey(c => c + 1);
+    setPayoutStep('pin');
+    setIsPayoutModalOpen(true);
+  };
+
+  const handleDisbursePayout = async (pin: string) => {
+    if (!id || !nextInLine?.id) return;
+    setIsSubmittingPayout(true);
+    setPayoutPinError('');
+
+    try {
+      const result = await payoutCircle(id, nextInLine.id, pin);
+      setPayoutReceipt(result);
+      await Promise.all([
+        refreshCircleQueries(),
+        queryClient.invalidateQueries({ queryKey: walletKeys.me }),
+        queryClient.invalidateQueries({ queryKey: walletKeys.ledger }),
+        queryClient.invalidateQueries({ queryKey: dashboardKeys.summary }),
+      ]);
+      setPayoutStep('receipt');
+      toast.success('Circle payout posted.');
+    } catch (payoutError) {
+      const message = getApiErrorMessage(payoutError, 'Unable to process this payout.');
+      setPayoutPinError(message);
+      setPinPadKey(c => c + 1);
+      toast.error(message);
+    } finally {
+      setIsSubmittingPayout(false);
+    }
+  };
+
   const currentUserParticipates = circle.role !== 'admin' || adminMember?.isContributionParticipant !== false;
   const payoutOrderMembers = payoutOrder.length === contributionParticipants.length
     ? payoutOrder
@@ -85,11 +153,7 @@ const CircleDetail = () => {
     && circle.status === 'pending'
     && !circle.isPayoutOrderFinalized
     && circle.memberCount < circle.maxMembers;
-
-  // Reordering is allowed specifically for admins BEFORE contribution starts
   const canReorder = circle.role === 'admin' && (circle.status === 'pending' || paidCount === 0 || circle.currentCycle === 1);
-
-  // Sorted members by payoutPosition
   const sortedMembers = [...circle.members].sort((a, b) => a.payoutPosition - b.payoutPosition);
 
   const handleShare = async () => {
@@ -200,6 +264,48 @@ const CircleDetail = () => {
     }
   };
 
+  const handlePauseCircle = async () => {
+    setIsPausingCircle(true);
+    try {
+      await pauseCircle(circle.id);
+      await refreshCircleQueries();
+      toast.success('Circle paused.');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Unable to pause circle.'));
+    } finally {
+      setIsPausingCircle(false);
+    }
+  };
+
+  const handleResumeCircle = async () => {
+    setIsResumingCircle(true);
+    try {
+      await resumeCircle(circle.id);
+      await refreshCircleQueries();
+      toast.success('Circle resumed.');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Unable to resume circle.'));
+    } finally {
+      setIsResumingCircle(false);
+    }
+  };
+
+  const handleStopCircle = async () => {
+    if (!window.confirm('Are you sure you want to stop this circle completely? This cannot be undone.')) {
+      return;
+    }
+    setIsStoppingCircle(true);
+    try {
+      await stopCircle(circle.id);
+      await refreshCircleQueries();
+      toast.success('Circle stopped successfully.');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Unable to stop circle.'));
+    } finally {
+      setIsStoppingCircle(false);
+    }
+  };
+
   return (
     <div className="min-h-screen px-4 py-6 safe-top pb-48">
       <button onClick={() => navigate(-1)} className="mb-6 flex items-center gap-1 text-sm text-muted-foreground">
@@ -257,6 +363,8 @@ const CircleDetail = () => {
           <span className="font-medium text-foreground">{formatCircleScheduleDate(circle.nextContributionDate)}</span>
         </div>
       </div>
+
+
 
       {circle.role === 'admin' && circle.status === 'pending' && (
         <div className="mb-4 space-y-3 rounded-xl border border-amber-200 bg-amber-50/40 p-4 text-sm">
@@ -403,6 +511,146 @@ const CircleDetail = () => {
         </div>
       </div>
 
+      {/* Payout Order Section */}
+      {contributionParticipants.length > 0 && (
+        <div className="mb-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-display text-base font-bold text-foreground">Payout Order</h2>
+            <span className="text-xs font-medium text-muted-foreground">
+              {contributionParticipants.filter(m => m.hasReceivedPayout).length}/{contributionParticipants.length} paid out
+            </span>
+          </div>
+
+          <div className="max-h-72 overflow-y-auto space-y-2.5 pr-1">
+            {contributionParticipants
+              .slice()
+              .sort((left, right) => left.payoutPosition - right.payoutPosition)
+              .map((member) => {
+                const isNext = member.id === nextInLine?.id;
+                const isPaidOut = member.hasReceivedPayout;
+
+                return (
+                  <div
+                    key={member.id}
+                    className={`flex items-center gap-3 rounded-xl border p-3.5 transition-all ${
+                      isPaidOut
+                        ? 'border-emerald-200 bg-emerald-50/60 text-emerald-950'
+                        : isNext
+                        ? 'border-accent/40 bg-accent/5 ring-1 ring-accent/20'
+                        : 'border-border/60 bg-muted/20 text-muted-foreground'
+                    }`}
+                  >
+                    {/* Position Avatar / Status Icon */}
+                    <div
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                        isPaidOut
+                          ? 'bg-emerald-500 text-white'
+                          : isNext
+                          ? 'bg-accent text-white'
+                          : 'bg-muted-foreground/20 text-muted-foreground'
+                      }`}
+                    >
+                      {isPaidOut ? (
+                        <CheckCircle2 className="h-5 w-5" />
+                      ) : (
+                        <span>#{member.payoutPosition}</span>
+                      )}
+                    </div>
+
+                    {/* Member Info */}
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={`text-sm font-semibold truncate ${
+                          isPaidOut
+                            ? 'text-emerald-900'
+                            : isNext
+                            ? 'text-foreground'
+                            : 'text-muted-foreground'
+                        }`}
+                      >
+                        {member.name}
+                      </p>
+                      <p className="text-xs opacity-75">
+                        Position #{member.payoutPosition}
+                      </p>
+                    </div>
+
+                    {/* Status Indicator Badge */}
+                    <div className="shrink-0">
+                      {isPaidOut ? (
+                        <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-300/50 font-bold text-[11px]">
+                          Paid Out
+                        </Badge>
+                      ) : isNext ? (
+                        <Badge className="bg-accent/15 text-accent border-accent/30 font-bold text-[11px]">
+                          Next Recipient
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-gray-100/80 text-gray-500 border-gray-200 font-medium text-[11px]">
+                          Upcoming
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      {/* Admin Pause/Resume/Stop Controls for Started Circles */}
+      {circle.role === 'admin' && (circle.status === 'active' || circle.status === 'paused') && (
+        <div className="mb-6 rounded-xl border border-border bg-card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Admin Circle Controls</p>
+            <Badge variant={circle.status === 'paused' ? 'outline' : 'secondary'} className="text-[10px] uppercase font-bold">
+              {circle.status}
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {circle.status === 'active'
+              ? 'Pause contributions temporarily or stop this circle completely.'
+              : 'Resume this circle to allow member contributions again.'}
+          </p>
+          <div className="flex gap-2 pt-1">
+            {circle.status === 'active' ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="flex-1 gap-1.5 text-xs font-bold text-amber-700 bg-amber-50/80 border border-amber-300/80 hover:bg-amber-100 hover:text-amber-950 transition-colors shadow-sm"
+                onClick={handlePauseCircle}
+                disabled={isPausingCircle || isStoppingCircle}
+              >
+                <Pause className="h-4 w-4" />
+                {isPausingCircle ? 'Pausing...' : 'Pause Circle'}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                className="flex-1 gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50/80 border border-emerald-300/80 hover:bg-emerald-100 hover:text-emerald-950 transition-colors shadow-sm"
+                onClick={handleResumeCircle}
+                disabled={isResumingCircle || isStoppingCircle}
+              >
+                <Play className="h-4 w-4 fill-current" />
+                {isResumingCircle ? 'Resuming...' : 'Resume Circle'}
+              </Button>
+            )}
+
+            <Button
+              type="button"
+              variant="ghost"
+              className="flex-1 gap-1.5 text-xs font-bold text-red-600 bg-red-50/80 border border-red-200 hover:bg-red-100 hover:text-red-950 transition-colors shadow-sm"
+              onClick={handleStopCircle}
+              disabled={isStoppingCircle || isPausingCircle || isResumingCircle}
+            >
+              <Square className="h-4 w-4" />
+              {isStoppingCircle ? 'Stopping...' : 'Stop Circle'}
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="fixed bottom-20 left-0 right-0 px-4">
         <div className="mx-auto max-w-lg space-y-2">
           {circle.role === 'admin' && (
@@ -418,21 +666,75 @@ const CircleDetail = () => {
                 <Share2 className="h-4 w-4" /> Share
               </Button>
               <Button variant="outline" className="h-11 flex-grow gap-1.5 px-2.5 text-xs font-semibold" onClick={() => navigate('/circles/create', { state: { templateCircle: circle } })}>
-                <Copy className="h-4 w-4" /> Duplicate
+                <Copy className="h-4 w-4" /> Use as Template
               </Button>
             </div>
           )}
-          <Button className="h-12 w-full font-bold" onClick={() => navigate(`/circles/${circle.id}/contribute`)} disabled={circle.status !== 'active' || !currentUserParticipates}>
+
+          <Button
+            className="h-12 w-full font-bold"
+            onClick={() => navigate(`/circles/${circle.id}/contribute`)}
+            disabled={circle.status !== 'active' || !currentUserParticipates || circle.hasPaidCurrentCycle}
+          >
             {circle.status !== 'active'
-              ? 'Start circle before contributions'
+              ? circle.status === 'paused'
+                ? 'Circle is paused'
+                : circle.status === 'completed'
+                  ? 'Circle completed'
+                  : `Make Contribution - ${formatCurrency(circle.amount)}`
               : !currentUserParticipates
                 ? 'Admin is not contributing'
-              : circle.hasPaidCurrentCycle
-                ? 'Contribution posted for this cycle'
-                : `Make Contribution - ${formatCurrency(circle.amount)}`}
+                : circle.hasPaidCurrentCycle
+                  ? 'Contribution posted for this cycle'
+                  : `Make Contribution - ${formatCurrency(circle.amount)}`}
           </Button>
         </div>
       </div>
+
+      {/* Inline Payout Authorization & Receipt Modal */}
+      {isPayoutModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl bg-background p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setIsPayoutModalOpen(false)}
+              className="absolute right-4 top-4 rounded-full p-1 text-muted-foreground hover:bg-muted"
+            >
+              <XCircle className="h-5 w-5" />
+            </button>
+
+            {payoutStep === 'pin' && (
+              <div className="flex flex-col items-center pt-2">
+                <PinPad
+                  key={pinPadKey}
+                  title="Authorize Payout"
+                  subtitle={`${formatCurrency(circle.payoutAmount)} to ${nextInLine?.name ?? 'eligible member'}`}
+                  error={payoutPinError}
+                  disabled={isSubmittingPayout}
+                  onInput={() => setPayoutPinError('')}
+                  onComplete={handleDisbursePayout}
+                />
+              </div>
+            )}
+
+            {payoutStep === 'receipt' && payoutReceipt && (
+              <Receipt
+                status="completed"
+                amount={payoutReceipt.amount}
+                description={`Circle payout to ${payoutReceipt.recipientName}`}
+                reference={payoutReceipt.reference}
+                date={payoutReceipt.createdAtUtc}
+                onClose={() => setIsPayoutModalOpen(false)}
+                details={[
+                  { label: 'Circle', value: circle.name },
+                  { label: 'Recipient', value: payoutReceipt.recipientName },
+                  { label: 'Completed Cycle', value: String(payoutReceipt.completedCycleNumber) },
+                  { label: 'Recipient Wallet After', value: formatCurrency(payoutReceipt.walletBalanceAfter) },
+                ]}
+              />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

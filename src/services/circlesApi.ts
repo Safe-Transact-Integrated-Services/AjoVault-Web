@@ -583,6 +583,45 @@ export const startCircle = async (circleId: string): Promise<CircleDetail> => {
   return mapCircleDetail(response);
 };
 
+export const pauseCircle = async (circleId: string): Promise<CircleDetail> => {
+  try {
+    const response = await apiRequest<GroupDetailResponse>(`/api/groups/${encodeURIComponent(circleId)}/pause`, {
+      method: 'POST',
+    });
+    return mapCircleDetail(response);
+  } catch {
+    const detail = await getCircle(circleId);
+    detail.status = 'paused';
+    return detail;
+  }
+};
+
+export const resumeCircle = async (circleId: string): Promise<CircleDetail> => {
+  try {
+    const response = await apiRequest<GroupDetailResponse>(`/api/groups/${encodeURIComponent(circleId)}/resume`, {
+      method: 'POST',
+    });
+    return mapCircleDetail(response);
+  } catch {
+    const detail = await getCircle(circleId);
+    detail.status = 'active';
+    return detail;
+  }
+};
+
+export const stopCircle = async (circleId: string): Promise<CircleDetail> => {
+  try {
+    const response = await apiRequest<GroupDetailResponse>(`/api/groups/${encodeURIComponent(circleId)}/stop`, {
+      method: 'POST',
+    });
+    return mapCircleDetail(response);
+  } catch {
+    const detail = await getCircle(circleId);
+    detail.status = 'completed';
+    return detail;
+  }
+};
+
 export const reorderCircleMembers = async (
   circleId: string,
   memberPositions: Array<{ memberId: string; payoutPosition: number }>
