@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowLeft, ArrowUp, Banknote, Calendar, CheckCircle2, Share2, UserPlus, Wallet, XCircle, Copy, ListChecks, Shuffle, Play, Unlock, ChevronUp, ChevronDown, ArrowUpDown, Pause, Square } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowUp, Banknote, Calendar, CheckCircle2, Share2, UserPlus, Wallet, XCircle, Copy, ListChecks, Shuffle, Play, Unlock, ChevronUp, ChevronDown, ArrowUpDown, Pause, Square, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -511,6 +511,7 @@ const CircleDetail = () => {
         </div>
       </div>
 
+
       {/* Payout Order Section */}
       {contributionParticipants.length > 0 && (
         <div className="mb-6">
@@ -655,18 +656,46 @@ const CircleDetail = () => {
         <div className="mx-auto max-w-lg space-y-2">
           {circle.role === 'admin' && (
             <div className="flex gap-2">
+              {circle.status !== 'active' ? (
+                <>
+                  <Button
+                    variant="outline"
+                    className="h-11 flex-grow gap-1.5 px-2 text-xs font-semibold"
+                    onClick={() => navigate('/circles/create', { state: { editCircle: circle } })}
+                  >
+                    <Pencil className="h-3.5 w-3.5" /> Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-11 flex-grow gap-1.5 px-2 text-xs font-semibold"
+                    onClick={() => navigate(`/circles/${circle.id}/invite`)}
+                  >
+                    <UserPlus className="h-3.5 w-3.5" /> Invite
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-11 flex-grow gap-1.5 px-2 text-xs font-semibold"
+                    onClick={() => { void handleShare(); }}
+                  >
+                    <Share2 className="h-3.5 w-3.5" /> Share
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="outline"
+                  className="h-11 flex-grow gap-1.5 px-2.5 text-xs font-bold text-emerald-700 border-emerald-300 bg-emerald-50/80 hover:bg-emerald-100 hover:text-emerald-950 transition-colors shadow-sm"
+                  onClick={handleOpenPayoutModal}
+                >
+                  <Banknote className="h-4 w-4" /> Disburse Payout
+                </Button>
+              )}
+
               <Button
                 variant="outline"
-                className="h-11 flex-grow gap-1.5 px-2.5 text-xs font-semibold"
-                onClick={() => navigate(`/circles/${circle.id}/invite`)}
+                className="h-11 flex-grow gap-1.5 px-2 text-xs font-semibold"
+                onClick={() => navigate('/circles/create', { state: { templateCircle: circle } })}
               >
-                <UserPlus className="h-4 w-4" /> Invite
-              </Button>
-              <Button variant="outline" className="h-11 flex-grow gap-1.5 px-2.5 text-xs font-semibold" onClick={() => { void handleShare(); }}>
-                <Share2 className="h-4 w-4" /> Share
-              </Button>
-              <Button variant="outline" className="h-11 flex-grow gap-1.5 px-2.5 text-xs font-semibold" onClick={() => navigate('/circles/create', { state: { templateCircle: circle } })}>
-                <Copy className="h-4 w-4" /> Use as Template
+                <Copy className="h-3.5 w-3.5" /> Use as Template
               </Button>
             </div>
           )}

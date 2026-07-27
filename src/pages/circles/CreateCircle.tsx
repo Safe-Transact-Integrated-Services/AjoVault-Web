@@ -12,6 +12,7 @@ import {
   circlesKeys,
   createCircle,
   sendCircleInvite,
+  updateCircle,
   type CircleDetail,
   type CircleFrequency,
 } from '@/services/circlesApi';
@@ -51,23 +52,26 @@ const CreateCircle = () => {
   const [completedPayoutsCount, setCompletedPayoutsCount] = useState('0');
 
   const location = useLocation();
+  const editCircleTarget = location.state?.editCircle;
+  const isEditing = !!editCircleTarget;
   const template = location.state?.templateCircle;
 
-  // Auto pre-fill if navigating with template state
+  // Auto pre-fill if navigating with edit or template state
   useEffect(() => {
-    if (template) {
-      setName(template.name ?? '');
-      setDescription(template.description ?? '');
-      setAmount(template.amount?.toString() ?? '');
-      setFrequency(template.frequency ?? 'monthly');
-      setMaxMembers(template.maxMembers?.toString() ?? '');
+    const source = editCircleTarget || template;
+    if (source) {
+      setName(source.name ?? '');
+      setDescription(source.description ?? '');
+      setAmount(source.amount?.toString() ?? '');
+      setFrequency(source.frequency ?? 'monthly');
+      setMaxMembers(source.maxMembers?.toString() ?? '');
       setAdminParticipatesInContributions(
-        template.members?.find((member: { role?: string; isContributionParticipant?: boolean }) => member.role === 'admin')
+        source.members?.find((member: { role?: string; isContributionParticipant?: boolean }) => member.role === 'admin')
           ?.isContributionParticipant ?? true,
       );
-      setStartDate(template.startDate ?? '');
+      setStartDate(source.startDate ?? '');
     }
-  }, [template]);
+  }, [editCircleTarget, template]);
 
   const handleCreate = async () => {
     const amountValue = Number(amount);
@@ -94,6 +98,25 @@ const CreateCircle = () => {
     const completedPayoutsValue = isOngoing ? Number(completedPayoutsCount) : 0;
 
     try {
+      if (isEditing && editCircleTarget?.id) {
+        await updateCircle(editCircleTarget.id, {
+          name,
+          description,
+          amount: amountValue,
+          frequency,
+          maxMembers: maxMembersValue,
+          adminParticipatesInContributions,
+        });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: circlesKeys.detail(editCircleTarget.id) }),
+          queryClient.invalidateQueries({ queryKey: circlesKeys.list }),
+          queryClient.invalidateQueries({ queryKey: circlesKeys.dashboard }),
+        ]);
+        toast.success('Circle updated successfully.');
+        navigate(`/circles/${editCircleTarget.id}`);
+        return;
+      }
+
       const createdCircle = await createCircle({
         name,
         description,
@@ -116,7 +139,7 @@ const CreateCircle = () => {
       setStep('invite');
       toast.success('Circle created.');
     } catch (createError) {
-      setError(getApiErrorMessage(createError, 'Unable to create this circle.'));
+      setError(getApiErrorMessage(createError, 'Unable to process circle.'));
     } finally {
       setIsSubmitting(false);
     }
