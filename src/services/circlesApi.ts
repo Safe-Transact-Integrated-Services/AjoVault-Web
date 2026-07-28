@@ -322,7 +322,6 @@ export interface CreateCircleInput {
   amount: number;
   frequency: CircleFrequency;
   maxMembers: number;
-  payoutType?: 'rotation' | 'random' | 'bidding';
   adminParticipatesInContributions?: boolean;
   currency?: string;
   isOngoing?: boolean;
@@ -629,27 +628,29 @@ export interface UpdateCircleInput {
   frequency?: CircleFrequency;
   maxMembers?: number;
   adminParticipatesInContributions?: boolean;
+  startDate?: string;
+  totalCycles?: number;
 }
 
 export const updateCircle = async (
   circleId: string,
   input: UpdateCircleInput
 ): Promise<CircleDetail> => {
-  try {
-    const response = await apiRequest<GroupDetailResponse>(`/api/groups/${encodeURIComponent(circleId)}`, {
-      method: 'PUT',
-      json: input,
-    });
-    return mapCircleDetail(response);
-  } catch {
-    const detail = await getCircle(circleId);
-    if (input.name) detail.name = input.name;
-    if (input.description !== undefined) detail.description = input.description;
-    if (input.amount) detail.amount = input.amount;
-    if (input.frequency) detail.frequency = input.frequency;
-    if (input.maxMembers) detail.maxMembers = input.maxMembers;
-    return detail;
-  }
+  const response = await apiRequest<GroupDetailResponse>(`/api/groups/${encodeURIComponent(circleId)}`, {
+    method: 'PUT',
+    json: {
+      groupName: input.name?.trim(),
+      description: input.description?.trim() ?? undefined,
+      contributionAmount: input.amount,
+      frequency: input.frequency,
+      maxMembers: input.maxMembers,
+      adminParticipatesInContributions: input.adminParticipatesInContributions,
+      startDate: input.startDate || undefined,
+      totalCycles: input.totalCycles,
+    },
+  });
+
+  return mapCircleDetail(response);
 };
 
 export const reorderCircleMembers = async (

@@ -39,7 +39,6 @@ const CreateCircle = () => {
   const [amount, setAmount] = useState('');
   const [frequency, setFrequency] = useState<CircleFrequency>('monthly');
   const [maxMembers, setMaxMembers] = useState('');
-  const [payoutType] = useState<'rotation' | 'random' | 'bidding'>('rotation');
   const [adminParticipatesInContributions, setAdminParticipatesInContributions] = useState(true);
   const [startDate, setStartDate] = useState('');
   const [circle, setCircle] = useState<CircleDetail | null>(null);
@@ -106,11 +105,14 @@ const CreateCircle = () => {
           frequency,
           maxMembers: maxMembersValue,
           adminParticipatesInContributions,
+          startDate: startDate || undefined,
+          totalCycles: maxMembersValue,
         });
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: circlesKeys.detail(editCircleTarget.id) }),
           queryClient.invalidateQueries({ queryKey: circlesKeys.list }),
           queryClient.invalidateQueries({ queryKey: circlesKeys.dashboard }),
+          queryClient.invalidateQueries({ queryKey: dashboardKeys.summary }),
         ]);
         toast.success('Circle updated successfully.');
         navigate(`/circles/${editCircleTarget.id}`);
@@ -205,7 +207,7 @@ const CreateCircle = () => {
         <motion.div key={step} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
           {step === 'form' && (
             <div className="space-y-6">
-              <h1 className="font-display text-2xl font-bold">Create Circle</h1>
+              <h1 className="font-display text-2xl font-bold">{isEditing ? 'Edit Circle' : 'Create Circle'}</h1>
               
               {/* Section 1: Basic Information */}
               <div className="space-y-4 rounded-xl border border-border bg-card p-4">
@@ -224,7 +226,7 @@ const CreateCircle = () => {
               <div className="space-y-4 rounded-xl border border-border bg-card p-4">
                 <h3 className="font-semibold text-foreground text-sm border-b border-border pb-2">Contribution Settings</h3>
                 <div className="space-y-2">
-                  <Label htmlFor="circle-amount">Amount per member (₦)</Label>
+                  <Label htmlFor="circle-amount">Amount per member (NGN)</Label>
                   <Input id="circle-amount" type="number" value={amount} onChange={event => setAmount(event.target.value.replace(/[^\d]/g, ''))} placeholder="25000" className="h-12" />
                 </div>
                 <div className="space-y-2">
@@ -292,28 +294,30 @@ const CreateCircle = () => {
                   </p>
                 </div>
 
-                <div className="pt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={isOngoing}
-                      onChange={(e) => {
-                        setIsOngoing(e.target.checked);
-                        if (!e.target.checked) {
-                          setCurrentCycle('1');
-                          setCompletedPayoutsCount('0');
-                        }
-                      }}
-                      className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent accent-accent"
-                    />
-                    <span className="text-sm font-semibold text-foreground">Import group contribution (offline circle)</span>
-                  </label>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 ml-6">
-                    Select this if some contributions/payouts have already been processed offline. Requires a start date.
-                  </p>
-                </div>
+                {!isEditing && (
+                  <div className="pt-2">
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={isOngoing}
+                        onChange={(e) => {
+                          setIsOngoing(e.target.checked);
+                          if (!e.target.checked) {
+                            setCurrentCycle('1');
+                            setCompletedPayoutsCount('0');
+                          }
+                        }}
+                        className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent accent-accent"
+                      />
+                      <span className="text-sm font-semibold text-foreground">Import group contribution (offline circle)</span>
+                    </label>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 ml-6">
+                      Select this if some contributions/payouts have already been processed offline. Requires a start date.
+                    </p>
+                  </div>
+                )}
 
-                {isOngoing && (
+                {!isEditing && isOngoing && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
@@ -364,7 +368,7 @@ const CreateCircle = () => {
               )}
 
               <Button className="h-12 w-full font-bold" onClick={handleCreate} disabled={isSubmitting || !name.trim() || !amount || !maxMembers}>
-                {isSubmitting ? 'Creating...' : 'Create Circle'}
+                {isSubmitting ? (isEditing ? 'Saving...' : 'Creating...') : (isEditing ? 'Save Changes' : 'Create Circle')}
               </Button>
             </div>
           )}
