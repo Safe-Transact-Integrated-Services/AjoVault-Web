@@ -7,7 +7,7 @@ export interface GroupGoal {
   currency: string;
   image?: string;
   memberCount: number;
-  frequency: 'daily' | 'weekly' | 'monthly' | 'one-time';
+  frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'one-time';
   contributionAmount: number;
   deadline: string;
   createdAt: string;

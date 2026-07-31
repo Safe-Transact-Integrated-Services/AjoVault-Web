@@ -294,70 +294,24 @@ const CreateCircle = () => {
                   </p>
                 </div>
 
-                {!isEditing && (
-                  <div className="pt-2">
-                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={isOngoing}
-                        onChange={(e) => {
-                          setIsOngoing(e.target.checked);
-                          if (!e.target.checked) {
-                            setCurrentCycle('1');
-                            setCompletedPayoutsCount('0');
-                          }
-                        }}
-                        className="h-4 w-4 rounded border-gray-300 text-accent focus:ring-accent accent-accent"
-                      />
-                      <span className="text-sm font-semibold text-foreground">Import group contribution (offline circle)</span>
-                    </label>
-                    <p className="text-[11px] text-muted-foreground mt-0.5 ml-6">
-                      Select this if some contributions/payouts have already been processed offline. Requires a start date.
-                    </p>
-                  </div>
-                )}
-
-                {!isEditing && isOngoing && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    className="space-y-4 border-l-2 border-accent/20 pl-4 py-1"
-                  >
-                    <div className="space-y-2">
-                      <Label htmlFor="circle-current-cycle">Current Cycle Number</Label>
-                      <Input
-                        id="circle-current-cycle"
-                        type="number"
-                        min="1"
-                        max={maxMembers || "100"}
-                        value={currentCycle}
-                        onChange={event => setCurrentCycle(event.target.value.replace(/[^\d]/g, ''))}
-                        placeholder="e.g. 4"
-                        className="h-12"
-                      />
-                      <p className="text-[10px] text-muted-foreground">
-                        The circle will start digitized at this cycle number.
+                {/* Import group contribution (offline circle) */}
+                <div className="space-y-3 pt-2 border-t border-border">
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isOngoing}
+                      onChange={e => setIsOngoing(e.target.checked)}
+                      className="mt-1 h-4 w-4 rounded border-border text-accent focus:ring-accent accent-accent"
+                    />
+                    <div>
+                      <span className="text-sm font-bold text-foreground">Import group contribution (offline circle)</span>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Select this if some contributions/payouts have already been processed offline. Requires a start date.
                       </p>
                     </div>
+                  </label>
+                </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="circle-completed-payouts">Payouts Completed Offline</Label>
-                      <Input
-                        id="circle-completed-payouts"
-                        type="number"
-                        min="0"
-                        max={String(Math.max(0, Number(currentCycle) - 1))}
-                        value={completedPayoutsCount}
-                        onChange={event => setCompletedPayoutsCount(event.target.value.replace(/[^\d]/g, ''))}
-                        placeholder="e.g. 3"
-                        className="h-12"
-                      />
-                      <p className="text-[10px] text-muted-foreground">
-                        Number of members who have already received their payouts offline.
-                      </p>
-                    </div>
-                  </motion.div>
-                )}
               </div>
 
               {error && (

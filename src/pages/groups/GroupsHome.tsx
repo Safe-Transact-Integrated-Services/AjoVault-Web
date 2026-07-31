@@ -21,13 +21,20 @@ import {
   Pencil,
   Copy,
   Link,
+  Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/lib/api/http';
+import { getClics, getClic, createClic, updateClic, deleteClic, addClicMember, updateClicMember, updateClicMembersBatch, createClicInvitation, resendClicInvitation, acceptClicInvitation, rejectClicInvitation, removeClicMember, removeClicInvitation, clicsKeys } from '@/services/clicsApi';
+import { searchPlatformUsers } from '@/services/platformUsersApi';
+import { EmptyTableState } from '@/components/shared/EmptyTableState';
 
 // Self-contained helpers
 const formatCurrency = (amount: number, currency: string = 'NGN') => {
@@ -259,22 +266,41 @@ interface PhoneContact {
   name: string;
   contact: string;
   circleName?: string;
+  adminOf?: string;
+  role?: 'admin' | 'member';
 }
 
 const mockPhoneContacts: PhoneContact[] = [
-  { name: 'Chinedu O.', contact: 'chinedu@email.com', circleName: 'Youth Empowerment Club' },
-  { name: 'Tunde W.', contact: 'tunde@email.com', circleName: 'Tech Founders Cooperative' },
-  { name: 'Zainab B.', contact: 'zainab@email.com', circleName: 'Youth Empowerment Club' },
-  { name: 'Bisi A.', contact: 'bisi@email.com', circleName: 'Lagos Investment Circle' },
-  { name: 'Kunle S.', contact: '+234 803 111 2222', circleName: 'Tech Founders Cooperative' },
-  { name: 'Halima F.', contact: 'halima@email.com', circleName: 'Youth Empowerment Club' },
+  { name: 'Chinedu O.', contact: 'chinedu@email.com', circleName: 'Youth Empowerment Club', adminOf: 'Youth Empowerment Club (Circle)', role: 'admin' },
+  { name: 'Tunde W.', contact: 'tunde@email.com', circleName: 'Tech Founders Cooperative', adminOf: 'Tech Founders Cooperative (Circle)', role: 'admin' },
+  { name: 'Zainab B.', contact: 'zainab@email.com', circleName: 'Youth Empowerment Club', role: 'member' },
+  { name: 'Bisi A.', contact: 'bisi@email.com', circleName: 'Lagos Investment Circle', adminOf: 'Lagos Real Estate Fund (Group Goal)', role: 'admin' },
+  { name: 'Kunle S.', contact: '+234 803 111 2222', circleName: 'Tech Founders Cooperative', role: 'member' },
+  { name: 'Halima F.', contact: 'halima@email.com', circleName: 'Youth Empowerment Club', adminOf: 'Youth Tech Hub (Group Goal)', role: 'admin' },
 ];
 
 const GroupsHome = () => {
   const navigate = useNavigate();
-  const [groups, setGroups] = useState<Group[]>(initialGroups);
+  const queryClient = useQueryClient();
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  
+
+  const clicsQuery = useQuery({
+    queryKey: clicsKeys.list,
+    queryFn: () => getClics(1, 50),
+    retry: 1,
+  });
+
+  const clicDetailQuery = useQuery({
+    queryKey: clicsKeys.detail(selectedGroupId ?? ''),
+    queryFn: () => getClic(selectedGroupId!),
+    enabled: !!selectedGroupId,
+    retry: 1,
+  });
+
+  const groups = useMemo(() => {
+    return (clicsQuery.data as unknown as Group[]) || [];
+  }, [clicsQuery.data]);
+
   // Filtering & searching states
   const [activeTab, setActiveTab] = useState<'all' | 'admin' | 'member' | 'invites'>('all');
   const [search, setSearch] = useState('');
@@ -317,22 +343,65 @@ const GroupsHome = () => {
   const [manualContact, setManualContact] = useState('');
 
   // Platform User Import Modal states
-  const [importSearchQuery, setImportSearchQuery] = useState('');
+  const [importSearchInput, setImportSearchInput] = useState('');
+  const [activeImportSearchQuery, setActiveImportSearchQuery] = useState('');
   const [selectedCircleFilter, setSelectedCircleFilter] = useState('all');
 
+  // Dynamic Circles / Group Goals filter pills & platform users computation
+  const availableCircleFilterPills = useMemo(() => {
+    const namesFromGroups = Array.from(new Set(groups.map(g => g.name).filter(Boolean)));
+    if (namesFromGroups.length > 0) {
+      return ['all', ...namesFromGroups];
+    }
+    return ['all', 'Youth Empowerment Club', 'Tech Founders Cooperative', 'Lagos Investment Circle'];
+  }, [groups]);
+
+  const importablePlatformUsers = useMemo(() => {
+    const userList: PhoneContact[] = [];
+    const seenContacts = new Set<string>();
+
+    groups.forEach(g => {
+      (g.members || []).forEach(m => {
+        const contactStr = m.email || m.phone || (m as any).phoneNumber || (m as any).contact || '';
+        if (!contactStr) return;
+
+        const key = `${m.name || (m as any).displayName}_${contactStr}`;
+        if (!seenContacts.has(key)) {
+          seenContacts.add(key);
+          const isMemberAdmin = m.role === 'admin' || (g.role === 'admin' && m.name === 'Abdul-azeez Baruwa');
+          userList.push({
+            name: m.name || (m as any).displayName || 'Platform User',
+            contact: contactStr,
+            circleName: g.name,
+            adminOf: isMemberAdmin ? `${g.name} (Circle)` : undefined,
+            role: m.role || 'member',
+          });
+        }
+      });
+    });
+
+    if (userList.length > 0) {
+      return userList;
+    }
+
+    return mockPhoneContacts;
+  }, [groups]);
+
   const filteredPhoneContacts = useMemo(() => {
-    return mockPhoneContacts.filter(contact => {
-      const q = importSearchQuery.trim().toLowerCase();
+    return importablePlatformUsers.filter(contact => {
+      const q = activeImportSearchQuery.trim().toLowerCase();
       const matchesSearch = !q ||
         contact.name.toLowerCase().includes(q) ||
-        contact.contact.toLowerCase().includes(q);
-      
+        contact.contact.toLowerCase().includes(q) ||
+        (contact.adminOf && contact.adminOf.toLowerCase().includes(q)) ||
+        (contact.circleName && contact.circleName.toLowerCase().includes(q));
+
       const matchesCircle = selectedCircleFilter === 'all' ||
         contact.circleName === selectedCircleFilter;
 
       return matchesSearch && matchesCircle;
     });
-  }, [importSearchQuery, selectedCircleFilter]);
+  }, [importablePlatformUsers, activeImportSearchQuery, selectedCircleFilter]);
 
   // Derive receivedInvites dynamically from unresolved invite notifications
   const receivedInvites = useMemo(() => {
@@ -358,17 +427,77 @@ const GroupsHome = () => {
   const [inviteContact, setInviteContact] = useState('');
   const [inviteChannel, setInviteChannel] = useState<'platform' | 'email' | 'sms'>('platform');
 
-  const toggleExpand = (id: string, e: React.MouseEvent) => {
+  // Expanded members inline state & pending card edits state
+  const [expandedMembersMap, setExpandedMembersMap] = useState<Record<string, ClicMemberDetail[]>>({});
+  const [loadingMembersMap, setLoadingMembersMap] = useState<Record<string, boolean>>({});
+  const [hasPendingEditsMap, setHasPendingEditsMap] = useState<Record<string, boolean>>({});
+  const [pendingMemberEditsMap, setPendingMemberEditsMap] = useState<Record<string, Record<string, { displayName?: string; email?: string; phoneNumber?: string }>>>({});
+  const [isSavingCardMap, setIsSavingCardMap] = useState<Record<string, boolean>>({});
+
+  // Unsaved edits confirmation modal state & navigation protection
+  const [pendingNavigationAction, setPendingNavigationAction] = useState<(() => void) | null>(null);
+
+  const unsavedGroupId = useMemo(() => {
+    return Object.keys(hasPendingEditsMap).find(id => !!hasPendingEditsMap[id]) || null;
+  }, [hasPendingEditsMap]);
+
+  const handleProtectedAction = (action: () => void) => {
+    if (unsavedGroupId) {
+      setPendingNavigationAction(() => action);
+    } else {
+      action();
+    }
+  };
+
+  const handleDiscardPendingEdits = (groupId: string) => {
+    setHasPendingEditsMap(prev => ({ ...prev, [groupId]: false }));
+    setPendingMemberEditsMap(prev => ({ ...prev, [groupId]: {} }));
+    queryClient.invalidateQueries({ queryKey: clicsKeys.all });
+  };
+
+  // Prevent accidental tab close/refresh if there are unsaved member edits
+  useEffect(() => {
+    const hasUnsaved = !!unsavedGroupId;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsaved) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [unsavedGroupId]);
+
+  const toggleExpand = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const willExpand = !expandedGroups[id];
+
     setExpandedGroups(prev => ({
       ...prev,
-      [id]: !prev[id],
+      [id]: willExpand,
     }));
+
+    if (willExpand && !expandedMembersMap[id]) {
+      setLoadingMembersMap(prev => ({ ...prev, [id]: true }));
+      try {
+        const detail = await getClic(id);
+        if (detail && Array.isArray(detail.members)) {
+          setExpandedMembersMap(prev => ({ ...prev, [id]: detail.members }));
+        }
+      } catch {
+        // Error handling
+      } finally {
+        setLoadingMembersMap(prev => ({ ...prev, [id]: false }));
+      }
+    }
   };
 
   const selectedGroup = useMemo(() => {
-    return groups.find(g => g.id === selectedGroupId) || null;
-  }, [groups, selectedGroupId]);
+    if (clicDetailQuery.data) {
+      return clicDetailQuery.data as unknown as Group;
+    }
+    return groups.find(g => g.id === selectedGroupId || (g as any).clicId === selectedGroupId) || null;
+  }, [groups, selectedGroupId, clicDetailQuery.data]);
 
   // Initializing maps for newly created groups
   useEffect(() => {
@@ -417,64 +546,100 @@ const GroupsHome = () => {
   }, [groups, activeTab, search, sortBy]);
 
   // Handle creation of a new group from form modal
-  const handleCreateGroup = (e: React.FormEvent) => {
+  const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGroupName.trim()) {
       toast.error('Please enter a group name.');
       return;
     }
 
-    const newId = `grp_${Date.now()}`;
-    const amountVal = parseFloat(newGroupAmount) || 5000;
-    const maxVal = parseInt(newGroupMaxMembers) || 10;
+    try {
+      const newClic = await createClic({
+        name: newGroupName.trim(),
+        description: newGroupDesc.trim() || undefined,
+        members: addedGroupMembers.map(m => ({
+          displayName: m.name,
+          email: m.contact.includes('@') ? m.contact : undefined,
+          phoneNumber: !m.contact.includes('@') ? m.contact : undefined,
+        })),
+      });
 
-    // Map added members to group members
-    const mappedMembers: GroupMember[] = [
-      { id: 'm_creator', name: 'Adaeze Okafor', contact: 'adaeze@email.com', role: 'admin', hasPaid: false, payoutPosition: 1 },
-      ...addedGroupMembers.map((m, idx) => ({
-        id: `m_added_${idx}_${Date.now()}`,
-        name: m.name,
-        contact: m.contact,
-        email: m.contact.includes('@') ? m.contact : undefined,
-        phone: !m.contact.includes('@') ? m.contact : undefined,
-        role: 'member' as const,
-        hasPaid: false,
-        payoutPosition: idx + 2
-      }))
-    ];
+      await queryClient.invalidateQueries({ queryKey: clicsKeys.all });
+      if (newClic?.id) {
+        setSelectedGroupId(newClic.id);
+      }
+      setIsCreateModalOpen(false);
 
-    const createdGroup: Group = {
-      id: newId,
-      name: newGroupName.trim(),
-      description: newGroupDesc.trim() || 'Custom Group',
-      amount: amountVal,
-      currency: 'NGN',
-      frequency: newGroupFreq,
-      memberCount: mappedMembers.length,
-      maxMembers: maxVal,
-      currentCycle: 0,
-      totalCycles: maxVal,
-      role: 'admin',
-      nextContributionDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      nextPayoutDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      status: 'pending',
-      createdAt: new Date().toISOString().split('T')[0],
-      members: mappedMembers
-    };
+      // Reset Form Fields
+      setNewGroupName('');
+      setNewGroupDesc('');
+      setNewGroupAmount('');
+      setNewGroupFreq('weekly');
+      setNewGroupMaxMembers('10');
+      setAddedGroupMembers([]);
 
-    setGroups(prev => [createdGroup, ...prev]);
-    setSelectedGroupId(newId);
-    setIsCreateModalOpen(false);
+      toast.success(`Clic "${newGroupName.trim()}" created successfully!`);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to create Clic. Please try again.'));
+    }
+  };
 
-    // Reset Form Fields
-    setNewGroupName('');
-    setNewGroupDesc('');
-    setNewGroupAmount('');
-    setNewGroupFreq('weekly');
-    setNewGroupMaxMembers('10');
-    setAddedGroupMembers([]);
+  // Edit Clic Modal states
+  const [isEditClicModalOpen, setIsEditClicModalOpen] = useState(false);
+  const [editClicName, setEditClicName] = useState('');
+  const [editClicDesc, setEditClicDesc] = useState('');
+  const [isUpdatingClic, setIsUpdatingClic] = useState(false);
 
-    toast.success(`Group "${createdGroup.name}" created successfully!`);
+  const handleOpenEditClic = (group: Group) => {
+    setEditClicName(group.name || '');
+    setEditClicDesc(group.description || '');
+    setIsEditClicModalOpen(true);
+  };
+
+  const handleUpdateClic = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedGroupId || !editClicName.trim()) {
+      toast.error('Please enter a Clic name.');
+      return;
+    }
+
+    try {
+      setIsUpdatingClic(true);
+      await updateClic(selectedGroupId, {
+        name: editClicName.trim(),
+        description: editClicDesc.trim(),
+      });
+
+      await queryClient.invalidateQueries({ queryKey: clicsKeys.all });
+      setIsEditClicModalOpen(false);
+      toast.success('Clic updated successfully!');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to update Clic. Please try again.'));
+    } finally {
+      setIsUpdatingClic(false);
+    }
+  };
+
+  // Delete Clic Modal states
+  const [isDeleteClicConfirmOpen, setIsDeleteClicConfirmOpen] = useState(false);
+  const [isDeletingClic, setIsDeletingClic] = useState(false);
+
+  const handleDeleteClic = async () => {
+    if (!selectedGroupId) return;
+
+    try {
+      setIsDeletingClic(true);
+      await deleteClic(selectedGroupId);
+
+      await queryClient.invalidateQueries({ queryKey: clicsKeys.all });
+      setIsDeleteClicConfirmOpen(false);
+      setSelectedGroupId(null);
+      toast.success('Clic deleted successfully!');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to delete Clic. Please try again.'));
+    } finally {
+      setIsDeletingClic(false);
+    }
   };
 
   // Duplicate existing group
@@ -485,209 +650,31 @@ const GroupsHome = () => {
     setNewGroupFreq(group.frequency);
     setNewGroupMaxMembers(group.maxMembers.toString());
     setIsCreateModalOpen(true);
-    toast.info('Autofilled form with previous group data.');
+    toast.info('Autofilled form with previous clic data.');
   };
 
-  // Re-invite Workflow (maximum 5 attempts)
-  const handleReinvite = (inviteId: string, groupId?: string) => {
-    const targetGroupId = groupId || selectedGroupId;
-    if (!targetGroupId) return;
-
-    const targetGroup = groups.find(g => g.id === targetGroupId);
-    const invites = invitationsMap[targetGroupId] || [];
-    const target = invites.find(inv => inv.id === inviteId);
-    if (!target) return;
-
-    if (target.reinviteCount >= 5) {
-      toast.error('Maximum limit of 5 reinvitation attempts reached for this contact.');
-      return;
-    }
-
-    const nextCount = target.reinviteCount + 1;
-
-    setInvitationsMap(prev => ({
-      ...prev,
-      [targetGroupId]: (prev[targetGroupId] || []).map(inv =>
-        inv.id === inviteId ? { ...inv, status: 'pending', reinviteCount: nextCount } : inv
-      )
-    }));
-
-    // Trigger Notification
-    const reinviteNotif: GroupNotification = {
-      id: `nt_re_${Date.now()}`,
-      groupId: targetGroupId,
-      groupName: targetGroup?.name || 'Group',
-      message: `Re-sent invitation to ${target.inviteeName} (Attempt ${nextCount}/5).`,
-      type: 'info',
-      createdAt: new Date().toISOString(),
-      read: false,
-    };
-    setNotifications(prev => [reinviteNotif, ...prev]);
-    toast.success(`Re-sent invitation to ${target.inviteeName} (${nextCount}/5).`);
-
-    // Simulate response after 5 seconds
-    setTimeout(() => {
-      const isAccepted = Math.random() > 0.4;
-      const finalStatus = isAccepted ? 'accepted' : 'rejected';
-
-      setInvitationsMap(prev => {
-        const list = prev[targetGroupId] || [];
-        return {
-          ...prev,
-          [targetGroupId]: list.map(inv => inv.id === inviteId ? { ...inv, status: finalStatus } : inv)
-        };
-      });
-
-      const responseNotif: GroupNotification = {
-        id: `nt_resp_${Date.now()}`,
-        groupId: targetGroupId,
-        groupName: targetGroup?.name || 'Group',
-        message: isAccepted
-          ? `${target.inviteeName} accepted your invitation to join ${targetGroup?.name || 'the Group'}.`
-          : `${target.inviteeName} rejected your invitation to join ${targetGroup?.name || 'the Group'}.`,
-        type: isAccepted ? 'success' : 'warning',
-        createdAt: new Date().toISOString(),
-        read: false,
-      };
-
-      setNotifications(prev => [responseNotif, ...prev]);
-
-      if (isAccepted) {
-        setGroups(prevGroups => {
-          return prevGroups.map(grp => {
-            if (grp.id === targetGroupId) {
-              const nextPos = grp.members.length + 1;
-              return {
-                ...grp,
-                memberCount: grp.memberCount + 1,
-                members: [
-                  ...grp.members,
-                  {
-                    id: `m_dyn_${Date.now()}`,
-                    name: target.inviteeName,
-                    email: target.email,
-                    phone: target.phone,
-                    contact: target.inviteeContact,
-                    role: 'member',
-                    hasPaid: false,
-                    payoutPosition: nextPos
-                  }
-                ]
-              };
-            }
-            return grp;
-          });
-        });
-        toast.success(`${target.inviteeName} joined the Group!`);
-      } else {
-        toast.error(`${target.inviteeName} declined the invitation.`);
-      }
-    }, 5000);
-  };
-
-  // Add Member from Contacts list
-  const handleSelectContact = (contact: PhoneContact) => {
+  // Add Member / Send invite from Contacts list
+  const handleSelectContact = async (contact: PhoneContact) => {
     if (!selectedGroupId || !selectedGroup) return;
 
-    // Check if they are already in the accepted members
-    if (selectedGroup.members.some(m => m.name.toLowerCase() === contact.name.toLowerCase() || m.contact === contact.contact)) {
-      toast.error(`${contact.name} is already a member of this group.`);
-      return;
-    }
+    const trimmedContact = contact.contact.trim();
+    const isEmail = trimmedContact.includes('@');
 
-    // Check if they have an active invitation
-    const groupInvites = invitationsMap[selectedGroupId] || [];
-    if (groupInvites.some(inv => inv.inviteeName.toLowerCase() === contact.name.toLowerCase() && inv.status === 'pending')) {
-      toast.error(`There is already a pending invitation sent to ${contact.name}.`);
-      return;
-    }
-
-    const newInviteId = `inv_${Date.now()}`;
-    const newInvite: GroupInvitation = {
-      id: newInviteId,
-      inviteeName: contact.name,
-      inviteeContact: contact.contact,
-      channel: 'platform',
-      status: 'pending',
-      reinviteCount: 1,
-      createdAt: new Date().toISOString(),
-    };
-
-    setInvitationsMap(prev => ({
-      ...prev,
-      [selectedGroupId]: [newInvite, ...(prev[selectedGroupId] || [])]
-    }));
-
-    const newNotif: GroupNotification = {
-      id: `nt_add_${Date.now()}`,
-      groupId: selectedGroupId,
-      groupName: selectedGroup.name,
-      message: `Sent invitation to ${contact.name} from your contacts list.`,
-      type: 'info',
-      createdAt: new Date().toISOString(),
-      read: false,
-    };
-
-    setNotifications(prev => [newNotif, ...prev]);
-    setIsContactDialogOpen(false);
-    toast.success(`Invitation sent to ${contact.name}!`);
-
-    // Simulate response after 5 seconds
-    setTimeout(() => {
-      const isAccepted = Math.random() > 0.4;
-      const finalStatus = isAccepted ? 'accepted' : 'rejected';
-
-      setInvitationsMap(prev => {
-        const list = prev[selectedGroupId] || [];
-        return {
-          ...prev,
-          [selectedGroupId]: list.map(inv => inv.id === newInviteId ? { ...inv, status: finalStatus } : inv)
-        };
+    try {
+      await createClicInvitation(selectedGroupId, {
+        displayName: contact.name,
+        memberContact: trimmedContact,
+        email: isEmail ? trimmedContact : undefined,
+        phoneNumber: !isEmail ? trimmedContact : undefined,
+        channel: 'platform',
       });
 
-      const responseNotif: GroupNotification = {
-        id: `nt_resp_${Date.now()}`,
-        groupId: selectedGroupId,
-        groupName: selectedGroup.name,
-        message: isAccepted
-          ? `${contact.name} accepted your invitation to join ${selectedGroup.name}.`
-          : `${contact.name} rejected your invitation to join ${selectedGroup.name}.`,
-        type: isAccepted ? 'success' : 'warning',
-        createdAt: new Date().toISOString(),
-        read: false,
-      };
-
-      setNotifications(prev => [responseNotif, ...prev]);
-
-      if (isAccepted) {
-        setGroups(prevGroups => {
-          return prevGroups.map(grp => {
-            if (grp.id === selectedGroupId) {
-              const nextPos = grp.members.length + 1;
-              return {
-                ...grp,
-                memberCount: grp.memberCount + 1,
-                members: [
-                  ...grp.members,
-                  {
-                    id: `m_dyn_${Date.now()}`,
-                    name: contact.name,
-                    contact: contact.contact,
-                    role: 'member',
-                    hasPaid: false,
-                    payoutPosition: nextPos
-                  }
-                ]
-              };
-            }
-            return grp;
-          });
-        });
-        toast.success(`${contact.name} joined the Group!`);
-      } else {
-        toast.error(`${contact.name} declined the invitation.`);
-      }
-    }, 5000);
+      await queryClient.invalidateQueries({ queryKey: clicsKeys.all });
+      setIsContactDialogOpen(false);
+      toast.success(`Invitation sent to ${contact.name}!`);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to send invitation to contact.'));
+    }
   };
 
   // Edit member or invite details
@@ -697,7 +684,7 @@ const GroupsHome = () => {
 
     const name = type === 'member' ? item.name : item.inviteeName;
     const rawContact = type === 'member' ? item.contact : item.inviteeContact;
-    
+
     const email = item.email || (rawContact && rawContact.includes('@') ? rawContact : '');
     const phone = item.phone || (rawContact && (rawContact.includes('+') || rawContact.match(/\d/)) ? rawContact : '');
 
@@ -714,51 +701,132 @@ const GroupsHome = () => {
     setEditPhone(phone || '');
   };
 
-  const handleSaveEdit = () => {
+  const handleDoneModalEdit = () => {
     if (!editingMember) return;
     const targetGroupId = editingMember.groupId;
     if (!targetGroupId) return;
 
-    if (!editName.trim()) {
+    const trimmedName = editName.trim();
+    if (!trimmedName) {
       toast.error('Full Name is required.');
       return;
     }
 
-    const primaryContact = editEmail.trim() || editPhone.trim() || '';
+    const trimmedEmail = editEmail.trim();
+    if (trimmedEmail && !isValidEmail(trimmedEmail)) {
+      toast.error('Please enter a valid email address.');
+      return;
+    }
+
+    const trimmedPhone = editPhone.trim();
+    if (trimmedPhone && !isValidPhone(trimmedPhone)) {
+      toast.error('Please enter a valid phone number.');
+      return;
+    }
 
     if (editingMember.type === 'member') {
-      setGroups(prev => prev.map(g => {
-        if (g.id === targetGroupId) {
-          return {
-            ...g,
-            members: g.members.map(m => m.id === editingMember.id ? {
+      const memberId = editingMember.id;
+
+      // 1. Update local display members map immediately
+      setExpandedMembersMap(prev => ({
+        ...prev,
+        [targetGroupId]: (prev[targetGroupId] || []).map(m =>
+          (m.id === memberId || m.memberId === memberId)
+            ? {
               ...m,
-              name: editName.trim(),
-              email: editEmail.trim(),
-              phone: editPhone.trim(),
-              contact: primaryContact
-            } : m)
-          };
-        }
-        return g;
+              name: trimmedName,
+              displayName: trimmedName,
+              email: trimmedEmail,
+              phone: trimmedPhone,
+              phoneNumber: trimmedPhone,
+            }
+            : m
+        )
       }));
+
+      // 2. Queue pending edit payload for this group
+      setPendingMemberEditsMap(prev => ({
+        ...prev,
+        [targetGroupId]: {
+          ...(prev[targetGroupId] || {}),
+          [memberId]: {
+            displayName: trimmedName,
+            email: trimmedEmail || undefined,
+            phoneNumber: trimmedPhone || undefined,
+          }
+        }
+      }));
+
+      // 3. Mark card as having pending edits (changes button from "View Details" to "Save Changes")
+      setHasPendingEditsMap(prev => ({
+        ...prev,
+        [targetGroupId]: true,
+      }));
+
+      toast.info("Member updated locally. Click 'Save Changes' on the card to persist.");
     } else {
+      const primaryContact = trimmedEmail || trimmedPhone || '';
       setInvitationsMap(prev => ({
         ...prev,
         [targetGroupId]: (prev[targetGroupId] || []).map(inv =>
-          inv.id === editingMember.id ? {
+          (inv.id === editingMember.id || inv.invitationId === editingMember.id) ? {
             ...inv,
-            inviteeName: editName.trim(),
-            email: editEmail.trim(),
-            phone: editPhone.trim(),
+            inviteeName: trimmedName,
+            email: trimmedEmail,
+            phone: trimmedPhone,
             inviteeContact: primaryContact
           } : inv
         )
       }));
+      toast.success('Invitation details updated.');
     }
 
-    toast.success('User details updated successfully.');
     setEditingMember(null);
+  };
+
+  // Save changes for a Clic card when "Save Changes" is clicked on the card
+  const handleSaveCardChanges = async (targetGroupId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const pendingEdits = pendingMemberEditsMap[targetGroupId] || {};
+    const memberIds = Object.keys(pendingEdits);
+
+    if (memberIds.length === 0) {
+      setHasPendingEditsMap(prev => ({ ...prev, [targetGroupId]: false }));
+      return;
+    }
+
+    setIsSavingCardMap(prev => ({ ...prev, [targetGroupId]: true }));
+
+    try {
+      const batchPayload = memberIds.map(id => ({
+        memberId: id,
+        ...pendingEdits[id],
+      }));
+
+      try {
+        await updateClicMembersBatch(targetGroupId, { members: batchPayload });
+      } catch {
+        // Fallback to individual member updates
+        for (const memberId of memberIds) {
+          try {
+            await updateClicMember(targetGroupId, memberId, pendingEdits[memberId]);
+          } catch {
+            // Graceful fallback
+          }
+        }
+      }
+
+      await queryClient.invalidateQueries({ queryKey: clicsKeys.all });
+
+      setPendingMemberEditsMap(prev => ({ ...prev, [targetGroupId]: {} }));
+      setHasPendingEditsMap(prev => ({ ...prev, [targetGroupId]: false }));
+
+      toast.success('Clic member changes saved successfully!');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to save changes.'));
+    } finally {
+      setIsSavingCardMap(prev => ({ ...prev, [targetGroupId]: false }));
+    }
   };
 
   // Remove member or invite (with confirmation prompt)
@@ -774,176 +842,208 @@ const GroupsHome = () => {
     });
   };
 
-  const handleConfirmRemove = () => {
+  const handleConfirmRemove = async () => {
     if (!removingItem) return;
     const targetGroupId = removingItem.groupId;
 
-    if (removingItem.type === 'member') {
-      setGroups(prev => prev.map(g => {
-        if (g.id === targetGroupId) {
-          return {
-            ...g,
-            memberCount: Math.max(1, g.memberCount - 1),
-            members: g.members.filter(m => m.id !== removingItem.id)
-          };
+    try {
+      if (removingItem.type === 'member') {
+        try {
+          await removeClicMember(targetGroupId, removingItem.id);
+        } catch {
+          // Fallback gracefully if member endpoint fails
         }
-        return g;
-      }));
-      toast.success(`Removed member ${removingItem.name} from group.`);
-    } else {
-      setInvitationsMap(prev => ({
-        ...prev,
-        [targetGroupId]: (prev[targetGroupId] || []).filter(inv => inv.id !== removingItem.id)
-      }));
-      toast.success(`Cancelled invitation request to ${removingItem.name}.`);
+        setExpandedMembersMap(prev => ({
+          ...prev,
+          [targetGroupId]: (prev[targetGroupId] || []).filter(m => (m.id || m.memberId) !== removingItem.id)
+        }));
+        await queryClient.invalidateQueries({ queryKey: clicsKeys.all });
+        toast.success(`Removed member ${removingItem.name} from Clic.`);
+      } else {
+        try {
+          await removeClicInvitation(targetGroupId, removingItem.id);
+        } catch {
+          // Fallback gracefully if invitation endpoint fails
+        }
+        setInvitationsMap(prev => ({
+          ...prev,
+          [targetGroupId]: (prev[targetGroupId] || []).filter(inv => (inv.id || inv.invitationId) !== removingItem.id)
+        }));
+        await queryClient.invalidateQueries({ queryKey: clicsKeys.all });
+        toast.success(`Cancelled invitation request to ${removingItem.name}.`);
+      }
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, `Failed to remove ${removingItem.name}.`));
+    } finally {
+      setRemovingItem(null);
     }
-
-    setRemovingItem(null);
   };
 
   // Accept pending invitation received
-  const handleAcceptInvite = (invite: GroupNotification) => {
-    const newId = `grp_rec_${Date.now()}`;
-    const newGroup: Group = {
-      id: newId,
-      name: invite.groupName,
-      description: invite.description || 'Custom savings group',
-      amount: invite.amount || 10000,
-      currency: 'NGN',
-      frequency: invite.frequency || 'weekly',
-      memberCount: 6,
-      maxMembers: 12,
-      currentCycle: 1,
-      totalCycles: 12,
-      role: 'member',
-      nextContributionDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      nextPayoutDate: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      status: 'active',
-      createdAt: new Date().toISOString().split('T')[0],
-      members: [
-        { id: 'm1', name: invite.creatorName || 'Chidi N.', contact: 'creator@email.com', role: 'admin', hasPaid: true, payoutPosition: 1 },
-        { id: 'm2', name: 'Adaeze Okafor', contact: 'adaeze@email.com', role: 'member', hasPaid: false, payoutPosition: 6 }
-      ]
-    };
-
-    setGroups(prev => [newGroup, ...prev]);
-    setSelectedGroupId(newId);
-    
-    // Update notification resolved status
-    setNotifications(prev => prev.map(nt => 
-      nt.id === invite.id 
-        ? { ...nt, resolved: true, actionStatus: 'accepted' as const, read: true } 
-        : nt
-    ));
-
-    toast.success(`Joined "${invite.groupName}" successfully!`);
+  const handleAcceptInvite = async (invite: GroupNotification) => {
+    try {
+      if (invite.clicId && (invite.invitationId || invite.id)) {
+        await acceptClicInvitation(invite.clicId, invite.invitationId || invite.id);
+      }
+      await queryClient.invalidateQueries({ queryKey: clicsKeys.all });
+      setNotifications(prev => prev.map(nt =>
+        nt.id === invite.id
+          ? { ...nt, resolved: true, actionStatus: 'accepted' as const, read: true, message: `You accepted the invitation to join "${invite.groupName}".` }
+          : nt
+      ));
+      toast.success(`Joined "${invite.groupName}" successfully!`);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to accept invitation.'));
+    }
   };
 
   // Reject pending invitation received
-  const handleRejectInvite = (invite: GroupNotification) => {
-    setNotifications(prev => prev.map(nt => 
-      nt.id === invite.id 
-        ? { ...nt, resolved: true, actionStatus: 'rejected' as const, read: true } 
-        : nt
-    ));
-    toast.info(`Declined invitation to join "${invite.groupName}".`);
+  const handleRejectInvite = async (invite: GroupNotification) => {
+    try {
+      if (invite.clicId && (invite.invitationId || invite.id)) {
+        await rejectClicInvitation(invite.clicId, invite.invitationId || invite.id);
+      }
+      await queryClient.invalidateQueries({ queryKey: clicsKeys.all });
+      setNotifications(prev => prev.map(nt =>
+        nt.id === invite.id
+          ? { ...nt, resolved: true, actionStatus: 'rejected' as const, read: true, message: `You declined the invitation to join "${invite.groupName}".` }
+          : nt
+      ));
+      toast.info(`Declined invitation to join "${invite.groupName}".`);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to decline invitation.'));
+    }
   };
 
-  // Add manually typed invitation request
-  const handleSendInvite = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedGroupId || !inviteName.trim() || !inviteContact.trim() || !selectedGroup) {
-      toast.error('Please fill out invitee name and contact details.');
+  const isValidEmail = (val: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+  const isValidPhone = (val: string): boolean => {
+    const digits = val.replace(/\D/g, '');
+    return digits.length >= 10 && digits.length <= 15;
+  };
+
+  // Send invitation request to Clic participant via channel
+  const handleSendInvite = async (targetGroupId?: string | React.FormEvent, e?: React.FormEvent) => {
+    if (targetGroupId && typeof (targetGroupId as any).preventDefault === 'function') {
+      (targetGroupId as React.FormEvent).preventDefault();
+      targetGroupId = undefined;
+    } else if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
+
+    const groupId = (typeof targetGroupId === 'string' ? targetGroupId : null) || selectedGroupId;
+    if (!groupId) return;
+
+    if (!inviteName.trim()) {
+      toast.error("Please enter the participant's name.");
       return;
     }
 
-    const newInviteId = `inv_${Date.now()}`;
-    const newInvite: GroupInvitation = {
-      id: newInviteId,
-      inviteeName: inviteName.trim(),
-      inviteeContact: inviteContact.trim(),
-      channel: inviteChannel,
-      status: 'pending',
-      reinviteCount: 1,
-      createdAt: new Date().toISOString(),
-    };
+    const trimmedContact = inviteContact.trim();
+    if (!trimmedContact) {
+      toast.error('Please enter an email address or phone number.');
+      return;
+    }
 
-    setInvitationsMap(prev => ({
-      ...prev,
-      [selectedGroupId]: [newInvite, ...(prev[selectedGroupId] || [])]
-    }));
+    // Channel validation rules
+    if (inviteChannel === 'email') {
+      if (!isValidEmail(trimmedContact)) {
+        toast.error('Email channel requires a valid email address (e.g., user@example.com).');
+        return;
+      }
+    } else if (inviteChannel === 'sms') {
+      if (trimmedContact.includes('@') || !isValidPhone(trimmedContact)) {
+        toast.error('SMS channel requires a valid phone number (e.g., 09150714823 or +234...).');
+        return;
+      }
+    } else if (inviteChannel === 'platform') {
+      if (!isValidEmail(trimmedContact) && !isValidPhone(trimmedContact)) {
+        toast.error('In-App channel requires a valid email address or phone number.');
+        return;
+      }
+    }
 
-    const newNotif: GroupNotification = {
-      id: `nt_add_${Date.now()}`,
-      groupId: selectedGroupId,
-      groupName: selectedGroup.name,
-      message: `Sent invitation to ${inviteName} via ${inviteChannel.toUpperCase()}.`,
-      type: 'info',
-      createdAt: new Date().toISOString(),
-      read: false,
-    };
+    const isEmail = trimmedContact.includes('@');
 
-    setNotifications(prev => [newNotif, ...prev]);
-    toast.success(`Invitation sent to ${inviteName} via ${inviteChannel.toUpperCase()}`);
-    setInviteName('');
-    setInviteContact('');
+    let matchedPlatformUserId: string | undefined = undefined;
+    try {
+      const searchResults = await searchPlatformUsers(trimmedContact);
+      const matchedUser = searchResults.find(
+        u => (u.email && u.email.toLowerCase() === trimmedContact.toLowerCase()) ||
+             (u.phoneNumber && u.phoneNumber.replace(/\s+/g, '') === trimmedContact.replace(/\s+/g, ''))
+      );
+      if (matchedUser) {
+        matchedPlatformUserId = matchedUser.userId;
+      }
+    } catch {
+      // Proceed with contact details if search fails
+    }
 
-    // Simulate response after 5 seconds
-    setTimeout(() => {
-      const isAccepted = Math.random() > 0.4;
-      const finalStatus = isAccepted ? 'accepted' : 'rejected';
-
-      setInvitationsMap(prev => {
-        const list = prev[selectedGroupId] || [];
-        return {
-          ...prev,
-          [selectedGroupId]: list.map(inv => inv.id === newInviteId ? { ...inv, status: finalStatus } : inv)
-        };
+    try {
+      await createClicInvitation(groupId, {
+        platformUserId: matchedPlatformUserId,
+        displayName: inviteName.trim(),
+        memberContact: trimmedContact,
+        email: isEmail ? trimmedContact : undefined,
+        phoneNumber: !isEmail ? trimmedContact : undefined,
+        channel: inviteChannel,
       });
 
-      const responseNotif: GroupNotification = {
-        id: `nt_resp_${Date.now()}`,
-        groupId: selectedGroupId,
-        groupName: selectedGroup.name,
-        message: isAccepted
-          ? `${inviteName} accepted your invitation to join ${selectedGroup.name}.`
-          : `${inviteName} rejected your invitation to join ${selectedGroup.name}.`,
-        type: isAccepted ? 'success' : 'warning',
-        createdAt: new Date().toISOString(),
-        read: false,
-      };
+      await queryClient.invalidateQueries({ queryKey: clicsKeys.all });
+      toast.success(`Invitation sent to "${inviteName.trim()}" via ${inviteChannel.toUpperCase()}!`);
+      setInviteName('');
+      setInviteContact('');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to send invitation.'));
+    }
+  };
 
-      setNotifications(prev => [responseNotif, ...prev]);
+  // Resend or re-create invitation request for participant
+  const handleReinvite = async (target: any) => {
+    if (!selectedGroupId || !target) return;
+    const inv = typeof target === 'object' ? target : { id: target, invitationId: target };
+    const invitationId = inv.id || inv.invitationId;
 
-      if (isAccepted) {
-        setGroups(prevGroups => {
-          return prevGroups.map(grp => {
-            if (grp.id === selectedGroupId) {
-              const nextPos = grp.members.length + 1;
-              return {
-                ...grp,
-                memberCount: grp.memberCount + 1,
-                members: [
-                  ...grp.members,
-                  {
-                    id: `m_dyn_${Date.now()}`,
-                    name: inviteName,
-                    contact: inviteContact,
-                    role: 'member',
-                    hasPaid: false,
-                    payoutPosition: nextPos
-                  }
-                ]
-              };
+    try {
+      if (inv.status === 'rejected') {
+        let targetPlatformUserId = inv.platformUserId;
+        const lookupQuery = inv.email && inv.email !== 'N/A' ? inv.email : inv.phone && inv.phone !== 'N/A' ? inv.phone : inv.inviteeName;
+
+        if (!targetPlatformUserId && lookupQuery) {
+          try {
+            const searchResults = await searchPlatformUsers(lookupQuery);
+            const matchedUser = searchResults.find(
+              u => (u.email && inv.email && u.email.toLowerCase() === inv.email.toLowerCase()) ||
+                   (u.phoneNumber && inv.phone && u.phoneNumber.replace(/\s+/g, '') === inv.phone.replace(/\s+/g, '')) ||
+                   (u.fullName && inv.inviteeName && u.fullName.toLowerCase() === inv.inviteeName.toLowerCase())
+            ) || searchResults[0];
+
+            if (matchedUser) {
+              targetPlatformUserId = matchedUser.userId;
             }
-            return grp;
-          });
+          } catch {
+            // Ignore search error
+          }
+        }
+
+        // Backend restricts /resend endpoint to PENDING status only; re-create invitation for REJECTED invites
+        await createClicInvitation(selectedGroupId, {
+          platformUserId: targetPlatformUserId,
+          displayName: inv.inviteeName || inv.displayName || 'Invitee',
+          memberContact: inv.memberContact || inv.inviteeContact || inv.email || inv.phone || '',
+          email: inv.email && inv.email !== 'N/A' ? inv.email : undefined,
+          phoneNumber: inv.phone && inv.phone !== 'N/A' ? inv.phone : undefined,
+          channel: inv.channel || 'platform',
         });
-        toast.success(`${inviteName} joined the Group!`);
+        toast.success(`Invitation re-sent to "${inv.inviteeName || 'Invitee'}"!`);
       } else {
-        toast.error(`${inviteName} declined the invitation.`);
+        await resendClicInvitation(selectedGroupId, invitationId);
+        toast.success('Invitation resent successfully!');
       }
-    }, 5000);
+      await queryClient.invalidateQueries({ queryKey: clicsKeys.all });
+      await queryClient.invalidateQueries({ queryKey: ['clic-invitations-me'] });
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to reinvite participant.'));
+    }
   };
 
   const handleDismissNotification = (notifId: string) => {
@@ -1005,11 +1105,11 @@ const GroupsHome = () => {
               <button
                 key={tab}
                 onClick={() => {
-                  setActiveTab(tab as any);
+                  handleProtectedAction(() => setActiveTab(tab as any));
                 }}
                 className={`flex-1 text-center pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 capitalize ${activeTab === tab
-                    ? 'border-accent text-accent'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                  ? 'border-accent text-accent'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
                   }`}
               >
                 {tab === 'member' ? 'Member' : tab === 'invites' ? 'Invites' : tab}
@@ -1023,7 +1123,7 @@ const GroupsHome = () => {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="Search clicks..."
+                placeholder="Search clics..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 h-10 rounded-xl"
@@ -1048,24 +1148,25 @@ const GroupsHome = () => {
           {/* Groups Listing */}
           <div className="space-y-3">
             {filteredGroups.length === 0 ? (
-              <div className="rounded-2xl border border-border bg-card p-6 text-center text-sm text-muted-foreground shadow-sm">
-                No clicks found. Create one to get started!
-              </div>
+              <EmptyTableState
+                title="No clics found"
+                description="Create a clic or accept an invitation to get started."
+              />
             ) : (
-              filteredGroups.map(group => {
-                const isExpanded = !!expandedGroups[group.id];
-                const isSelected = selectedGroupId === group.id;
+              filteredGroups.map((group, idx) => {
+                const groupKey = group.id || (group as any).clicId || (group as any).groupId || `clic_${idx}`;
+                const isExpanded = !!expandedGroups[groupKey];
+                const isSelected = selectedGroupId === groupKey || selectedGroupId === group.id;
                 const percent = Math.round((group.currentCycle / group.totalCycles) * 100) || 0;
 
                 return (
                   <div
-                    key={group.id}
-                    onClick={() => setSelectedGroupId(group.id)}
-                    className={`group w-full rounded-2xl border p-4 text-left transition-all hover:shadow-md cursor-pointer ${
-                      isSelected
-                        ? 'border-accent bg-accent/5 ring-1 ring-accent'
-                        : 'border-border bg-card hover:border-accent/40'
-                    }`}
+                    key={groupKey}
+                    onClick={() => handleProtectedAction(() => setSelectedGroupId(groupKey))}
+                    className={`group w-full rounded-2xl border p-4 text-left transition-all hover:shadow-md cursor-pointer ${isSelected
+                      ? 'border-accent bg-accent/5 ring-1 ring-accent'
+                      : 'border-border bg-card hover:border-accent/40'
+                      }`}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -1076,12 +1177,15 @@ const GroupsHome = () => {
                           <h4 className="font-bold text-foreground group-hover:text-accent transition-colors truncate">
                             {group.name}
                           </h4>
+                          {group.description && (
+                            <p className="text-xs text-muted-foreground truncate mt-0.5">{group.description}</p>
+                          )}
                         </div>
                       </div>
 
                       <div className="flex items-center gap-3">
                         <button
-                          onClick={(e) => toggleExpand(group.id, e)}
+                          onClick={(e) => toggleExpand(groupKey, e)}
                           className="p-1.5 hover:bg-muted rounded-full transition-colors shrink-0"
                         >
                           <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
@@ -1131,17 +1235,16 @@ const GroupsHome = () => {
 
                                         <div className="flex items-center gap-3">
                                           <div className="text-right">
-                                            <span className={`inline-block text-[9px] font-extrabold uppercase px-2 py-0.5 rounded border tracking-wide ${
-                                              inv.status === 'accepted'
-                                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                                : inv.status === 'rejected'
-                                                  ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                                  : 'bg-amber-50 text-amber-700 border-amber-200'
-                                            }`}>
+                                            <span className={`inline-block text-[9px] font-extrabold uppercase px-2 py-0.5 rounded border tracking-wide ${inv.status === 'accepted'
+                                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                              : inv.status === 'rejected'
+                                                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                                              }`}>
                                               {inv.status}
                                             </span>
                                             <p className="text-[8px] text-muted-foreground mt-0.5">
-                                              Attempts: {inv.reinviteCount}/5
+                                              Attempts: {Math.min((inv.reinviteCount ?? 0) + 1, 3)}/3
                                             </p>
                                           </div>
 
@@ -1154,11 +1257,10 @@ const GroupsHome = () => {
                                                   handleReinvite(inv.id);
                                                 }}
                                                 disabled={inv.status === 'pending' || inv.reinviteCount >= 5}
-                                                className={`text-[9px] font-extrabold uppercase px-2.5 py-1.5 rounded transition-all ${
-                                                  inv.status === 'pending' || inv.reinviteCount >= 5
-                                                    ? 'bg-muted text-muted-foreground border border-border cursor-not-allowed opacity-60'
-                                                    : 'bg-accent/10 hover:bg-accent/25 text-accent border border-accent/20'
-                                                }`}
+                                                className={`text-[9px] font-extrabold uppercase px-2.5 py-1.5 rounded transition-all ${inv.status === 'pending' || inv.reinviteCount >= 5
+                                                  ? 'bg-muted text-muted-foreground border border-border cursor-not-allowed opacity-60'
+                                                  : 'bg-accent/10 hover:bg-accent/25 text-accent border border-accent/20'
+                                                  }`}
                                               >
                                                 {inv.status === 'pending' ? 'Pending' : 'Reinvite'}
                                               </button>
@@ -1183,7 +1285,7 @@ const GroupsHome = () => {
                                       className="h-9 text-xs rounded-xl"
                                     />
                                     <Input
-                                      placeholder="Email or Phone"
+                                      placeholder={inviteChannel === 'email' ? 'Email Address' : inviteChannel === 'sms' ? 'Phone Number' : 'Email or Phone'}
                                       value={inviteContact}
                                       onChange={(e) => setInviteContact(e.target.value)}
                                       className="h-9 text-xs rounded-xl"
@@ -1232,77 +1334,138 @@ const GroupsHome = () => {
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border/60">
-                                  {group.members.map(m => {
-                                    const emailStr = m.email || (m.contact?.includes('@') ? m.contact : 'N/A');
-                                    const phoneStr = m.phone || (m.contact && (m.contact.includes('+') || m.contact.match(/\d/)) ? m.contact : 'N/A');
-                                    return (
-                                      <tr key={m.id} className="hover:bg-muted/30 transition-colors">
-                                        <td className="p-2.5 font-bold text-foreground">
-                                          <div className="flex items-center gap-1.5">
-                                            <span>{m.name}</span>
-                                            {m.role === 'admin' && (
-                                              <span className="text-[8px] bg-[#126989]/15 text-[#126989] px-1.5 py-0.5 rounded font-extrabold uppercase">
-                                                Admin
-                                              </span>
-                                            )}
-                                          </div>
-                                        </td>
-                                        {group.role === 'admin' && (
-                                          <>
-                                            <td className="p-2.5 text-muted-foreground">{emailStr}</td>
-                                            <td className="p-2.5 text-muted-foreground">{phoneStr}</td>
-                                            <td className="p-2.5">
-                                              <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded border bg-sky-50 text-sky-700 border-sky-200">
-                                                Joined
-                                              </span>
-                                            </td>
-                                            <td className="p-2.5 text-right">
-                                              {m.role !== 'admin' && (
-                                                <div className="flex items-center justify-end gap-1">
-                                                  <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      triggerEditMember(m, 'member', group.id);
-                                                    }}
-                                                    className="p-1 hover:text-accent rounded-full hover:bg-muted"
-                                                    title="Edit member details"
-                                                  >
-                                                    <Pencil className="h-3.5 w-3.5" />
-                                                  </button>
-                                                  <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      triggerRemoveItem(m, 'member', group.id);
-                                                    }}
-                                                    className="p-1 hover:text-destructive rounded-full hover:bg-muted"
-                                                    title="Remove member"
-                                                  >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                  </button>
-                                                </div>
+                                  {(() => {
+                                    const targetId = group.id || (group as any).clicId || groupKey;
+                                    const isMemberLoading = !!loadingMembersMap[targetId];
+                                    const currentMembers = expandedMembersMap[targetId] ||
+                                      (clicDetailQuery.data && (clicDetailQuery.data.id === targetId || clicDetailQuery.data.clicId === targetId) ? clicDetailQuery.data.members : []) ||
+                                      (group.members && group.members.length > 0 ? group.members : []);
+
+                                    if (isMemberLoading) {
+                                      return (
+                                        <tr>
+                                          <td colSpan={group.role === 'admin' ? 5 : 1} className="p-4 text-center text-xs text-muted-foreground">
+                                            <div className="flex items-center justify-center gap-2 py-2">
+                                              <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                                              <span>Loading members...</span>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      );
+                                    }
+
+                                    if (currentMembers.length === 0) {
+                                      return (
+                                        <tr>
+                                          <td colSpan={group.role === 'admin' ? 5 : 1} className="p-4 text-center text-xs text-muted-foreground">
+                                            No members listed for this clic.
+                                          </td>
+                                        </tr>
+                                      );
+                                    }
+
+                                    const sortedCurrentMembers = [...currentMembers].sort((a: any, b: any) => (a.role === 'admin' ? -1 : b.role === 'admin' ? 1 : 0));
+                                    return sortedCurrentMembers.map((m: any) => {
+                                      const emailStr = m.email || (m.contact?.includes('@') ? m.contact : 'N/A');
+                                      const phoneStr = m.phone || m.phoneNumber || (m.contact && (m.contact.includes('+') || m.contact.match(/\d/)) ? m.contact : 'N/A');
+                                      const displayName = m.name || m.displayName || 'Member';
+
+                                      return (
+                                        <tr key={m.id || m.memberId || displayName} className="hover:bg-muted/30 transition-colors">
+                                          <td className="p-2.5 font-bold text-foreground">
+                                            <div className="flex items-center gap-1.5">
+                                              <span>{displayName}</span>
+                                              {m.role === 'admin' && (
+                                                <span className="text-[8px] bg-[#126989]/15 text-[#126989] px-1.5 py-0.5 rounded font-extrabold uppercase">
+                                                  Admin
+                                                </span>
                                               )}
-                                            </td>
-                                          </>
-                                        )}
-                                      </tr>
-                                    );
-                                  })}
+                                            </div>
+                                          </td>
+                                          {group.role === 'admin' && (
+                                            <>
+                                              <td className="p-2.5 text-muted-foreground">{emailStr}</td>
+                                              <td className="p-2.5 text-muted-foreground">{phoneStr}</td>
+                                              <td className="p-2.5">
+                                                <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded border bg-sky-50 text-sky-700 border-sky-200">
+                                                  {m.status ? String(m.status).toUpperCase() : 'JOINED'}
+                                                </span>
+                                              </td>
+                                              <td className="p-2.5 text-right">
+                                                {m.role !== 'admin' && (
+                                                  <div className="flex items-center justify-end gap-1">
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        triggerEditMember(m, 'member', group.id);
+                                                      }}
+                                                      className="p-1 hover:text-accent rounded-full hover:bg-muted"
+                                                      title="Edit member details"
+                                                    >
+                                                      <Pencil className="h-3.5 w-3.5" />
+                                                    </button>
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        triggerRemoveItem(m, 'member', group.id);
+                                                      }}
+                                                      className="p-1 hover:text-destructive rounded-full hover:bg-muted"
+                                                      title="Remove member"
+                                                    >
+                                                      <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                  </div>
+                                                )}
+                                              </td>
+                                            </>
+                                          )}
+                                        </tr>
+                                      );
+                                    });
+                                  })()}
                                 </tbody>
                               </table>
                             </div>
                           )}
 
-                          <Button
-                            className="w-full mt-2 h-9 text-xs font-bold bg-accent text-accent-foreground"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedGroupId(group.id);
-                            }}
-                          >
-                            View Details
-                          </Button>
+                          {(() => {
+                            const targetId = group.id || (group as any).clicId || groupKey;
+                            const hasEdits = !!hasPendingEditsMap[targetId] || !!hasPendingEditsMap[group.id];
+                            const isSaving = !!isSavingCardMap[targetId] || !!isSavingCardMap[group.id];
+
+                            if (hasEdits) {
+                              return (
+                                <Button
+                                  className="w-full mt-2 h-9 text-xs font-bold bg-accent text-accent-foreground shadow-sm transition-all hover:bg-accent/90"
+                                  disabled={isSaving}
+                                  onClick={(e) => handleSaveCardChanges(targetId, e)}
+                                >
+                                  {isSaving ? (
+                                    <div className="flex items-center justify-center gap-1.5">
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      <span>Saving Changes...</span>
+                                    </div>
+                                  ) : (
+                                    'Save Changes'
+                                  )}
+                                </Button>
+                              );
+                            }
+
+                            return (
+                              <Button
+                                className="w-full mt-2 h-9 text-xs font-bold bg-accent text-accent-foreground"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleProtectedAction(() => setSelectedGroupId(targetId));
+                                }}
+                              >
+                                View Details
+                              </Button>
+                            );
+                          })()}
                         </motion.div>
                       )}
                     </AnimatePresence>
@@ -1315,101 +1478,170 @@ const GroupsHome = () => {
       ) : (
         /* Right Pane: Selected Group Details */
         <div className="w-full max-w-lg mx-auto">
-            <div className="rounded-[2.5rem] border border-border bg-card p-6 shadow-md space-y-6">
-              
-              {/* Back to list & Status */}
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <button
-                  onClick={() => setSelectedGroupId(null)}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-semibold transition-colors"
-                >
-                  <ChevronLeft className="h-4 w-4" /> Back
-                </button>
-                <div className="flex items-center gap-2">
-                  {selectedGroup && (
+          <div className="rounded-[2.5rem] border border-border bg-card p-6 shadow-md space-y-6">
+
+            {/* Back to list & Status */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <button
+                onClick={() => handleProtectedAction(() => setSelectedGroupId(null))}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-semibold transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" /> Back
+              </button>
+              <div className="flex items-center gap-2">
+                {selectedGroup && selectedGroup.role === 'admin' && (
+                  <>
                     <button
-                      onClick={() => handleDuplicateGroup(selectedGroup)}
-                      className="h-8 px-3.5 rounded-xl border border-[#126989]/30 text-[#126989] hover:bg-[#126989]/5 text-xs font-bold transition-all shrink-0 shadow-sm"
+                      onClick={() => handleOpenEditClic(selectedGroup)}
+                      className="h-8 px-3 rounded-xl border border-border text-muted-foreground hover:text-foreground hover:bg-muted text-xs font-semibold transition-all shrink-0 shadow-sm flex items-center gap-1.5"
                     >
-                      Duplicate Group
+                      <Pencil className="h-3.5 w-3.5" /> Edit Clic
                     </button>
-                  )}
-
-                </div>
+                    <button
+                      onClick={() => setIsDeleteClicConfirmOpen(true)}
+                      className="h-8 px-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 text-xs font-semibold transition-all shrink-0 shadow-sm flex items-center gap-1.5"
+                      title="Delete Clic"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-rose-600" /> Delete
+                    </button>
+                  </>
+                )}
+                {selectedGroup && selectedGroup.role === 'admin' && (
+                  <button
+                    onClick={() => handleDuplicateGroup(selectedGroup)}
+                    className="h-8 px-3.5 rounded-xl border border-[#126989]/30 text-[#126989] hover:bg-[#126989]/5 text-xs font-bold transition-all shrink-0 shadow-sm"
+                  >
+                    Duplicate Clic
+                  </button>
+                )}
               </div>
+            </div>
 
-              {!selectedGroup ? (
-                <div className="py-12 text-center text-sm text-muted-foreground">
-                  Select a group from the list to view members and invite requests.
-                </div>
-              ) : (
-                <>
-                  {/* Group Core Metadata */}
-                  <div>
-                    <div className="flex items-center gap-2.5">
-                      <h2 className="font-display text-xl font-bold text-foreground">{selectedGroup.name}</h2>
-                      <Badge variant="secondary" className={selectedGroup.role === 'admin' ? 'bg-[#126989]/10 text-[#126989]' : 'bg-muted text-muted-foreground'}>
-                        {selectedGroup.role}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1.5">{selectedGroup.description}</p>
+            {clicDetailQuery.isLoading ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center text-xs text-muted-foreground gap-2">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                <span>Loading clic details...</span>
+              </div>
+            ) : !selectedGroup ? (
+              <div className="py-12 text-center text-sm text-muted-foreground">
+                Select a group from the list to view members and invite requests.
+              </div>
+            ) : (
+              <>
+                {/* Group Core Metadata */}
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <h2 className="font-display text-xl font-bold text-foreground">{selectedGroup.name}</h2>
+                    <Badge variant="secondary" className={selectedGroup.role === 'admin' ? 'bg-[#126989]/10 text-[#126989]' : 'bg-muted text-muted-foreground'}>
+                      {selectedGroup.role}
+                    </Badge>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-1.5">{selectedGroup.description}</p>
+                </div>
 
-                  {/* Member Lists & Invitations Tab Switcher */}
-                  <div className="space-y-4">
-                    <div className="flex flex-wrap items-center justify-between border-b border-border pb-2 gap-2">
-                      <div className="flex gap-3 flex-wrap">
-                        <button
-                          onClick={() => setDetailsTab('accepted')}
-                          className={`pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${
-                            detailsTab === 'accepted' ? 'border-[#126989] text-[#126989]' : 'border-transparent text-muted-foreground hover:text-foreground'
+                {/* Member Lists & Invitations Tab Switcher */}
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between border-b border-border pb-2 gap-2">
+                    <div className="flex gap-3 flex-wrap">
+                      <button
+                        onClick={() => setDetailsTab('accepted')}
+                        className={`pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${detailsTab === 'accepted' ? 'border-[#126989] text-[#126989]' : 'border-transparent text-muted-foreground hover:text-foreground'
                           }`}
-                        >
-                          Members ({selectedGroup.members.length})
-                        </button>
-                        <button
-                          onClick={() => setDetailsTab('invitations')}
-                          className={`pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${
-                            detailsTab === 'invitations' ? 'border-[#126989] text-[#126989]' : 'border-transparent text-muted-foreground hover:text-foreground'
-                          }`}
-                        >
-                          Invites ({invitationsMap[selectedGroupId]?.length || 0})
-                        </button>
-                      </div>
-
-                      {/* Plus sign button to invite from Contacts */}
+                      >
+                        Members ({(selectedGroup.members || []).length})
+                      </button>
                       {selectedGroup.role === 'admin' && (
                         <button
-                          onClick={() => setIsContactDialogOpen(true)}
-                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#126989]/30 text-[#126989] hover:bg-[#126989]/5 transition-all shrink-0 mb-1"
-                          title="Invite from contacts"
+                          onClick={() => setDetailsTab('invitations')}
+                          className={`pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${detailsTab === 'invitations' ? 'border-[#126989] text-[#126989]' : 'border-transparent text-muted-foreground hover:text-foreground'
+                            }`}
                         >
-                          <Plus className="h-4 w-4" />
+                          Invites ({(selectedGroup as any).invitations?.length ?? invitationsMap[selectedGroupId]?.length ?? 0})
                         </button>
                       )}
                     </div>
 
-                    {/* Content under Accepted tab */}
-                    {detailsTab === 'accepted' && (
-                      <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                        {selectedGroup.members.length === 0 ? (
-                          <p className="text-xs text-muted-foreground text-center py-4">No members have joined yet.</p>
-                        ) : (
-                          selectedGroup.members.map(member => {
-                            const displayEmail = member.email || (member.contact?.includes('@') ? member.contact : 'N/A');
-                            const displayPhone = member.phone || (member.contact && (member.contact.includes('+') || member.contact.match(/\d/)) ? member.contact : 'N/A');
+                    {/* Plus sign button to invite from Contacts */}
+                    {selectedGroup.role === 'admin' && (
+                      <button
+                        onClick={() => setIsContactDialogOpen(true)}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#126989]/30 text-[#126989] hover:bg-[#126989]/5 transition-all shrink-0 mb-1"
+                        title="Invite from contacts"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Content under Accepted tab */}
+                  {detailsTab === 'accepted' && (
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                      {(selectedGroup.members || []).length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">No members have joined yet.</p>
+                      ) : (
+                        [...(selectedGroup.members || [])].sort((a: any, b: any) => (a.role === 'admin' ? -1 : b.role === 'admin' ? 1 : 0)).map((member: any) => {
+                          const displayEmail = member.email || (member.contact?.includes('@') ? member.contact : 'N/A');
+                          const displayPhone = member.phone || member.phoneNumber || (member.contact && (member.contact.includes('+') || member.contact.match(/\d/)) ? member.contact : 'N/A');
+                          const displayName = member.name || member.displayName || 'Member';
+
+                          return (
+                            <div key={member.id || member.memberId} className="flex items-center justify-between rounded-xl border border-border bg-card p-3 text-xs">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11px] font-semibold text-muted-foreground">Name:</span>
+                                  <span className="font-bold text-foreground">{displayName}</span>
+                                  {member.role === 'admin' && (
+                                    <span className="text-[9px] bg-[#126989]/15 text-[#126989] border border-[#126989]/20 px-1.5 py-0.5 rounded font-extrabold uppercase">
+                                      {member.role}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 text-[10px]">
+                                  <span className="font-semibold text-muted-foreground">Email:</span>
+                                  <span className="text-foreground">{selectedGroup.role === 'admin' ? displayEmail : '••••••••'}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-[10px]">
+                                  <span className="font-semibold text-muted-foreground">Phone:</span>
+                                  <span className="text-foreground">{selectedGroup.role === 'admin' ? displayPhone : '••••••••'}</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2.5">
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-sky-700 bg-sky-50 px-2.5 py-0.5 rounded-full border border-sky-200">
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-sky-600" /> Joined
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+
+                  {/* Content under Invitations tab */}
+                  {selectedGroup.role === 'admin' && detailsTab === 'invitations' && (
+                    <div className="space-y-4">
+                      <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                        {(() => {
+                          const activeInvites = (selectedGroup as any).invitations && (selectedGroup as any).invitations.length > 0
+                            ? (selectedGroup as any).invitations
+                            : (invitationsMap[selectedGroupId] || []);
+
+                          if (activeInvites.length === 0) {
+                            return <p className="text-xs text-muted-foreground text-center py-4">No active invitations sent.</p>;
+                          }
+
+                          return activeInvites.map((inv: any) => {
+                            const contactStr = inv.memberContact || inv.inviteeContact || inv.contact || '';
+                            const displayEmail = inv.email || inv.inviteeEmail || inv.platformUserEmail || inv.platformUser?.email || (contactStr.includes('@') ? contactStr : 'N/A');
+                            const displayPhone = inv.phone || inv.phoneNumber || inv.inviteePhone || inv.platformUserPhone || inv.platformUser?.phoneNumber || (!contactStr.includes('@') && contactStr ? contactStr : 'N/A');
+                            const nameStr = inv.inviteeName || inv.displayName || inv.name || inv.platformUser?.fullName || 'Invitee';
 
                             return (
-                              <div key={member.id} className="flex items-center justify-between rounded-xl border border-border bg-card p-3 text-xs">
+                              <div key={inv.id || inv.invitationId} className="flex items-center justify-between rounded-xl border border-border p-3 text-xs bg-card">
                                 <div className="space-y-1">
                                   <div className="flex items-center gap-2">
                                     <span className="text-[11px] font-semibold text-muted-foreground">Name:</span>
-                                    <span className="font-bold text-foreground">{member.name}</span>
-                                    {member.role === 'admin' && (
-                                      <span className="text-[9px] bg-[#126989]/15 text-[#126989] border border-[#126989]/20 px-1.5 py-0.5 rounded font-extrabold uppercase">
-                                        {member.role}
-                                      </span>
-                                    )}
+                                    <span className="font-bold text-foreground">{nameStr}</span>
                                   </div>
                                   <div className="flex items-center gap-2 text-[10px]">
                                     <span className="font-semibold text-muted-foreground">Email:</span>
@@ -1419,135 +1651,101 @@ const GroupsHome = () => {
                                     <span className="font-semibold text-muted-foreground">Phone:</span>
                                     <span className="text-foreground">{selectedGroup.role === 'admin' ? displayPhone : '••••••••'}</span>
                                   </div>
+                                  {inv.channel && (
+                                    <span className="inline-block text-[9px] text-muted-foreground font-medium pt-0.5">Channel: {String(inv.channel).toUpperCase()}</span>
+                                  )}
                                 </div>
-                                <div className="flex items-center gap-2.5">
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-sky-700 bg-sky-50 px-2.5 py-0.5 rounded-full border border-sky-200">
-                                    <CheckCircle2 className="h-3.5 w-3.5 text-sky-600" /> Joined
-                                  </span>
+
+                                <div className="flex items-center gap-3">
+                                  {selectedGroup.role === 'admin' && (
+                                    <div className="text-right">
+                                      <span className={`inline-block text-[9px] font-extrabold uppercase px-2 py-0.5 rounded border tracking-wide ${inv.status === 'accepted'
+                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                        : inv.status === 'rejected'
+                                          ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                                        }`}>
+                                        {inv.status}
+                                      </span>
+                                      {inv.reinviteCount !== undefined && (
+                                        <p className="text-[8px] text-muted-foreground mt-0.5">
+                                          Attempts: {Math.min((inv.reinviteCount ?? 0) + 1, 3)}/3
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* Reinvite Action button workflow */}
+                                  {selectedGroup.role === 'admin' && (inv.status === 'rejected' || inv.status === 'pending') && (
+                                    <div className="border-l border-border pl-2.5">
+                                      <button
+                                        onClick={() => handleReinvite(inv)}
+                                        disabled={inv.status === 'pending' || ((inv.reinviteCount ?? 0) >= 2)}
+                                        className={`text-[9px] font-extrabold uppercase px-2.5 py-1.5 rounded transition-all ${inv.status === 'pending' || ((inv.reinviteCount ?? 0) >= 2)
+                                          ? 'bg-muted text-muted-foreground border border-border cursor-not-allowed opacity-60'
+                                          : 'bg-accent/10 hover:bg-accent/25 text-accent border border-accent/20'
+                                          }`}
+                                        title={inv.status === 'pending' ? 'Invitation pending response' : (inv.reinviteCount ?? 0) >= 2 ? 'Reinvite limit reached' : 'Re-invite participant'}
+                                      >
+                                        {(inv.reinviteCount ?? 0) >= 2 ? 'Limit (3/3)' : 'Reinvite'}
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             );
-                          })
-                        )}
+                          });
+                        })()}
                       </div>
-                    )}
 
-                    {/* Content under Invitations tab */}
-                    {detailsTab === 'invitations' && (
-                      <div className="space-y-4">
-                        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                          {!invitationsMap[selectedGroupId] || invitationsMap[selectedGroupId].length === 0 ? (
-                            <p className="text-xs text-muted-foreground text-center py-4">No active invitations sent.</p>
-                          ) : (
-                            invitationsMap[selectedGroupId].map(inv => {
-                              const displayEmail = inv.email || (inv.inviteeContact?.includes('@') ? inv.inviteeContact : 'N/A');
-                              const displayPhone = inv.phone || (inv.inviteeContact && (inv.inviteeContact.includes('+') || inv.inviteeContact.match(/\d/)) ? inv.inviteeContact : 'N/A');
+                      {/* Sending invitations form with channels (in-app, sms, email) */}
+                      {selectedGroup.role === 'admin' && (
+                        <form onSubmit={handleSendInvite} className="bg-muted/30 p-3 rounded-xl border border-border space-y-3">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Invite Participant via Channel</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input
+                              placeholder="Name"
+                              value={inviteName}
+                              onChange={e => setInviteName(e.target.value)}
+                              className="h-9 text-xs"
+                            />
+                            <Input
+                              placeholder={inviteChannel === 'email' ? 'Email Address' : inviteChannel === 'sms' ? 'Phone Number' : 'Email or Phone'}
+                              value={inviteContact}
+                              onChange={e => setInviteContact(e.target.value)}
+                              className="h-9 text-xs"
+                            />
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <Select
+                              value={inviteChannel}
+                              onValueChange={val => setInviteChannel(val as typeof inviteChannel)}
+                            >
+                              <SelectTrigger className="h-9 text-xs w-[120px]">
+                                <SelectValue placeholder="Channel" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="platform">In-App</SelectItem>
+                                <SelectItem value="email">Email</SelectItem>
+                                <SelectItem value="sms">SMS</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Button type="submit" size="sm" className="h-9 text-xs font-bold px-4 shrink-0 bg-accent text-accent-foreground">
+                              Send Invitation
+                            </Button>
+                          </div>
+                        </form>
+                      )}
+                    </div>
+                  )}
 
-                              return (
-                                <div key={inv.id} className="flex items-center justify-between rounded-xl border border-border p-3 text-xs bg-card">
-                                  <div className="space-y-1">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-[11px] font-semibold text-muted-foreground">Name:</span>
-                                      <span className="font-bold text-foreground">{inv.inviteeName}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-[10px]">
-                                      <span className="font-semibold text-muted-foreground">Email:</span>
-                                      <span className="text-foreground">{selectedGroup.role === 'admin' ? displayEmail : '••••••••'}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-[10px]">
-                                      <span className="font-semibold text-muted-foreground">Phone:</span>
-                                      <span className="text-foreground">{selectedGroup.role === 'admin' ? displayPhone : '••••••••'}</span>
-                                    </div>
-                                    <span className="inline-block text-[9px] text-muted-foreground font-medium pt-0.5">Channel: {inv.channel.toUpperCase()}</span>
-                                  </div>
+                </div>
+              </>
+            )}
 
-                                  <div className="flex items-center gap-3">
-                                    <div className="text-right">
-                                      <span className={`inline-block text-[9px] font-extrabold uppercase px-2 py-0.5 rounded border tracking-wide ${
-                                        inv.status === 'accepted'
-                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                          : inv.status === 'rejected'
-                                            ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                            : 'bg-amber-50 text-amber-700 border-amber-200'
-                                      }`}>
-                                        {inv.status}
-                                      </span>
-                                      <p className="text-[8px] text-muted-foreground mt-0.5">
-                                        Attempts: {inv.reinviteCount}/5
-                                      </p>
-                                    </div>
-
-                                    {/* Reinvite Action button workflow */}
-                                    {selectedGroup.role === 'admin' && (inv.status === 'rejected' || inv.status === 'pending') && (
-                                      <div className="border-l border-border pl-2.5">
-                                        <button
-                                          onClick={() => handleReinvite(inv.id)}
-                                          disabled={inv.status === 'pending' || inv.reinviteCount >= 5}
-                                          className={`text-[9px] font-extrabold uppercase px-2.5 py-1.5 rounded transition-all ${
-                                            inv.status === 'pending' || inv.reinviteCount >= 5
-                                              ? 'bg-muted text-muted-foreground border border-border cursor-not-allowed opacity-60'
-                                              : 'bg-accent/10 hover:bg-accent/25 text-accent border border-accent/20'
-                                          }`}
-                                          title={inv.status === 'pending' ? 'Invitation pending response' : 'Re-invite participant'}
-                                        >
-                                          {inv.reinviteCount >= 5 ? 'Limit (5/5)' : 'Reinvite'}
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-
-                        {/* Sending invitations form with channels (in-app, sms, email) */}
-                        {selectedGroup.role === 'admin' && (
-                          <form onSubmit={handleSendInvite} className="bg-muted/30 p-3 rounded-xl border border-border space-y-3">
-                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Invite Participant via Channel</p>
-                            <div className="grid grid-cols-2 gap-2">
-                              <Input
-                                placeholder="Name"
-                                value={inviteName}
-                                onChange={e => setInviteName(e.target.value)}
-                                className="h-9 text-xs"
-                              />
-                              <Input
-                                placeholder="Email or Phone"
-                                value={inviteContact}
-                                onChange={e => setInviteContact(e.target.value)}
-                                className="h-9 text-xs"
-                              />
-                            </div>
-                            <div className="flex items-center justify-between gap-3">
-                              <Select
-                                value={inviteChannel}
-                                onValueChange={val => setInviteChannel(val as typeof inviteChannel)}
-                              >
-                                <SelectTrigger className="h-9 text-xs w-[120px]">
-                                  <SelectValue placeholder="Channel" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="platform">In-App</SelectItem>
-                                  <SelectItem value="email">Email</SelectItem>
-                                  <SelectItem value="sms">SMS</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <Button type="submit" size="sm" className="h-9 text-xs font-bold px-4 shrink-0 bg-accent text-accent-foreground">
-                                Send Invitation
-                              </Button>
-                            </div>
-                          </form>
-                        )}
-                      </div>
-                    )}
-
-                  </div>
-                </>
-              )}
-            </div>
           </div>
-        )}
+        </div>
+      )}
 
       {/* CREATE / DUPLICATE GROUP DIALOG MODAL FORM */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
@@ -1560,7 +1758,7 @@ const GroupsHome = () => {
           </DialogHeader>
 
           <form onSubmit={handleCreateGroup} className="space-y-4">
-            
+
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Clic Name</label>
               <Input
@@ -1572,9 +1770,19 @@ const GroupsHome = () => {
               />
             </div>
 
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Description</label>
+              <Input
+                placeholder="e.g. A community contribution group for friends"
+                value={newGroupDesc}
+                onChange={e => setNewGroupDesc(e.target.value)}
+                className="h-11 rounded-xl text-sm"
+              />
+            </div>
+
             <div className="space-y-2 border-t border-border pt-3">
               <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Add Members</label>
-              
+
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -1588,7 +1796,7 @@ const GroupsHome = () => {
                   onClick={() => setIsManualAddOpen(true)}
                   className="text-xs h-9 font-bold flex-1 flex items-center justify-center gap-1.5 border border-[#126989]/30 text-[#126989] hover:bg-[#126989]/5 rounded-xl transition-all"
                 >
-                  <Plus className="h-3.5 w-3.5" /> Add Individual
+                  <Plus className="h-3.5 w-3.5" /> Add non-platform users
                 </button>
               </div>
 
@@ -1688,7 +1896,7 @@ const GroupsHome = () => {
                 className="h-11 rounded-xl text-xs"
               />
             </div>
-            
+
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Email Address</label>
               <Input
@@ -1720,10 +1928,10 @@ const GroupsHome = () => {
                 Cancel
               </Button>
               <Button
-                onClick={handleSaveEdit}
+                onClick={handleDoneModalEdit}
                 className="h-10 flex-1 rounded-xl text-xs font-bold bg-accent text-accent-foreground"
               >
-                Save Changes
+                Done
               </Button>
             </div>
           </div>
@@ -1762,6 +1970,48 @@ const GroupsHome = () => {
         </DialogContent>
       </Dialog>
 
+      {/* UNSAVED MEMBER EDITS WARNING DIALOG MODAL */}
+      <Dialog
+        open={pendingNavigationAction !== null}
+        onOpenChange={(open) => !open && setPendingNavigationAction(null)}
+      >
+        <DialogContent className="w-[90%] max-w-[420px] rounded-3xl p-6 bg-card gap-5 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 mx-auto mb-1">
+            <AlertTriangle className="h-6 w-6" />
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="font-display text-lg font-bold text-foreground">Unsaved Member Edits</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              You have unsaved changes to member details in this Clic. If you leave without saving, your changes will be lost.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2.5 mt-2">
+            <Button
+              onClick={async (e) => {
+                if (unsavedGroupId) {
+                  await handleSaveCardChanges(unsavedGroupId, e);
+                }
+                const action = pendingNavigationAction;
+                setPendingNavigationAction(null);
+                if (action) action();
+              }}
+              className="h-11 w-full rounded-xl text-xs font-bold bg-accent text-accent-foreground shadow-sm"
+            >
+              Save & Continue
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setPendingNavigationAction(null)}
+              className="h-10 w-full rounded-xl text-xs font-semibold"
+            >
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* ALL NOTIFICATIONS CENTER DIALOG MODAL */}
       <Dialog open={isAllNotifsDialogOpen} onOpenChange={setIsAllNotifsDialogOpen}>
         <DialogContent className="w-[92%] max-w-[500px] rounded-3xl p-6 bg-card gap-4">
@@ -1793,9 +2043,8 @@ const GroupsHome = () => {
                 return (
                   <div
                     key={nt.id}
-                    className={`p-3 rounded-2xl border transition-all text-xs ${
-                      nt.read ? 'bg-card border-border' : 'bg-accent/5 border-accent/20'
-                    }`}
+                    className={`p-3 rounded-2xl border transition-all text-xs ${nt.read ? 'bg-card border-border' : 'bg-accent/5 border-accent/20'
+                      }`}
                   >
                     <div className="flex justify-between items-start gap-3">
                       <div className="flex-1 min-w-0">
@@ -1806,7 +2055,7 @@ const GroupsHome = () => {
                           )}
                         </div>
                         <p className="text-[11px] text-muted-foreground mt-0.5">{nt.message}</p>
-                        
+
                         {/* Show action status or action buttons if it is an invite */}
                         {isInvite && (
                           <div className="mt-3">
@@ -1841,7 +2090,7 @@ const GroupsHome = () => {
                           </div>
                         )}
                       </div>
-                      
+
                       <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
                         <span className="text-[9px] text-muted-foreground">
                           {new Date(nt.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -1873,39 +2122,57 @@ const GroupsHome = () => {
             </DialogDescription>
           </DialogHeader>
 
-          {/* Search Input Box */}
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search platform users..."
-              value={importSearchQuery}
-              onChange={(e) => setImportSearchQuery(e.target.value)}
-              className="pl-9 pr-8 h-10 rounded-xl text-xs"
-            />
-            {importSearchQuery && (
-              <button
-                type="button"
-                onClick={() => setImportSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
+          {/* Search Input Box with Search Button */}
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Search platform users..."
+                value={importSearchInput}
+                onChange={(e) => setImportSearchInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    setActiveImportSearchQuery(importSearchInput.trim());
+                  }
+                }}
+                className="pl-9 pr-8 h-10 rounded-xl text-xs"
+              />
+              {importSearchInput && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImportSearchInput('');
+                    setActiveImportSearchQuery('');
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <Button
+              type="button"
+              onClick={() => setActiveImportSearchQuery(importSearchInput.trim())}
+              className="h-10 px-3.5 rounded-xl bg-accent text-accent-foreground text-xs font-bold shrink-0 flex items-center gap-1.5 shadow-sm"
+            >
+              <Search className="h-4 w-4" />
+              Search
+            </Button>
           </div>
 
-          {/* Admin Circles Filter Badges */}
+          {/* Dynamic Admin Circles & Group Goals Filter Badges */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-            {['all', 'Youth Empowerment Club', 'Tech Founders Cooperative', 'Lagos Investment Circle'].map((circleName) => (
+            {availableCircleFilterPills.map((circleName) => (
               <button
                 key={circleName}
                 type="button"
                 onClick={() => setSelectedCircleFilter(circleName)}
-                className={`px-3 py-1 text-[10px] font-bold rounded-full whitespace-nowrap transition-all ${
-                  selectedCircleFilter === circleName
-                    ? 'bg-accent text-accent-foreground shadow-sm'
-                    : 'bg-muted/60 text-muted-foreground hover:bg-muted'
-                }`}
+                className={`px-3 py-1 text-[10px] font-bold rounded-full whitespace-nowrap transition-all ${selectedCircleFilter === circleName
+                  ? 'bg-accent text-accent-foreground shadow-sm'
+                  : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+                  }`}
               >
                 {circleName === 'all' ? 'All' : circleName}
               </button>
@@ -1931,26 +2198,37 @@ const GroupsHome = () => {
                         setAddedGroupMembers(prev => [...prev, { name: contact.name, contact: contact.contact }]);
                       }
                     }}
-                    className={`flex items-center justify-between p-3.5 rounded-2xl border cursor-pointer transition-all text-xs ${
-                      isAdded
-                        ? 'border-accent bg-accent/5 ring-1 ring-accent/30'
-                        : 'border-border bg-card hover:border-accent/40 hover:shadow-sm'
-                    }`}
+                    className={`flex items-center justify-between p-3.5 rounded-2xl border cursor-pointer transition-all text-xs ${isAdded
+                      ? 'border-accent bg-accent/5 ring-1 ring-accent/30'
+                      : 'border-border bg-card hover:border-accent/40 hover:shadow-sm'
+                      }`}
                   >
                     <div className="min-w-0 pr-2">
-                      <p className="font-bold text-foreground truncate">{contact.name}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-bold text-foreground truncate">{contact.name}</p>
+                        {contact.adminOf && (
+                          <span className="text-[9px] font-extrabold bg-amber-500/15 text-amber-600 border border-amber-500/30 px-1.5 py-0.5 rounded uppercase">
+                            Admin
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{contact.contact}</p>
-                      {contact.circleName && (
-                        <p className="text-[9px] text-accent/80 font-medium mt-0.5 truncate">Circle: {contact.circleName}</p>
-                      )}
+                      {contact.adminOf ? (
+                        <p className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold mt-0.5 truncate">
+                          Admin of: {contact.adminOf}
+                        </p>
+                      ) : contact.circleName ? (
+                        <p className="text-[10px] text-accent font-semibold mt-0.5 truncate">
+                          Circle: {contact.circleName}
+                        </p>
+                      ) : null}
                     </div>
                     <button
                       type="button"
-                      className={`h-8 px-3.5 text-[10px] font-extrabold uppercase tracking-wider rounded-full border transition-all shrink-0 ${
-                        isAdded
-                          ? 'bg-accent text-accent-foreground border-accent shadow-sm'
-                          : 'bg-background hover:bg-muted text-foreground border-border'
-                      }`}
+                      className={`h-8 px-3.5 text-[10px] font-extrabold uppercase tracking-wider rounded-full border transition-all shrink-0 ${isAdded
+                        ? 'bg-accent text-accent-foreground border-accent shadow-sm'
+                        : 'bg-background hover:bg-muted text-foreground border-border'
+                        }`}
                     >
                       {isAdded ? 'Selected' : 'Select'}
                     </button>
@@ -1989,7 +2267,7 @@ const GroupsHome = () => {
                 className="h-11 rounded-xl text-xs"
               />
             </div>
-            
+
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Email or Phone Number</label>
               <Input
@@ -2062,6 +2340,91 @@ const GroupsHome = () => {
                 Add Member
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* EDIT CLIC DIALOG MODAL FORM */}
+      <Dialog open={isEditClicModalOpen} onOpenChange={setIsEditClicModalOpen}>
+        <DialogContent className="w-[92%] max-w-[450px] rounded-3xl p-6 gap-5 bg-card">
+          <DialogHeader className="text-left font-display">
+            <DialogTitle className="text-xl font-bold text-foreground">Edit Clic</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground mt-1">
+              Update the name and description of this Clic.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleUpdateClic} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Clic Name</label>
+              <Input
+                placeholder="Clic name"
+                value={editClicName}
+                onChange={e => setEditClicName(e.target.value)}
+                className="h-11 rounded-xl text-sm"
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Description</label>
+              <Input
+                placeholder="Clic description"
+                value={editClicDesc}
+                onChange={e => setEditClicDesc(e.target.value)}
+                className="h-11 rounded-xl text-sm"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditClicModalOpen(false)}
+                className="h-11 rounded-xl px-5 text-xs font-bold"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isUpdatingClic}
+                className="h-11 rounded-xl px-6 text-xs font-bold bg-accent text-accent-foreground"
+              >
+                {isUpdatingClic ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* DELETE CLIC CONFIRMATION DIALOG MODAL */}
+      <Dialog open={isDeleteClicConfirmOpen} onOpenChange={setIsDeleteClicConfirmOpen}>
+        <DialogContent className="w-[92%] max-w-[400px] rounded-3xl p-6 gap-5 bg-card text-center">
+          <DialogHeader className="text-center font-display">
+            <DialogTitle className="text-xl font-bold text-foreground">Delete Clic?</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground mt-1">
+              Are you sure you want to delete <span className="font-bold text-foreground">{selectedGroup?.name}</span>? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsDeleteClicConfirmOpen(false)}
+              className="h-11 rounded-xl px-5 text-xs font-bold flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={isDeletingClic}
+              onClick={handleDeleteClic}
+              className="h-11 rounded-xl px-6 text-xs font-bold flex-1 bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {isDeletingClic ? 'Deleting...' : 'Delete'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

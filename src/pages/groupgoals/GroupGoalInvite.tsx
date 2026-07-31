@@ -88,7 +88,7 @@ const GroupGoalInvite = () => {
 
       <h1 className="mb-2 font-display text-2xl font-bold">Invite Members</h1>
       <p className="mb-6 text-sm text-muted-foreground">
-        {goal.name} - {goal.memberCount} members
+        {goal.name} - {goal.memberCount} {goal.memberCount === 1 ? 'member' : 'members'}
       </p>
 
       <Card className="mb-5 space-y-4 p-5">
