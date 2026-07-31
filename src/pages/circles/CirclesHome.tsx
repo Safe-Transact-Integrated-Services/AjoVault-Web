@@ -429,7 +429,7 @@ const CirclesHome = () => {
                     {/* Badges & Meta row */}
                     <div className="flex items-center justify-between text-xs">
                       <p className="text-xs text-muted-foreground flex items-center gap-1.5 font-medium">
-                        <span>{circle.memberCount}/{circle.maxMembers} members</span>
+                        <span>{circle.memberCount}/{circle.maxMembers} {circle.memberCount === 1 ? 'member' : 'members'}</span>
                       </p>
                       
                       <div className="flex items-center gap-1.5">
