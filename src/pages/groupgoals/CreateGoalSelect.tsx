@@ -78,7 +78,7 @@ const CreateGoalSelect = () => {
   // Group Goal specific states
   const [category, setCategory] = useState<GroupGoalCategory>('other');
   const [description, setDescription] = useState('');
-  const [groupFrequency, setGroupFrequency] = useState<'weekly' | 'monthly'>('monthly');
+  const [groupFrequency, setGroupFrequency] = useState<GroupGoalFrequency>('monthly');
   const [deadline, setDeadline] = useState('');
   const [createdGroupGoal, setCreatedGroupGoal] = useState<GroupGoalDetail | null>(null);
 
@@ -147,8 +147,13 @@ const CreateGoalSelect = () => {
   };
 
   const handleCreateGroupGoal = async () => {
-    if (!name.trim() || !Number.isFinite(targetAmount) || targetAmount <= 0 || !Number.isFinite(contributionAmount) || contributionAmount <= 0 || !deadline) {
-      setError('Enter a valid name, target amount, contribution amount, and deadline.');
+    if (!name.trim() || !Number.isFinite(targetAmount) || targetAmount <= 0 || !Number.isFinite(contributionAmount) || contributionAmount <= 0) {
+      setError('Enter a valid name, target amount, and contribution amount.');
+      return;
+    }
+
+    if (!deadline.trim()) {
+      setError('Please select a deadline date for your group goal.');
       return;
     }
 
@@ -163,7 +168,7 @@ const CreateGoalSelect = () => {
         targetAmount,
         contributionAmount,
         frequency: groupFrequency,
-        deadline,
+        deadline: deadline.trim(),
       });
 
       setCreatedGroupGoal(result);
@@ -222,7 +227,7 @@ const CreateGoalSelect = () => {
         <ArrowLeft className="h-4 w-4" /> Back
       </button>
 
-      <div className="mx-auto max-w-md space-y-6">
+      <div className="mx-auto max-w-2xl space-y-6">
         <AnimatePresence mode="wait">
           {step === 'form' && (
             <motion.div
@@ -444,8 +449,8 @@ const CreateGoalSelect = () => {
                     </div>
                     <div className="space-y-2">
                       <Label>Frequency</Label>
-                      <div className="flex gap-2">
-                        {(['weekly', 'monthly'] as const).map(value => (
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        {(['daily', 'weekly', 'biweekly', 'monthly'] as const).map(value => (
                           <button
                             key={value}
                             type="button"
@@ -453,20 +458,20 @@ const CreateGoalSelect = () => {
                               setGroupFrequency(value);
                               setError('');
                             }}
-                            className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium capitalize transition-colors ${groupFrequency === value ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-border text-foreground'}`}
+                            className={`rounded-lg border px-3 py-2.5 text-xs font-semibold capitalize transition-colors ${groupFrequency === value ? 'border-primary bg-primary/10 text-primary font-bold' : 'border-border text-foreground hover:bg-muted/50'}`}
                           >
-                            {value}
+                            {value === 'biweekly' ? 'Biweekly' : value}
                           </button>
                         ))}
                       </div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="group-goal-deadline">Deadline</Label>
-                      <Input id="group-goal-deadline" type="date" value={deadline} onChange={event => { setDeadline(event.target.value); setError(''); }} className="h-12" />
+                      <Input id="group-goal-deadline" type="date" value={deadline} onChange={event => { setDeadline(event.target.value); setError(''); }} className="h-12" required />
                     </div>
                   </div>
 
-                  <Button className="h-12 w-full font-bold mt-4 animate-in fade-in duration-300" onClick={handleCreateGroupGoal} disabled={isSubmitting || !name.trim() || !target || !contribution || !deadline}>
+                  <Button className="h-12 w-full font-bold mt-4 animate-in fade-in duration-300" onClick={handleCreateGroupGoal} disabled={isSubmitting || !name.trim() || !target || !contribution || !deadline.trim()}>
                     {isSubmitting ? 'Creating group goal...' : 'Create Group Goal'}
                   </Button>
                 </div>
