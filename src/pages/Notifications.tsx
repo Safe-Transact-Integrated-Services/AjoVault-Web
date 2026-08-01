@@ -120,8 +120,10 @@ const Notifications = () => {
       <div className="space-y-2">
         {notifications.map(notification => {
           const isGroup = notification.category === 'group' || notification.link === '/groups';
-          const Icon = isGroup ? Users : iconMap[notification.type];
-          const colorClass = isGroup ? 'bg-[#126989]/15 text-[#126989]' : colorMap[notification.type];
+          const isClic = notification.category === 'clic' || notification.link?.startsWith('/clicks');
+          const groupLabel = isClic ? 'Clic' : 'Group';
+          const Icon = isGroup || isClic ? Users : iconMap[notification.type];
+          const colorClass = isGroup || isClic ? 'bg-[#126989]/15 text-[#126989]' : colorMap[notification.type];
           
           const currentInviteStatus = inviteStatusMap[notification.id] || notification.inviteStatus;
 
@@ -142,9 +144,9 @@ const Notifications = () => {
                   <p className={`text-sm ${notification.read ? 'font-medium' : 'font-semibold'} text-foreground`}>
                     {notification.title}
                   </p>
-                  {isGroup && (
+                  {(isGroup || isClic) && (
                     <span className="text-[9px] font-bold uppercase tracking-wider text-[#126989] bg-[#126989]/10 px-2 py-0.5 rounded-full border border-[#126989]/20 shrink-0">
-                      Group
+                      {groupLabel}
                     </span>
                   )}
                 </div>

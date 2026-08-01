@@ -170,6 +170,7 @@ const App = () => (
                   <Route path="/group-goals/:id" element={<GroupGoalDetail />} />
                   <Route path="/group-goals/:id/contribute" element={<GroupGoalContribute />} />
                   <Route path="/group-goals/:id/invite" element={<GroupGoalInvite />} />
+                  <Route path="/clicks/invitations/:code" element={<GroupsHome />} />
                   <Route path="/clicks" element={<GroupsHome />} />
                   <Route path="/groups" element={<Navigate to="/clicks" replace />} />
                   <Route path="/more" element={<MorePage />} />
@@ -238,4 +239,3 @@ const App = () => (
 );
 
 export default App;
-
