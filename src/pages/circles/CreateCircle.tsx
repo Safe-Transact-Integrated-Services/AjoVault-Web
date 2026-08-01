@@ -141,7 +141,9 @@ const CreateCircle = () => {
       setStep('invite');
       toast.success('Circle created.');
     } catch (createError) {
-      setError(getApiErrorMessage(createError, 'Unable to process circle.'));
+      const msg = getApiErrorMessage(createError, 'Unable to process circle.');
+      setError(msg);
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
