@@ -140,8 +140,6 @@ const App = () => (
 
               <Route element={<MobilePageLayout />}>
                 <Route path="/fundraising/donate/:code" element={<DonateFundraiser />} />
-                <Route path="/wallet" element={<Navigate to="/transactions" replace />} />
-                <Route path="/wallet/history" element={<Navigate to="/transactions" replace />} />
               </Route>
 
               <Route element={<AuthRouteGuard />}>
@@ -170,9 +168,9 @@ const App = () => (
                   <Route path="/group-goals/:id" element={<GroupGoalDetail />} />
                   <Route path="/group-goals/:id/contribute" element={<GroupGoalContribute />} />
                   <Route path="/group-goals/:id/invite" element={<GroupGoalInvite />} />
-                  <Route path="/clicks/invitations/:code" element={<GroupsHome />} />
-                  <Route path="/clicks" element={<GroupsHome />} />
-                  <Route path="/groups" element={<Navigate to="/clicks" replace />} />
+                  <Route path="/clics" element={<GroupsHome />} />
+                  <Route path="/clicks" element={<Navigate to="/clics" replace />} />
+                  <Route path="/groups" element={<Navigate to="/clics" replace />} />
                   <Route path="/more" element={<MorePage />} />
                   <Route path="/more/profile" element={<Profile />} />
                   <Route path="/more/settings" element={<Settings />} />
