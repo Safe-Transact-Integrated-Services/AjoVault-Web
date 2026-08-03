@@ -85,7 +85,7 @@ export const apiRequest = async <T>(path: string, options: ApiRequestOptions = {
   if (!response.ok) {
     const apiError = await toApiError(response);
 
-    if (shouldExpireAuthSession(response, apiError)) {
+    if (auth && shouldExpireAuthSession(response, apiError)) {
       clearAuthSession();
       notifyAuthSessionExpired();
     }

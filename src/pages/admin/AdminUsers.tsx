@@ -42,15 +42,8 @@ const dateFormatter = new Intl.DateTimeFormat('en-NG', {
 
 const normalizeStatus = (user: AdminUserListItem) => (user.isActive ? 'active' : 'suspended');
 
-const getDisplayEmail = (email: string, maxLen = 20) => {
-  if (!email || email.endsWith('@phone.ajovault.local')) return 'Not provided';
-  if (email.length <= maxLen) return email;
-  const atIdx = email.indexOf('@');
-  if (atIdx > 0 && atIdx <= maxLen) {
-    return `${email.slice(0, atIdx)}...`;
-  }
-  return `${email.slice(0, maxLen)}...`;
-};
+const getDisplayEmail = (email: string) =>
+  email.endsWith('@phone.ajovault.local') ? 'Not provided' : email;
 
 const getInitials = (fullName: string) =>
   fullName
@@ -200,7 +193,7 @@ const AdminUsers = () => {
                       >
                         <td className="p-4">
                           <p className="font-medium text-foreground">{user.fullName}</p>
-                          <p className="text-xs text-muted-foreground" title={user.email}>{getDisplayEmail(user.email)}</p>
+                          <p className="text-xs text-muted-foreground">{getDisplayEmail(user.email)}</p>
                           <p className="text-xs text-muted-foreground md:hidden">{user.phoneNumber || 'No phone number'}</p>
                         </td>
                         <td className="hidden p-4 text-foreground md:table-cell">{user.phoneNumber || 'Not provided'}</td>

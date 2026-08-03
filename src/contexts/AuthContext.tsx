@@ -96,9 +96,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           clearAuthSession();
           if (active) {
             setUser(null);
-            if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/signup')) {
-              window.location.href = '/login';
-            }
           }
         }
       } finally {
@@ -123,9 +120,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const handleSessionExpired = () => {
       clearAuthSession();
       setUser(null);
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/signup')) {
-        window.location.href = '/login';
-      }
     };
 
     window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);

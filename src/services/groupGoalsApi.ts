@@ -94,7 +94,7 @@ interface GroupGoalContributionResponse {
 }
 
 export type GroupGoalCategory = 'property' | 'vehicle' | 'equipment' | 'education' | 'other';
-export type GroupGoalFrequency = 'daily' | 'weekly' | 'biweekly' | 'monthly';
+export type GroupGoalFrequency = 'daily' | 'weekly' | 'monthly';
 export type GroupGoalStatus = 'active' | 'completed' | 'cancelled';
 export type GroupGoalRole = 'admin' | 'member';
 
@@ -184,7 +184,7 @@ export interface CreateGroupGoalInput {
   targetAmount: number;
   contributionAmount: number;
   frequency: GroupGoalFrequency;
-  deadline?: string;
+  deadline: string;
   currency?: string;
 }
 
@@ -250,7 +250,7 @@ export const createGroupGoal = async (input: CreateGroupGoalInput): Promise<Grou
       targetAmount: input.targetAmount,
       contributionAmount: input.contributionAmount,
       frequency: input.frequency,
-      deadline: input.deadline || undefined,
+      deadline: input.deadline,
       currency: input.currency ?? 'NGN',
     },
   });

@@ -1,7 +1,7 @@
 import { apiRequest } from '@/lib/api/http';
 import type { UpcomingContributionItem } from '@/services/dashboardApi';
 
-export type CircleFrequency = 'daily' | 'weekly' | 'biweekly' | 'monthly';
+export type CircleFrequency = 'daily' | 'weekly' | 'biweekly' | 'bi-weekly' | 'monthly';
 
 interface GroupSummaryResponse {
   groupId: string;

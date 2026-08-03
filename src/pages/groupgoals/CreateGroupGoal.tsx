@@ -34,7 +34,7 @@ const CreateGroupGoal = () => {
   const [description, setDescription] = useState('');
   const [target, setTarget] = useState('');
   const [contribution, setContribution] = useState('');
-  const [frequency, setFrequency] = useState<GroupGoalFrequency>('monthly');
+  const [frequency, setFrequency] = useState<'weekly' | 'monthly'>('monthly');
   const [deadline, setDeadline] = useState('');
   const [goal, setGoal] = useState<GroupGoalDetail | null>(null);
   const [error, setError] = useState('');
@@ -44,8 +44,8 @@ const CreateGroupGoal = () => {
     const targetAmount = Number(target);
     const contributionAmount = Number(contribution);
 
-    if (!name.trim() || !Number.isFinite(targetAmount) || targetAmount <= 0 || !Number.isFinite(contributionAmount) || contributionAmount <= 0) {
-      setError('Enter a valid name, target amount, and contribution amount.');
+    if (!name.trim() || !Number.isFinite(targetAmount) || targetAmount <= 0 || !Number.isFinite(contributionAmount) || contributionAmount <= 0 || !deadline) {
+      setError('Enter a valid name, target amount, contribution amount, and deadline.');
       return;
     }
 
@@ -60,7 +60,7 @@ const CreateGroupGoal = () => {
         targetAmount,
         contributionAmount,
         frequency,
-        deadline: deadline.trim() || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        deadline,
       });
 
       setGoal(createdGoal);
@@ -205,26 +205,26 @@ const CreateGroupGoal = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>Frequency</Label>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {(['daily', 'weekly', 'biweekly', 'monthly'] as const).map(value => (
+                  <div className="flex gap-2">
+                    {(['weekly', 'monthly'] as const).map(value => (
                       <button
                         key={value}
                         type="button"
                         onClick={() => setFrequency(value)}
-                        className={`rounded-lg border px-3 py-2.5 text-xs font-semibold capitalize transition-colors ${frequency === value ? 'border-accent bg-accent/10 text-accent font-bold' : 'border-border text-foreground hover:bg-muted/50'}`}
+                        className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${frequency === value ? 'border-accent bg-accent/10 text-accent font-semibold' : 'border-border text-foreground'}`}
                       >
-                        {value === 'biweekly' ? 'Bi-Weekly' : value}
+                        {value}
                       </button>
                     ))}
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="group-goal-deadline">Deadline <span className="text-xs text-muted-foreground font-normal">(Optional)</span></Label>
+                  <Label htmlFor="group-goal-deadline">Deadline</Label>
                   <Input id="group-goal-deadline" type="date" value={deadline} onChange={event => setDeadline(event.target.value)} className="h-12" />
                 </div>
               </div>
 
-              <Button className="h-12 w-full font-bold mt-4 animate-in fade-in duration-300" onClick={handleCreate} disabled={isSubmitting || !name.trim() || !target || !contribution}>
+              <Button className="h-12 w-full font-bold mt-4 animate-in fade-in duration-300" onClick={handleCreate} disabled={isSubmitting || !name.trim() || !target || !contribution || !deadline}>
                 {isSubmitting ? 'Creating group goal...' : 'Create Group Goal'}
               </Button>
             </div>
