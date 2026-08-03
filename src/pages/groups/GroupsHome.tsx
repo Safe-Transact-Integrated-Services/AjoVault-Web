@@ -32,7 +32,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/api/http';
-import { getClics, getClic, createClic, updateClic, deleteClic, addClicMember, updateClicMember, updateClicMembersBatch, createClicInvitation, resendClicInvitation, acceptClicInvitation, rejectClicInvitation, removeClicMember, removeClicInvitation, clicsKeys } from '@/services/clicsApi';
+import { getClics, getClic, createClic, updateClic, deleteClic, addClicMember, updateClicMember, updateClicMembersBatch, createClicInvitation, resendClicInvitation, acceptClicInvitation, rejectClicInvitation, removeClicMember, removeClicInvitation, getMyClicInvitations, clicsKeys } from '@/services/clicsApi';
+import type { ClicInvitationItem } from '@/services/clicsApi';
 import { searchPlatformUsers } from '@/services/platformUsersApi';
 import { EmptyTableState } from '@/components/shared/EmptyTableState';
 
@@ -54,11 +55,30 @@ const formatDate = (dateStr: string) => {
   });
 };
 
-const formatEmailForDisplay = (email: string | undefined | null): string => {
-  if (!email || email === 'N/A' || email === '••••••••') return email || 'N/A';
-  if (!email.includes('@')) return email;
-  const [username] = email.split('@');
-  return `${username}@....`;
+const getMemberStatus = (status?: string) => (status || 'active').trim().toLowerCase();
+
+const getMemberStatusLabel = (status?: string) => {
+  const normalized = getMemberStatus(status);
+  if (normalized === 'pending') return 'Pending Invite';
+  if (normalized === 'removed') return 'Removed';
+  return 'Joined';
+};
+
+const getMemberStatusClassName = (status?: string) => {
+  const normalized = getMemberStatus(status);
+  if (normalized === 'pending') return 'bg-amber-50 text-amber-700 border-amber-200';
+  if (normalized === 'removed') return 'bg-rose-50 text-rose-700 border-rose-200';
+  return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+};
+
+const getActiveMemberCount = (members: Array<{ status?: string }> = []) =>
+  members.filter(member => getMemberStatus(member.status) === 'active').length;
+
+const getInvitationStatusClassName = (status?: string) => {
+  const normalized = (status || 'pending').trim().toLowerCase();
+  if (normalized === 'accepted') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  if (normalized === 'rejected') return 'bg-rose-50 text-rose-700 border-rose-200';
+  return 'bg-amber-50 text-amber-700 border-amber-200';
 };
 
 interface GroupMember {
@@ -68,6 +88,7 @@ interface GroupMember {
   phone?: string;
   contact?: string;
   role: 'admin' | 'member';
+  status?: 'active' | 'pending' | 'removed' | string;
   hasPaid: boolean;
   payoutPosition: number;
 }
@@ -304,12 +325,18 @@ const GroupsHome = () => {
     retry: 1,
   });
 
+  const receivedInvitationsQuery = useQuery({
+    queryKey: ['clic-invitations-me'],
+    queryFn: getMyClicInvitations,
+    retry: 1,
+  });
+
   const groups = useMemo(() => {
     return (clicsQuery.data as unknown as Group[]) || [];
   }, [clicsQuery.data]);
 
   // Filtering & searching states
-  const [activeTab, setActiveTab] = useState<'all' | 'admin' | 'member' | 'invites'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'admin' | 'member' | 'invitations'>('all');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('newest');
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -477,8 +504,7 @@ const GroupsHome = () => {
       list = list.filter(g => g.role === 'admin');
     } else if (activeTab === 'member') {
       list = list.filter(g => g.role === 'member');
-    } else if (activeTab === 'invites') {
-      list = list.filter(g => g.role === 'admin');
+
     }
 
     if (search.trim()) {
@@ -505,21 +531,29 @@ const GroupsHome = () => {
     return list;
   }, [groups, activeTab, search, sortBy]);
 
-  // Automatically fetch invitation detail from backend for all visible admin groups when under Invites tab
-  useEffect(() => {
-    if (activeTab === 'invites' && filteredGroups.length > 0) {
-      filteredGroups.forEach(g => {
-        const targetId = g.id || (g as any).clicId;
-        if (targetId) {
-          getClic(targetId).then(detail => {
-            if (detail && Array.isArray(detail.invitations)) {
-              setExpandedInvitationsMap(prev => ({ ...prev, [targetId]: detail.invitations }));
-            }
-          }).catch(() => { });
-        }
-      });
-    }
-  }, [activeTab, filteredGroups]);
+  const filteredReceivedInvitations = useMemo(() => {
+    const list = [...(receivedInvitationsQuery.data || [])];
+    const query = search.trim().toLowerCase();
+    const filtered = query
+      ? list.filter(invitation =>
+          (invitation.groupName || invitation.clicName || '').toLowerCase().includes(query)
+          || (invitation.inviterName || '').toLowerCase().includes(query)
+          || invitation.status.toLowerCase().includes(query))
+      : list;
+
+    return filtered.sort((a, b) => {
+      const aDate = new Date(a.createdAtUtc || a.createdAt || '').getTime();
+      const bDate = new Date(b.createdAtUtc || b.createdAt || '').getTime();
+      if (sortBy === 'oldest') {
+        return aDate - bDate;
+      }
+      if (sortBy === 'alphabetical') {
+        return (a.groupName || a.clicName || '').localeCompare(b.groupName || b.clicName || '');
+      }
+      return bDate - aDate;
+    });
+  }, [receivedInvitationsQuery.data, search, sortBy]);
+
 
   // Handle creation of a new group from form modal
   const handleCreateGroup = async (e: React.FormEvent) => {
@@ -920,6 +954,19 @@ const GroupsHome = () => {
     }
   };
 
+  const handleAcceptReceivedInvitation = async (invitation: ClicInvitationItem) => {
+    try {
+      await acceptClicInvitation(invitation.clicId, invitation.invitationId || invitation.id);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: clicsKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ['clic-invitations-me'] }),
+      ]);
+      toast.success(`Joined "${invitation.groupName || invitation.clicName || 'Clic'}" successfully!`);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to accept invitation.'));
+    }
+  };
+
   // Reject pending invitation received
   const handleRejectInvite = async (invite: GroupNotification) => {
     try {
@@ -933,6 +980,19 @@ const GroupsHome = () => {
           : nt
       ));
       toast.info(`Declined invitation to join "${invite.groupName}".`);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to decline invitation.'));
+    }
+  };
+
+  const handleRejectReceivedInvitation = async (invitation: ClicInvitationItem) => {
+    try {
+      await rejectClicInvitation(invitation.clicId, invitation.invitationId || invitation.id);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: clicsKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ['clic-invitations-me'] }),
+      ]);
+      toast.info(`Declined invitation to join "${invitation.groupName || invitation.clicName || 'Clic'}".`);
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Failed to decline invitation.'));
     }
@@ -1154,7 +1214,7 @@ const GroupsHome = () => {
 
           {/* Filter Tabs */}
           <div className="flex border-b border-border w-full justify-between pb-0.5">
-            {['all', 'admin', 'member', 'invites'].map((tab) => (
+            {['all', 'admin', 'member', 'invitations'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => {
@@ -1165,7 +1225,7 @@ const GroupsHome = () => {
                   : 'border-transparent text-muted-foreground hover:text-foreground'
                   }`}
               >
-                {tab === 'member' ? 'Member' : tab === 'invites' ? 'Invites' : tab}
+                {tab === 'member' ? 'Member' : tab === 'invitations' ? 'Invitations' : tab}
               </button>
             ))}
           </div>
@@ -1176,7 +1236,7 @@ const GroupsHome = () => {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="Search clics..."
+                placeholder={activeTab === 'invitations' ? 'Search invitations...' : 'Search clics...'}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 h-10 rounded-xl"
@@ -1200,7 +1260,73 @@ const GroupsHome = () => {
 
           {/* Groups Listing */}
           <div className="space-y-3">
-            {filteredGroups.length === 0 ? (
+            {activeTab === 'invitations' ? (
+              receivedInvitationsQuery.isLoading ? (
+                <div className="flex items-center justify-center gap-2 rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                  <span>Loading invitations...</span>
+                </div>
+              ) : filteredReceivedInvitations.length === 0 ? (
+                <EmptyTableState
+                  title="No invitations received"
+                  description="Clic invitations sent to you will appear here."
+                />
+              ) : (
+                filteredReceivedInvitations.map(invitation => {
+                  const invitationId = invitation.invitationId || invitation.id;
+                  const clicName = invitation.groupName || invitation.clicName || 'Clic';
+                  const isPending = invitation.status === 'pending';
+
+                  return (
+                    <div key={invitationId} className="rounded-2xl border border-border bg-card p-4 shadow-sm transition-all hover:border-accent/40 hover:shadow-md">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10">
+                              <Bell className="h-5 w-5 text-accent" />
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="truncate font-bold text-foreground">{clicName}</h4>
+                              <p className="text-xs text-muted-foreground">
+                                {invitation.inviterName ? `${invitation.inviterName} invited you` : 'Invitation received'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] font-semibold text-muted-foreground">
+                            <span>{formatDate(invitation.createdAtUtc || invitation.createdAt || '')}</span>
+                            <span className={`rounded-full border px-2 py-0.5 uppercase tracking-wide ${getInvitationStatusClassName(invitation.status)}`}>
+                              {invitation.status}
+                            </span>
+                          </div>
+                        </div>
+
+                        {isPending && (
+                          <div className="flex shrink-0 items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 rounded-xl border-rose-200 bg-rose-50 px-3 text-[10px] font-bold text-rose-700 hover:bg-rose-100"
+                              onClick={() => handleRejectReceivedInvitation(invitation)}
+                            >
+                              Decline
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-8 rounded-xl bg-accent px-3 text-[10px] font-bold text-accent-foreground hover:bg-accent/90"
+                              onClick={() => handleAcceptReceivedInvitation(invitation)}
+                            >
+                              Accept
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )
+            ) : filteredGroups.length === 0 ? (
               <EmptyTableState
                 title="No clics found"
                 description="Create a clic or accept an invitation to get started."
@@ -1256,98 +1382,8 @@ const GroupsHome = () => {
                           className="overflow-hidden border-t border-border/50 pt-3.5 space-y-3"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          {/* Expanded Card Content: Invites View if top tab is 'invites', else Members Table */}
-                          {activeTab === 'invites' ? (
-                            /* INVITES View under top 'Invites' tab: Sent Invitations list */
-                            <div className="space-y-4">
-                              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                                {(() => {
-                                  const targetId = group.id || (group as any).clicId || groupKey;
-                                  const activeInvites = (group as any).invitations && (group as any).invitations.length > 0
-                                    ? (group as any).invitations
-                                    : (expandedInvitationsMap[targetId] || expandedInvitationsMap[group.id] || invitationsMap[group.id] || []);
-
-                                  if (!activeInvites || activeInvites.length === 0) {
-                                    return <p className="text-xs text-muted-foreground text-center py-4">No active invitations sent.</p>;
-                                  }
-
-                                  return activeInvites.map((inv: any) => {
-                                    const contactStr = inv.memberContact || inv.inviteeContact || inv.contact || '';
-                                    const displayEmail = inv.email || inv.inviteeEmail || inv.platformUserEmail || inv.platformUser?.email || (contactStr.includes('@') ? contactStr : 'N/A');
-                                    const displayPhone = inv.phone || inv.phoneNumber || inv.inviteePhone || inv.platformUserPhone || inv.platformUser?.phoneNumber || (!contactStr.includes('@') && contactStr ? contactStr : 'N/A');
-                                    const inviteeName = inv.inviteeName || inv.displayName || inv.name || inv.platformUser?.fullName || 'Invitee';
-
-                                    return (
-                                      <div key={inv.id || inv.invitationId} className="flex items-center justify-between rounded-xl border border-border p-3 text-xs bg-card">
-                                        <div className="space-y-1">
-                                          <div className="flex items-center gap-2">
-                                            <span className="text-[11px] font-semibold text-muted-foreground">Name:</span>
-                                            <span className="font-bold text-foreground">{inviteeName}</span>
-                                          </div>
-                                          <div className="flex items-center gap-2 text-[10px]">
-                                            <span className="font-semibold text-muted-foreground">Email:</span>
-                                            <span className="text-foreground">{group.role === 'admin' ? displayEmail : '••••••••'}</span>
-                                          </div>
-                                          <div className="flex items-center gap-2 text-[10px]">
-                                            <span className="font-semibold text-muted-foreground">Phone:</span>
-                                            <span className="text-foreground">{group.role === 'admin' ? displayPhone : '••••••••'}</span>
-                                          </div>
-                                          {inv.channel && (
-                                            <span className="inline-block text-[9px] text-muted-foreground font-medium pt-0.5">Channel: {String(inv.channel).toUpperCase()}</span>
-                                          )}
-                                        </div>
-
-                                        <div className="flex items-center gap-3">
-                                          <div className="text-right">
-                                            <span className={`inline-block text-[9px] font-extrabold uppercase px-2 py-0.5 rounded border tracking-wide ${inv.status === 'accepted'
-                                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                              : inv.status === 'rejected'
-                                                ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                                : 'bg-amber-50 text-amber-700 border-amber-200'
-                                              }`}>
-                                              {inv.status}
-                                            </span>
-                                            {inv.reinviteCount !== undefined && (
-                                              <p className="text-[8px] text-muted-foreground mt-0.5">
-                                                Attempts: {Math.min((inv.reinviteCount ?? 0) + 1, 3)}/3
-                                              </p>
-                                            )}
-                                          </div>
-
-                                          {group.role === 'admin' && (inv.status === 'rejected' || inv.status === 'pending') && (() => {
-                                             const reinviteCount = inv.reinviteCount ?? inv.reInvitesCount ?? 0;
-                                             const isMaxAttempts = reinviteCount >= 2;
-                                             const isDisabled = inv.status === 'pending' || isMaxAttempts;
-
-                                             return (
-                                               <div className="border-l border-border pl-2.5">
-                                                 <button
-                                                   type="button"
-                                                   onClick={(e) => {
-                                                     e.stopPropagation();
-                                                     handleReinvite(inv, group.id || (group as any).clicId);
-                                                   }}
-                                                   disabled={isDisabled}
-                                                   className={`text-[9px] font-extrabold uppercase px-2.5 py-1.5 rounded transition-all ${isDisabled
-                                                     ? 'bg-muted text-muted-foreground border border-border cursor-not-allowed opacity-60'
-                                                     : 'bg-accent/10 hover:bg-accent/25 text-accent border border-accent/20'
-                                                     }`}
-                                                 >
-                                                   {inv.status === 'pending' ? 'Pending' : isMaxAttempts ? 'Max Attempts' : 'Reinvite'}
-                                                 </button>
-                                               </div>
-                                             );
-                                           })()}
-                                        </div>
-                                      </div>
-                                    );
-                                  });
-                                })()}
-                              </div>
-                            </div>
-                          ) : (
-                            /* MEMBERS View for All / Admin / Member tabs */
-                            <div className="max-h-[245px] overflow-y-auto overflow-x-auto rounded-xl border border-border bg-card [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border">
+                          {/* Expanded Card Content: Members Table */}
+                          <div className="max-h-[245px] overflow-y-auto overflow-x-auto rounded-xl border border-border bg-card [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border">
                               <table className="w-full text-left text-xs">
                                 <thead className="sticky top-0 bg-muted/90 backdrop-blur-sm text-[10px] font-bold uppercase text-muted-foreground border-b border-border z-10">
                                   <tr>
@@ -1398,6 +1434,7 @@ const GroupsHome = () => {
                                       const emailStr = m.email || (m.contact?.includes('@') ? m.contact : 'N/A');
                                       const phoneStr = m.phone || m.phoneNumber || (m.contact && (m.contact.includes('+') || m.contact.match(/\d/)) ? m.contact : 'N/A');
                                       const displayName = m.name || m.displayName || 'Member';
+                                      const statusLabel = getMemberStatusLabel(m.status);
 
                                       return (
                                         <tr key={m.id || m.memberId || displayName} className="hover:bg-muted/30 transition-colors">
@@ -1416,8 +1453,8 @@ const GroupsHome = () => {
                                               <td className="p-2.5 text-muted-foreground">{formatEmailForDisplay(emailStr)}</td>
                                               <td className="p-2.5 text-muted-foreground">{phoneStr}</td>
                                               <td className="p-2.5">
-                                                <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded border bg-sky-50 text-sky-700 border-sky-200">
-                                                  {m.status ? String(m.status).toUpperCase() : 'JOINED'}
+                                                <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded border ${getMemberStatusClassName(m.status)}`}>
+                                                  {statusLabel}
                                                 </span>
                                               </td>
                                               <td className="p-2.5 text-right">
@@ -1456,8 +1493,7 @@ const GroupsHome = () => {
                                   })()}
                                 </tbody>
                               </table>
-                            </div>
-                          )}
+                          </div>
 
                           {(() => {
                             const targetId = group.id || (group as any).clicId || groupKey;
@@ -1577,7 +1613,7 @@ const GroupsHome = () => {
                         className={`pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${detailsTab === 'accepted' ? 'border-[#126989] text-[#126989]' : 'border-transparent text-muted-foreground hover:text-foreground'
                           }`}
                       >
-                        Members ({(selectedGroup.members || []).length})
+                        Members ({selectedGroup.memberCount ?? getActiveMemberCount(selectedGroup.members || [])})
                       </button>
                       {selectedGroup.role === 'admin' && (
                         <button
@@ -1585,7 +1621,7 @@ const GroupsHome = () => {
                           className={`pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${detailsTab === 'invitations' ? 'border-[#126989] text-[#126989]' : 'border-transparent text-muted-foreground hover:text-foreground'
                             }`}
                         >
-                          Invite Participant
+                          Invitations ({(selectedGroup as any).invitations?.length ?? invitationsMap[selectedGroupId]?.length ?? 0})
                         </button>
                       )}
                     </div>
@@ -1595,12 +1631,14 @@ const GroupsHome = () => {
                   {detailsTab === 'accepted' && (
                     <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                       {(selectedGroup.members || []).length === 0 ? (
-                        <p className="text-xs text-muted-foreground text-center py-4">No members have joined yet.</p>
+                        <p className="text-xs text-muted-foreground text-center py-4">No members listed yet.</p>
                       ) : (
                         [...(selectedGroup.members || [])].sort((a: any, b: any) => (a.role === 'admin' ? -1 : b.role === 'admin' ? 1 : 0)).map((member: any) => {
                           const displayEmail = member.email || (member.contact?.includes('@') ? member.contact : 'N/A');
                           const displayPhone = member.phone || member.phoneNumber || (member.contact && (member.contact.includes('+') || member.contact.match(/\d/)) ? member.contact : 'N/A');
                           const displayName = member.name || member.displayName || 'Member';
+                          const memberStatus = getMemberStatus(member.status);
+                          const StatusIcon = memberStatus === 'pending' ? Clock : CheckCircle2;
 
                           return (
                             <div key={member.id || member.memberId} className="flex items-center justify-between rounded-xl border border-border bg-card p-3 text-xs">
@@ -1619,40 +1657,9 @@ const GroupsHome = () => {
                                 </div>
                               </div>
                               <div className="flex items-center gap-2.5">
-                                {member.role === 'admin' ? (
-                                  <span className="text-[9px] bg-[#126989]/15 text-[#126989] border border-[#126989]/20 px-2.5 py-0.5 rounded-full font-extrabold uppercase">
-                                    Admin
-                                  </span>
-                                ) : selectedGroup.role === 'admin' ? (
-                                  <div className="flex items-center justify-end gap-1">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        triggerEditMember(member, 'member', selectedGroup.id);
-                                      }}
-                                      className="p-1.5 hover:text-accent rounded-full hover:bg-muted transition-colors"
-                                      title="Edit member details"
-                                    >
-                                      <Pencil className="h-3.5 w-3.5 text-foreground" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        triggerRemoveItem(member, 'member', selectedGroup.id);
-                                      }}
-                                      className="p-1.5 hover:text-destructive rounded-full hover:bg-muted transition-colors"
-                                      title="Remove member"
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5 text-foreground hover:text-destructive" />
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-sky-700 bg-sky-50 px-2.5 py-0.5 rounded-full border border-sky-200">
-                                    <CheckCircle2 className="h-3.5 w-3.5 text-sky-600" /> Joined
-                                  </span>
-                                )}
+                                <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${getMemberStatusClassName(member.status)}`}>
+                                  <StatusIcon className="h-3.5 w-3.5" /> {getMemberStatusLabel(member.status)}
+                                </span>
                               </div>
                             </div>
                           );
