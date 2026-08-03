@@ -73,7 +73,10 @@ export interface ClicInvitationDetail {
   email?: string;
   phone?: string;
   phoneNumber?: string;
+  invitedUserId?: string;
+  platformUserId?: string;
   inviteeContact?: string;
+  memberContact?: string;
   channel?: 'platform' | 'email' | 'sms';
   status: 'pending' | 'accepted' | 'rejected';
   reinviteCount?: number;
@@ -148,28 +151,83 @@ export const getClics = async (page: number | any = 1, pageSize: number = 50): P
               ? item.data.members
               : [];
 
-  return rawList.map((item: any, idx: number) => ({
-    ...item,
-    id: item.clicId || item.id || item.groupId || `clic_${idx}`,
-    clicId: item.clicId || item.id,
-    name: item.name || '',
-    description: item.description || '',
-    status: item.status || 'active',
-    memberCount: item.memberCount ?? (Array.isArray(item.members) ? item.members.length : 0),
-    role: item.role || 'member',
-    createdAt: item.createdAt || item.createdAtUtc || new Date().toISOString(),
-    createdAtUtc: item.createdAtUtc || item.createdAt,
-    updatedAtUtc: item.updatedAtUtc,
-    members: mapClicMembers(Array.isArray(item.members) ? item.members : []),
-  }));
+    return {
+      ...item,
+      id: item.clicId || item.id || item.groupId || `clic_${idx}`,
+      clicId: item.clicId || item.id || item.groupId,
+      name: item.name || '',
+      description: item.description || '',
+      amount: item.amount ?? item.contributionAmount ?? 0,
+      currency: item.currency || 'NGN',
+      frequency: item.frequency || 'monthly',
+      memberCount: item.memberCount ?? item.membersCount ?? rawMembers.length,
+      pendingInvitationCount: item.pendingInvitationCount,
+      maxMembers: item.maxMembers ?? rawMembers.length,
+      currentCycle: item.currentCycle ?? 0,
+      totalCycles: item.totalCycles ?? 12,
+      role: item.role || 'member',
+      nextContributionDate: item.nextContributionDate ?? null,
+      nextPayoutDate: item.nextPayoutDate ?? null,
+      status: item.status || 'active',
+      members: mapClicMembers(rawMembers).filter((member) =>
+        member.role === 'admin' ||
+        member.status === 'active' ||
+        member.status === 'joined' ||
+        member.status === 'accepted' ||
+        !member.status
+      ),
+      createdAt: item.createdAt || item.createdAtUtc || new Date().toISOString(),
+      createdAtUtc: item.createdAtUtc || item.createdAt,
+      updatedAtUtc: item.updatedAtUtc,
+      completedPayoutsCount: item.completedPayoutsCount,
+      hasPaidCurrentCycle: item.hasPaidCurrentCycle,
+    };
+  });
 };
 
 export const getClic = async (id: string): Promise<ClicGroupDetail> => {
-  const item = await apiRequest<any>(`/api/clics/${encodeURIComponent(id)}`);
-  const rawMembers = Array.isArray(item?.members) ? item.members : [];
-  const rawInvitations = Array.isArray(item?.invitations) ? item.invitations : [];
+  const response = await apiRequest<any>(`/api/clics/${encodeURIComponent(id)}`);
+  const item = (response && typeof response === 'object' && ('data' in response || 'result' in response))
+    ? (response.data || response.result || response)
+    : response;
 
-  const members = mapClicMembers(rawMembers);
+  const rawMembers = Array.isArray(item?.members)
+    ? item.members
+    : Array.isArray(item?.participants)
+      ? item.participants
+      : Array.isArray(item?.clicMembers)
+        ? item.clicMembers
+        : Array.isArray(item?.userMembers)
+          ? item.userMembers
+          : Array.isArray(item?.data?.members)
+            ? item.data.members
+            : [];
+
+  const rawInvitations = Array.isArray(item?.invitations)
+    ? item.invitations
+    : Array.isArray(item?.pendingInvitations)
+      ? item.pendingInvitations
+      : Array.isArray(item?.clicInvitations)
+        ? item.clicInvitations
+        : Array.isArray(item?.invites)
+          ? item.invites
+          : Array.isArray(item?.data?.invitations)
+            ? item.data.invitations
+            : [];
+
+  const acceptedRawMembers = rawMembers.filter((member: any) =>
+    member.role === 'admin' ||
+    member.status === 'active' ||
+    member.status === 'joined' ||
+    member.status === 'accepted' ||
+    !member.status
+  );
+
+  const pendingRawMembers = rawMembers.filter((member: any) =>
+    member.role !== 'admin' && member.status === 'pending'
+  );
+
+  const members = mapClicMembers(acceptedRawMembers);
 
   const pendingMemberInvitations: any[] = pendingRawMembers.map((m: any, idx: number) => {
     const contact = m.email || m.phoneNumber || m.phone || '';
@@ -297,20 +355,25 @@ export const getClic = async (id: string): Promise<ClicGroupDetail> => {
     clicId: item?.clicId || item?.id || id,
     name: item?.name || '',
     description: item?.description || '',
+    amount: item?.amount ?? item?.contributionAmount ?? 0,
+    currency: item?.currency || 'NGN',
+    frequency: item?.frequency || 'monthly',
     status: item?.status || 'active',
     memberCount: item?.memberCount ?? item?.numberCount ?? members.length,
     pendingInvitationCount: item?.pendingInvitationCount ?? deduplicatedInvitations.filter(i => i.status === 'pending').length,
+    maxMembers: item?.maxMembers ?? rawMembers.length,
+    currentCycle: item?.currentCycle ?? 0,
+    totalCycles: item?.totalCycles ?? 12,
     role: item?.role || 'admin',
+    nextContributionDate: item?.nextContributionDate ?? null,
+    nextPayoutDate: item?.nextPayoutDate ?? null,
     members,
     invitations: deduplicatedInvitations,
     createdAt: item?.createdAt || item?.createdAtUtc || new Date().toISOString(),
     createdAtUtc: item?.createdAtUtc || item?.createdAt,
     updatedAtUtc: item?.updatedAtUtc,
-    amount: item?.amount ?? 0,
-    currency: item?.currency || 'NGN',
-    frequency: item?.frequency || 'monthly',
-    currentCycle: item?.currentCycle ?? 0,
-    totalCycles: item?.totalCycles ?? 12,
+    completedPayoutsCount: item?.completedPayoutsCount,
+    hasPaidCurrentCycle: item?.hasPaidCurrentCycle,
   };
 };
 
