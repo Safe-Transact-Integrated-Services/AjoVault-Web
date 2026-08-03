@@ -176,9 +176,7 @@ const CreateGoalSelect = () => {
       setStep('invite');
       toast.success('Group goal created.');
     } catch (createError) {
-      const msg = getApiErrorMessage(createError, 'Unable to create this group goal.');
-      setError(msg);
-      toast.error(msg);
+      setError(getApiErrorMessage(createError, 'Unable to create this group goal.'));
     } finally {
       setIsSubmitting(false);
     }
