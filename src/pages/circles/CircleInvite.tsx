@@ -66,12 +66,17 @@ const CircleInvite = () => {
       return;
     }
 
-    await sendCircleInvite({
-      circleId: id,
-      channel: 'platform',
-      platformUserId: user.userId,
-    });
-    toast.success(`In-app invite sent to ${user.fullName}.`);
+    try {
+      await sendCircleInvite({
+        circleId: id,
+        channel: 'platform',
+        platformUserId: user.userId,
+      });
+      toast.success(`In-app invite sent to ${user.fullName}.`);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err));
+      throw err;
+    }
   };
 
   const handleContactInvite = async (contact: string, channel: 'email' | 'sms') => {
@@ -84,12 +89,17 @@ const CircleInvite = () => {
       return;
     }
 
-    await sendCircleInvite({
-      circleId: id,
-      channel,
-      memberContact: contact,
-    });
-    toast.success(`${channel.toUpperCase()} invite queued for ${contact}.`);
+    try {
+      await sendCircleInvite({
+        circleId: id,
+        channel,
+        memberContact: contact,
+      });
+      toast.success(`${channel.toUpperCase()} invite queued for ${contact}.`);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err));
+      throw err;
+    }
   };
 
   return (
