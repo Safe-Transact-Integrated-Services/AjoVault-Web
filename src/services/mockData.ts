@@ -41,11 +41,11 @@ export const mockSavingsPlans: SavingsPlan[] = [
 ];
 
 export const mockNotifications: Notification[] = [
-  // { id: 'n_grp_1', type: 'info', category: 'group', title: 'Group Invitation', message: 'Yusuf K. invited you to join "Tech Founders Cooperative".', read: false, date: '2026-07-22T12:30:00', link: '/clicks', inviteStatus: 'pending', groupId: 'grp_002' },
-  // { id: 'n_grp_2', type: 'milestone', category: 'group', title: 'Invitation Accepted', message: 'Ibrahim M. accepted your invitation to join "Youth Empowerment Club".', read: false, date: '2026-07-22T10:15:00', link: '/clicks' },
+  // { id: 'n_grp_1', type: 'info', category: 'group', title: 'Group Invitation', message: 'Yusuf K. invited you to join "Tech Founders Cooperative".', read: false, date: '2026-07-22T12:30:00', link: '/clics', inviteStatus: 'pending', groupId: 'grp_002' },
+  // { id: 'n_grp_2', type: 'milestone', category: 'group', title: 'Invitation Accepted', message: 'Ibrahim M. accepted your invitation to join "Youth Empowerment Club".', read: false, date: '2026-07-22T10:15:00', link: '/clics' },
   { id: 'n1', type: 'reminder', title: 'Contribution Due', message: 'Your Ajo Family Circle contribution of ₦25,000 is due tomorrow.', read: false, date: '2026-03-07T08:00:00', link: '/circles/cir_001' },
   { id: 'n2', type: 'milestone', title: '80% Goal Reached', message: 'Your "New Laptop" savings is at 80%. Keep going!', read: false, date: '2026-03-06T12:00:00', link: '/savings/sav_002' },
-  // { id: 'n_grp_3', type: 'info', category: 'group', title: 'New Member Joined', message: 'Adaeze Okafor joined "Lagos Investment Circle".', read: true, date: '2026-03-05T14:30:00', link: '/clicks' },
+  // { id: 'n_grp_3', type: 'info', category: 'group', title: 'New Member Joined', message: 'Adaeze Okafor joined "Lagos Investment Circle".', read: true, date: '2026-03-05T14:30:00', link: '/clics' },
   { id: 'n3', type: 'alert', title: 'Login from New Device', message: 'A login was detected from a new device. If this wasn\'t you, please change your PIN.', read: true, date: '2026-03-05T09:15:00' },
   { id: 'n4', type: 'info', title: 'KYC Verified', message: 'Your identity has been verified. You now have full access.', read: true, date: '2026-03-03T14:00:00' },
   { id: 'n5', type: 'reminder', title: 'Weekly Savings', message: 'Auto-debit of ₦10,000 for Emergency Fund is scheduled for tomorrow.', read: false, date: '2026-03-07T07:00:00', link: '/savings/sav_001' },

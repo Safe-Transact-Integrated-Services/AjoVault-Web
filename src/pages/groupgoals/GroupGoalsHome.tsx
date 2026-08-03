@@ -659,7 +659,7 @@ const GroupGoalsHome = () => {
                         {/* Meta row */}
                         <div className="flex items-center justify-between text-xs">
                           <p className="text-xs text-muted-foreground font-medium">
-                            <span>{item.raw.memberCount} members</span>
+                            <span>{item.raw.memberCount} {item.raw.memberCount === 1 ? 'member' : 'members'}</span>
                             <span className="inline-block h-1 w-1 rounded-full bg-muted-foreground/50 mx-1.5" />
                             <span className="capitalize">{item.raw.frequency} contribution</span>
                           </p>
