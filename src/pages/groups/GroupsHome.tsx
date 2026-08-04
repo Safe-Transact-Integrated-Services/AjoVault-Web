@@ -329,7 +329,7 @@ const normalizeNameForCompare = (val?: string) => (val || '').trim().replace(/\s
 const normalizePhoneForCompare = (val?: string) => (val || '').replace(/\D/g, '');
 
 const formatFriendSourceFilterLabel = (val: string) =>
-  val === 'all' ? 'All' : val.replace(/^Circle: /, '').replace(/^Group Goal: /, '');
+  val === 'all' ? 'All' : val.replace(/^Clic: /, '').replace(/^Circle: /, '').replace(/^Group Goal: /, '');
 
 const isValidPhone = (val: string): boolean => {
   const digits = normalizePhoneForCompare(val);
@@ -557,7 +557,6 @@ const GroupsHome = () => {
   const [manualName, setManualName] = useState('');
   const [manualEmail, setManualEmail] = useState('');
   const [manualPhone, setManualPhone] = useState('');
-  const [manualFriendSearch, setManualFriendSearch] = useState<{ email: string; phoneNumber: string } | null>(null);
   const [selectedManualFriend, setSelectedManualFriend] = useState<PlatformUserSearchResult | null>(null);
   const [friendSourceSearchInput, setFriendSourceSearchInput] = useState('');
   const [activeFriendSourceSearchQuery, setActiveFriendSourceSearchQuery] = useState('');
@@ -599,23 +598,18 @@ const GroupsHome = () => {
     return mockPhoneContacts;
   }, [groups]);
 
-  const manualFriendSearchTerms = useMemo(() => {
-    if (!manualFriendSearch) {
-      return [];
-    }
-
-    return [manualFriendSearch.email, manualFriendSearch.phoneNumber]
-      .map(term => term.trim())
-      .filter(term => term.length >= 2);
-  }, [manualFriendSearch]);
+  const manualEmailQuery = manualEmail.trim();
+  const manualPhoneQuery = manualPhone.trim();
+  const hasManualFriendLookupInput = manualEmailQuery.length >= 2 || normalizePhoneForCompare(manualPhoneQuery).length >= 2;
 
   const manualFriendSearchQuery = useQuery({
-    queryKey: ['clic-create-friend-platform-users', manualFriendSearch?.email || '', manualFriendSearch?.phoneNumber || ''],
+    queryKey: ['clic-create-friend-platform-users', manualEmailQuery, manualPhoneQuery],
     queryFn: async () => {
-      const resultSets = await Promise.all(manualFriendSearchTerms.map(term => searchPlatformUsers(term)));
+      const terms = [manualEmailQuery, manualPhoneQuery].filter(term => term.length >= 2);
+      const resultSets = await Promise.all(terms.map(term => searchPlatformUsers(term)));
       return dedupePlatformUserResults(resultSets);
     },
-    enabled: isManualAddOpen && manualFriendSearchTerms.length > 0,
+    enabled: isManualAddOpen && hasManualFriendLookupInput,
     retry: 1,
   });
 
@@ -703,6 +697,33 @@ const GroupsHome = () => {
       }
     };
 
+    groups
+      .filter(group => group.role === 'admin')
+      .forEach(group => {
+        (group.members || [])
+          .filter(member => isJoinedMember(member))
+          .forEach(member => {
+            const rawContact = member.contact || '';
+            const email = member.email || (isValidEmail(rawContact) ? rawContact : undefined);
+            const rawPhone = member.phone || (member as any).phoneNumber || (!isValidEmail(rawContact) ? rawContact : '');
+            const phoneNumber = rawPhone && isValidPhone(rawPhone) ? rawPhone : undefined;
+
+            addSuggestion({
+              name: member.name || (member as any).displayName || 'Clic member',
+              contact: email || phoneNumber || '',
+              email,
+              phoneNumber,
+              platformUserId: (member as any).userId || (member as any).platformUserId,
+              circleName: group.name,
+              adminOf: member.role === 'admin' ? `${group.name} (Clic)` : undefined,
+              sourceId: group.id,
+              sourceLabel: `Clic: ${group.name}`,
+              sourceType: 'clic',
+              role: member.role || 'member',
+            });
+          });
+      });
+
     (friendSourceDetailsQuery.data?.circles || []).forEach(circle => {
       circle.members.forEach(member => {
         addSuggestion({
@@ -739,7 +760,7 @@ const GroupsHome = () => {
     });
 
     return Array.from(suggestions.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [friendSourceDetailsQuery.data, user]);
+  }, [friendSourceDetailsQuery.data, groups, user]);
 
   const availableFriendSourceFilterPills = useMemo(() => {
     const sourceLabels = Array.from(new Set(
@@ -976,7 +997,6 @@ const GroupsHome = () => {
     setManualName('');
     setManualEmail('');
     setManualPhone('');
-    setManualFriendSearch(null);
     setSelectedManualFriend(null);
     setFriendSourceSearchInput('');
     setActiveFriendSourceSearchQuery('');
@@ -1053,34 +1073,6 @@ const GroupsHome = () => {
     handleAddSuggestedFriend(contact);
   };
 
-  const handleManualFriendSearch = () => {
-    const trimmedEmail = manualEmail.trim();
-    const trimmedPhone = manualPhone.trim();
-
-    if (!trimmedEmail && !trimmedPhone) {
-      toast.error('Please enter an email address or phone number before searching.');
-      return;
-    }
-
-    if (trimmedEmail && !isValidEmail(trimmedEmail)) {
-      toast.error('Please enter a valid email address.');
-      return;
-    }
-
-    if (trimmedPhone && !isValidPhone(trimmedPhone)) {
-      toast.error('Please enter a valid phone number.');
-      return;
-    }
-
-    if (isLoggedInContact({ email: trimmedEmail, phoneNumber: trimmedPhone }, user)) {
-      toast.error('You are already the Clic creator, so you cannot add yourself as a member invite.');
-      return;
-    }
-
-    setSelectedManualFriend(null);
-    setManualFriendSearch({ email: trimmedEmail, phoneNumber: trimmedPhone });
-  };
-
   const handleSelectManualFriend = (friend: PlatformUserSearchResult) => {
     setSelectedManualFriend(friend);
     setManualName(friend.fullName || manualName);
@@ -1092,6 +1084,14 @@ const GroupsHome = () => {
     const trimmedName = manualName.trim() || selectedManualFriend?.fullName || '';
     const trimmedEmail = manualEmail.trim();
     const trimmedPhone = manualPhone.trim();
+    const hasManualFriendDraft = !!trimmedName || !!trimmedEmail || !!trimmedPhone || !!selectedManualFriend;
+
+    if (!hasManualFriendDraft && addedGroupMembers.length > 0) {
+      setIsManualAddOpen(false);
+      resetManualFriendForm();
+      toast.success(`${addedGroupMembers.length} selected ${addedGroupMembers.length === 1 ? 'friend is' : 'friends are'} ready for the Clic invite list.`);
+      return;
+    }
 
     if (!trimmedName) {
       toast.error('Please enter a full name or select a matching profile.');
@@ -1124,17 +1124,12 @@ const GroupsHome = () => {
       return;
     }
 
-    if (!manualFriendSearch) {
-      toast.error('Search first so we can check whether this friend already exists on the platform.');
-      return;
-    }
-
-    if (manualFriendSearchQuery.isFetching) {
+    if (hasManualFriendLookupInput && manualFriendSearchQuery.isFetching) {
       toast.info('Please wait for the friend search to finish.');
       return;
     }
 
-    if (manualFriendSearchQuery.isError) {
+    if (hasManualFriendLookupInput && manualFriendSearchQuery.isError) {
       toast.error('Search failed. Please try again before inviting this friend.');
       return;
     }
@@ -1165,9 +1160,11 @@ const GroupsHome = () => {
     }
 
     setAddedGroupMembers(prev => [...prev, candidate]);
-    resetManualFriendForm();
-    setIsManualAddOpen(false);
-    toast.success(`Added ${candidate.name} to invite list.`);
+    setManualName('');
+    setManualEmail('');
+    setManualPhone('');
+    setSelectedManualFriend(null);
+    toast.success(`Added ${candidate.name} to selected friends.`);
   };
 
   // Handle creation of a new group from form modal
@@ -2396,14 +2393,14 @@ const GroupsHome = () => {
             </div>
 
             <div className="space-y-2 border-t border-border pt-3">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Add Members</label>
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Add Friends</label>
 
               <button
                 type="button"
                 onClick={() => setIsManualAddOpen(true)}
                 className="text-xs h-9 font-bold w-full flex items-center justify-center gap-1.5 border border-[#126989]/30 text-[#126989] hover:bg-[#126989]/5 rounded-xl transition-all"
               >
-                <Plus className="h-3.5 w-3.5" /> Add Friend
+                <Plus className="h-3.5 w-3.5" /> Add Friends
               </button>
 
               {/* Displaying selected members list */}
@@ -2825,7 +2822,7 @@ const GroupsHome = () => {
       }}>
         <DialogContent className="w-[calc(100vw-1rem)] max-w-[420px] max-h-[calc(100svh-2rem)] overflow-y-auto rounded-3xl p-6 bg-card gap-4">
           <DialogHeader className="text-left font-display">
-            <DialogTitle className="text-lg font-bold text-foreground">Add Friend</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-foreground">Add Friends</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               Input new friend details. We will send invites to them whether they exist on our platform or not.
             </DialogDescription>
@@ -2837,7 +2834,7 @@ const GroupsHome = () => {
                 <div>
                   <p className="text-[10px] font-bold text-[#126989] uppercase tracking-wider">In-Platform Friends</p>
                   <p className="mt-0.5 text-[10px] text-muted-foreground">
-                    Select members from your circles and group goals you created.
+                    Select members from your created Clics, circles, and group goals.
                   </p>
                 </div>
                 {isLoadingCreateFriendSuggestions && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#126989]" />}
@@ -2909,7 +2906,7 @@ const GroupsHome = () => {
               ) : hasCreateFriendSuggestionError ? (
                 <p className="rounded-xl border border-border bg-card p-3 text-xs text-rose-600">Unable to load circle or group-goal friends right now.</p>
               ) : createFriendSuggestions.length === 0 ? (
-                <p className="rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">No eligible in-platform friends found from your circles or created group goals.</p>
+                <p className="rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">No eligible in-platform friends found from your created Clics, circles, or group goals.</p>
               ) : filteredCreateFriendSuggestions.length === 0 ? (
                 <p className="rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">No in-platform friends found matching your search.</p>
               ) : (
@@ -2956,80 +2953,96 @@ const GroupsHome = () => {
               )}
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Full Name</label>
-              <Input
-                placeholder="e.g. John Doe"
-                value={manualName}
-                onChange={e => setManualName(e.target.value)}
-                className="h-11 rounded-xl text-xs"
-              />
-            </div>
+            {addedGroupMembers.length > 0 && (
+              <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Selected Friends</p>
+                  <Badge variant="outline" className="text-[9px] uppercase tracking-wide">
+                    {addedGroupMembers.length} selected
+                  </Badge>
+                </div>
+                <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                  {addedGroupMembers.map((friend, idx) => (
+                    <div key={`${friend.platformUserId || friend.email || friend.phoneNumber || friend.contact}_${idx}`} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2 text-xs shadow-sm">
+                      <div className="min-w-0">
+                        <p className="truncate font-bold text-foreground">{friend.name}</p>
+                        <p className="truncate text-[10px] text-muted-foreground">
+                          {[friend.email, friend.phoneNumber].filter(Boolean).join(' - ') || friend.contact}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAddedGroupMembers(prev => prev.filter((_, itemIdx) => itemIdx !== idx))}
+                        className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                        title={`Remove ${friend.name}`}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Email</label>
+            <div className="space-y-3 rounded-2xl border border-border bg-muted/20 p-3">
+              <div className="grid grid-cols-1 gap-2">
+                <Input
+                  placeholder="Full name"
+                  value={manualName}
+                  onChange={e => {
+                    setManualName(e.target.value);
+                    setSelectedManualFriend(null);
+                  }}
+                  className="h-10 rounded-xl text-xs"
+                />
                 <Input
                   type="email"
-                  placeholder="john@email.com"
+                  placeholder="Email address"
                   value={manualEmail}
                   onChange={e => {
                     setManualEmail(e.target.value);
-                    setManualFriendSearch(null);
                     setSelectedManualFriend(null);
                   }}
-                  className="h-11 rounded-xl text-xs"
+                  className="h-10 rounded-xl text-xs"
                 />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Phone Number</label>
                 <Input
                   type="tel"
-                  placeholder="+234 812 345 6789"
+                  placeholder="Phone number"
                   value={manualPhone}
                   onChange={e => {
                     setManualPhone(e.target.value);
-                    setManualFriendSearch(null);
                     setSelectedManualFriend(null);
                   }}
-                  className="h-11 rounded-xl text-xs"
+                  className="h-10 rounded-xl text-xs"
                 />
               </div>
-            </div>
-            <p className="text-[10px] text-muted-foreground">Fill in at least one contact method, then search to check for an existing profile.</p>
 
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleManualFriendSearch}
-              disabled={manualFriendSearchQuery.isFetching}
-              className="h-10 w-full rounded-xl text-xs font-bold"
-            >
-              {manualFriendSearchQuery.isFetching ? (
-                <>
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  Searching...
-                </>
-              ) : (
-                <>
-                  <Search className="mr-1.5 h-3.5 w-3.5" />
-                  Search
-                </>
+              {selectedManualFriend && (
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-[#126989]/20 bg-[#126989]/5 px-3 py-2 text-[10px]">
+                  <span className="font-semibold text-[#126989]">Selected platform profile: {selectedManualFriend.fullName}</span>
+                  <button type="button" className="font-bold text-muted-foreground hover:text-foreground" onClick={() => setSelectedManualFriend(null)}>
+                    Clear
+                  </button>
+                </div>
               )}
-            </Button>
+            </div>
 
-            {manualFriendSearch && (
-              <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-3">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Search Matches</p>
-                {manualFriendSearchQuery.isLoading ? (
-                  <p className="text-xs text-muted-foreground">Searching platform users...</p>
-                ) : manualFriendSearchQuery.isError ? (
-                  <p className="text-xs text-rose-600">Unable to search platform users. Try again.</p>
-                ) : manualFriendMatches.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No platform match found. You can still invite this friend with the details entered.</p>
-                ) : (
-                  <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                    {manualFriendMatches.map(friend => {
+            {hasManualFriendLookupInput && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Matching Platform Profiles</p>
+                  {manualFriendSearchQuery.isFetching && <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />}
+                </div>
+
+                <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
+                  {manualFriendSearchQuery.isLoading ? (
+                    <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-muted-foreground">Searching profiles...</p>
+                  ) : manualFriendSearchQuery.isError ? (
+                    <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-rose-600">Unable to search platform users. Try again.</p>
+                  ) : manualFriendMatches.length === 0 ? (
+                    <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-muted-foreground">No platform profile found for this email or phone.</p>
+                  ) : (
+                    manualFriendMatches.map(friend => {
                       const isSelected = selectedManualFriend?.userId === friend.userId;
 
                       return (
@@ -3053,9 +3066,9 @@ const GroupsHome = () => {
                           </Badge>
                         </button>
                       );
-                    })}
-                  </div>
-                )}
+                    })
+                  )}
+                </div>
               </div>
             )}
 
@@ -3072,9 +3085,15 @@ const GroupsHome = () => {
               </Button>
               <Button
                 onClick={handleInviteManualFriend}
+                disabled={manualFriendSearchQuery.isFetching}
                 className="h-11 flex-1 rounded-xl text-xs font-bold bg-accent text-accent-foreground"
               >
-                Invite Friend
+                {manualFriendSearchQuery.isFetching ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    Checking...
+                  </>
+                ) : manualName.trim() || manualEmail.trim() || manualPhone.trim() || selectedManualFriend ? 'Add to List' : addedGroupMembers.length > 0 ? 'Done' : 'Add to List'}
               </Button>
             </div>
           </div>
