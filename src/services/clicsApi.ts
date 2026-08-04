@@ -277,16 +277,49 @@ export interface ClicInvitationItem {
 }
 
 export const getMyClicInvitations = async (): Promise<ClicInvitationItem[]> => {
-  const response = await apiRequest<any[]>('/api/clics/invitations/me');
-  return (response || []).map((item, idx) => ({
-    ...item,
-    id: item.invitationId || item.id || `clic_inv_${idx}`,
-    invitationId: item.invitationId || item.id,
-    clicId: item.clicId || item.groupId || item.clic?.id,
-    groupName: item.groupName || item.clicName || item.clic?.name || item.name || 'Group',
-    inviterName: item.inviterName || item.invitedBy || item.inviter?.fullName || item.inviter?.name,
-    status: item.status || 'pending',
-  }));
+  const response = await apiRequest<any>('/api/clics/invitations/me');
+  const rawList = Array.isArray(response)
+    ? response
+    : Array.isArray(response?.data)
+      ? response.data
+      : Array.isArray(response?.items)
+        ? response.items
+        : Array.isArray(response?.data?.items)
+          ? response.data.items
+          : Array.isArray(response?.result)
+            ? response.result
+            : Array.isArray(response?.result?.items)
+              ? response.result.items
+              : [];
+
+  return rawList.map((item, idx) => {
+    const rawStatus = String(item.status || 'pending').trim().toLowerCase();
+    const status =
+      rawStatus === 'accepted'
+        ? 'accepted'
+        : rawStatus === 'rejected' || rawStatus === 'declined'
+          ? 'rejected'
+          : 'pending';
+
+    return {
+      ...item,
+      id: item.invitationId || item.id || `clic_inv_${idx}`,
+      invitationId: item.invitationId || item.id,
+      clicId: item.clicId || item.groupId || item.clic?.id || item.clic?.clicId,
+      groupName: item.groupName || item.clicName || item.clic?.name || item.name || 'Clic',
+      clicName: item.clicName || item.groupName || item.clic?.name || item.name || 'Clic',
+      inviterName:
+        item.inviterName ||
+        item.invitedBy ||
+        item.senderName ||
+        item.createdByName ||
+        item.inviter?.fullName ||
+        item.inviter?.name ||
+        item.createdBy?.fullName ||
+        item.createdBy?.name,
+      status,
+    };
+  });
 };
 
 export const acceptClicInvitation = async (clicId: string, invitationId: string): Promise<void> => {
@@ -381,6 +414,7 @@ export interface CreateClicInvitationInput {
   email?: string;
   phoneNumber?: string;
   channel?: string;
+  channels?: string[];
 }
 
 export const createClicInvitation = async (clicId: string, input: CreateClicInvitationInput): Promise<void> => {
@@ -395,6 +429,7 @@ export const createClicInvitation = async (clicId: string, input: CreateClicInvi
       email: input.email?.trim() || undefined,
       phoneNumber: input.phoneNumber?.trim() || undefined,
       channel: input.channel || undefined,
+      channels: input.channels && input.channels.length > 0 ? input.channels : undefined,
     },
   });
 };

@@ -1,10 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
   Users,
-  Clock,
   Calendar,
   ChevronRight,
   ChevronDown,
@@ -32,9 +31,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/api/http';
+import { useAuth } from '@/contexts/AuthContext';
 import { getClics, getClic, createClic, updateClic, deleteClic, addClicMember, updateClicMember, updateClicMembersBatch, createClicInvitation, resendClicInvitation, acceptClicInvitation, rejectClicInvitation, removeClicMember, removeClicInvitation, getMyClicInvitations, clicsKeys } from '@/services/clicsApi';
 import type { ClicInvitationItem } from '@/services/clicsApi';
-import { searchPlatformUsers } from '@/services/platformUsersApi';
+import { searchPlatformUsers, type PlatformUserSearchResult } from '@/services/platformUsersApi';
 import { EmptyTableState } from '@/components/shared/EmptyTableState';
 
 // Self-contained helpers
@@ -56,6 +56,10 @@ const formatDate = (dateStr: string) => {
 };
 
 const getMemberStatus = (status?: string) => (status || 'active').trim().toLowerCase();
+const joinedMemberStatuses = new Set(['active', 'accepted', 'joined']);
+
+const isJoinedMember = (member: { role?: string; status?: string }) =>
+  member.role === 'admin' || joinedMemberStatuses.has(getMemberStatus(member.status));
 
 const getMemberStatusLabel = (status?: string) => {
   const normalized = getMemberStatus(status);
@@ -71,8 +75,8 @@ const getMemberStatusClassName = (status?: string) => {
   return 'bg-emerald-50 text-emerald-700 border-emerald-200';
 };
 
-const getActiveMemberCount = (members: Array<{ status?: string }> = []) =>
-  members.filter(member => getMemberStatus(member.status) === 'active').length;
+const getActiveMemberCount = (members: Array<{ role?: string; status?: string }> = []) =>
+  members.filter(isJoinedMember).length;
 
 const getInvitationStatusClassName = (status?: string) => {
   const normalized = (status || 'pending').trim().toLowerCase();
@@ -119,6 +123,8 @@ interface GroupNotification {
   description?: string;
   resolved?: boolean;
   actionStatus?: 'accepted' | 'rejected' | null;
+  clicId?: string;
+  invitationId?: string;
 }
 
 interface Group {
@@ -293,10 +299,157 @@ const initialNotifications: GroupNotification[] = [
 interface PhoneContact {
   name: string;
   contact: string;
+  email?: string;
+  phoneNumber?: string;
+  platformUserId?: string;
   circleName?: string;
   adminOf?: string;
   role?: 'admin' | 'member';
 }
+
+type ClicInviteChannel = 'platform' | 'email' | 'sms';
+type CurrentAuthUser = { id?: string; email?: string; phone?: string } | null | undefined;
+
+const isValidEmail = (val: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+
+const normalizePhoneForCompare = (val?: string) => (val || '').replace(/\D/g, '');
+
+const isValidPhone = (val: string): boolean => {
+  const digits = normalizePhoneForCompare(val);
+  return digits.length >= 10 && digits.length <= 15;
+};
+
+const isLoggedInContact = (
+  contact: { contact?: string; email?: string; phoneNumber?: string; platformUserId?: string },
+  currentUser: CurrentAuthUser,
+) => {
+  if (!currentUser) return false;
+
+  const contactValue = contact.contact || '';
+  const contactEmail = (contact.email || (contactValue.includes('@') ? contactValue : '')).trim().toLowerCase();
+  const contactPhone = normalizePhoneForCompare(contact.phoneNumber || (!contactValue.includes('@') ? contactValue : ''));
+  const userEmail = currentUser.email?.trim().toLowerCase();
+  const userPhone = normalizePhoneForCompare(currentUser.phone);
+
+  return (
+    (!!currentUser.id && contact.platformUserId === currentUser.id) ||
+    (!!contactEmail && !!userEmail && contactEmail === userEmail) ||
+    (!!contactPhone && !!userPhone && contactPhone === userPhone)
+  );
+};
+
+const formatInviteChannels = (channels: ClicInviteChannel[] | string[]) =>
+  channels
+    .map(channel => channel === 'platform' ? 'In-App' : channel.toUpperCase())
+    .join(' + ');
+
+const dedupePlatformUserResults = (results: PlatformUserSearchResult[][]) => {
+  const byId = new Map<string, PlatformUserSearchResult>();
+  results.flat().forEach(user => {
+    if (user.userId) {
+      byId.set(user.userId, user);
+    }
+  });
+  return Array.from(byId.values());
+};
+
+const findExactPlatformUserMatch = (
+  users: PlatformUserSearchResult[],
+  email?: string,
+  phoneNumber?: string,
+  platformUserId?: string,
+) => {
+  const normalizedEmail = (email || '').trim().toLowerCase();
+  const normalizedPhone = normalizePhoneForCompare(phoneNumber);
+
+  return users.find(user => (
+    (platformUserId && user.userId === platformUserId) ||
+    (normalizedEmail && user.email?.trim().toLowerCase() === normalizedEmail) ||
+    (normalizedPhone && normalizePhoneForCompare(user.phoneNumber) === normalizedPhone)
+  ));
+};
+
+const getInviteChannels = (isPlatformUser: boolean, email?: string, phoneNumber?: string): ClicInviteChannel[] => {
+  if (isPlatformUser) {
+    return email ? ['platform', 'email'] : ['platform'];
+  }
+
+  const channels: ClicInviteChannel[] = [];
+  if (email) channels.push('email');
+  if (phoneNumber) channels.push('sms');
+  return channels;
+};
+
+const sendClicInviteNotification = async ({
+  groupId,
+  displayName,
+  contact,
+  email,
+  phoneNumber,
+  platformUser,
+  platformUserId,
+}: {
+  groupId: string;
+  displayName: string;
+  contact?: string;
+  email?: string;
+  phoneNumber?: string;
+  platformUser?: PlatformUserSearchResult | null;
+  platformUserId?: string;
+}) => {
+  const trimmedEmail = email?.trim() || (contact && isValidEmail(contact.trim()) ? contact.trim() : '');
+  const trimmedPhone = phoneNumber?.trim() || (contact && !contact.includes('@') && isValidPhone(contact.trim()) ? contact.trim() : '');
+  const fallbackContact = contact?.trim() || trimmedEmail || trimmedPhone;
+
+  if (trimmedEmail && !isValidEmail(trimmedEmail)) {
+    throw new Error('Please enter a valid email address.');
+  }
+
+  if (trimmedPhone && !isValidPhone(trimmedPhone)) {
+    throw new Error('Please enter a valid phone number.');
+  }
+
+  if (!trimmedEmail && !trimmedPhone && !platformUserId && !platformUser?.userId) {
+    throw new Error('Please enter an email address or phone number.');
+  }
+
+  let matchedPlatformUser = platformUser || null;
+  let resolvedPlatformUserId = platformUserId || platformUser?.userId;
+
+  if (!resolvedPlatformUserId && (trimmedEmail || trimmedPhone)) {
+    const lookupTerms = [trimmedEmail, trimmedPhone].filter(Boolean);
+    try {
+      const lookupResults = await Promise.all(lookupTerms.map(term => searchPlatformUsers(term)));
+      matchedPlatformUser = findExactPlatformUserMatch(dedupePlatformUserResults(lookupResults), trimmedEmail, trimmedPhone) || null;
+      resolvedPlatformUserId = matchedPlatformUser?.userId;
+    } catch {
+      // If lookup fails, continue with email/SMS invite details.
+    }
+  }
+
+  const resolvedEmail = matchedPlatformUser?.email || trimmedEmail || undefined;
+  const resolvedPhone = matchedPlatformUser?.phoneNumber || trimmedPhone || undefined;
+  const channels = getInviteChannels(!!resolvedPlatformUserId, resolvedEmail, resolvedPhone);
+
+  if (channels.length === 0) {
+    throw new Error('Please enter an email address or phone number.');
+  }
+
+  await createClicInvitation(groupId, {
+    platformUserId: resolvedPlatformUserId,
+    displayName: displayName.trim() || matchedPlatformUser?.fullName || 'Invitee',
+    memberContact: fallbackContact,
+    email: resolvedEmail,
+    phoneNumber: resolvedPhone,
+    channel: channels[0],
+    channels,
+  });
+
+  return {
+    channels,
+    platformUser: matchedPlatformUser,
+  };
+};
 
 const mockPhoneContacts: PhoneContact[] = [
   { name: 'Chinedu O.', contact: 'chinedu@email.com', circleName: 'Youth Empowerment Club', adminOf: 'Youth Empowerment Club (Circle)', role: 'admin' },
@@ -307,9 +460,17 @@ const mockPhoneContacts: PhoneContact[] = [
   { name: 'Halima F.', contact: 'halima@email.com', circleName: 'Youth Empowerment Club', adminOf: 'Youth Tech Hub (Group Goal)', role: 'admin' },
 ];
 
+const homeTabs = ['all', 'admin', 'member', 'invitations'] as const;
+type HomeTab = typeof homeTabs[number];
+
+const isHomeTab = (value: string | null): value is HomeTab =>
+  !!value && homeTabs.includes(value as HomeTab);
+
 const GroupsHome = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
   const clicsQuery = useQuery({
@@ -336,7 +497,8 @@ const GroupsHome = () => {
   }, [clicsQuery.data]);
 
   // Filtering & searching states
-  const [activeTab, setActiveTab] = useState<'all' | 'admin' | 'member' | 'invitations'>('all');
+  const requestedTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<HomeTab>(isHomeTab(requestedTab) ? requestedTab : 'all');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('newest');
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -347,7 +509,7 @@ const GroupsHome = () => {
   const [isAllNotifsDialogOpen, setIsAllNotifsDialogOpen] = useState(false);
 
   // Group Details - Members tabs ('accepted' vs 'invitations')
-  const [detailsTab, setDetailsTab] = useState<'accepted' | 'invitations'>('accepted');
+  const [detailsTab, setDetailsTab] = useState<'accepted' | 'sentInvites'>('accepted');
 
   // Contact Picker dialog modal
   const [isContactDialogOpen, setIsContactDialogOpen] = useState(false);
@@ -396,7 +558,9 @@ const GroupsHome = () => {
 
     groups.forEach(g => {
       (g.members || []).forEach(m => {
-        const contactStr = m.email || m.phone || (m as any).phoneNumber || (m as any).contact || '';
+        const email = m.email || ((m as any).contact?.includes('@') ? (m as any).contact : '');
+        const phoneNumber = m.phone || (m as any).phoneNumber || ((m as any).contact && !(m as any).contact.includes('@') ? (m as any).contact : '');
+        const contactStr = email || phoneNumber || '';
         if (!contactStr) return;
 
         const key = `${m.name || (m as any).displayName}_${contactStr}`;
@@ -406,6 +570,9 @@ const GroupsHome = () => {
           userList.push({
             name: m.name || (m as any).displayName || 'Platform User',
             contact: contactStr,
+            email: email || undefined,
+            phoneNumber: phoneNumber || undefined,
+            platformUserId: (m as any).userId || (m as any).platformUserId,
             circleName: g.name,
             adminOf: isMemberAdmin ? `${g.name} (Circle)` : undefined,
             role: m.role || 'member',
@@ -423,6 +590,10 @@ const GroupsHome = () => {
 
   const filteredPhoneContacts = useMemo(() => {
     return importablePlatformUsers.filter(contact => {
+      if (isLoggedInContact(contact, user)) {
+        return false;
+      }
+
       const q = activeImportSearchQuery.trim().toLowerCase();
       const matchesSearch = !q ||
         contact.name.toLowerCase().includes(q) ||
@@ -435,12 +606,7 @@ const GroupsHome = () => {
 
       return matchesSearch && matchesCircle;
     });
-  }, [importablePlatformUsers, activeImportSearchQuery, selectedCircleFilter]);
-
-  // Derive receivedInvites dynamically from unresolved invite notifications
-  const receivedInvites = useMemo(() => {
-    return notifications.filter(n => n.type === 'invite' && !n.resolved);
-  }, [notifications]);
+  }, [importablePlatformUsers, activeImportSearchQuery, selectedCircleFilter, user]);
 
   // Invitation Maps
   const [invitationsMap, setInvitationsMap] = useState<Record<string, GroupInvitation[]>>({
@@ -458,8 +624,27 @@ const GroupsHome = () => {
 
   // Invitation Form input states
   const [inviteName, setInviteName] = useState('');
-  const [inviteContact, setInviteContact] = useState('');
-  const [inviteChannel, setInviteChannel] = useState<'platform' | 'email' | 'sms'>('platform');
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [invitePhone, setInvitePhone] = useState('');
+  const [selectedInviteUser, setSelectedInviteUser] = useState<PlatformUserSearchResult | null>(null);
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
+
+  const inviteEmailQuery = inviteEmail.trim();
+  const invitePhoneQuery = invitePhone.trim();
+  const hasInviteLookupInput = inviteEmailQuery.length >= 2 || normalizePhoneForCompare(invitePhoneQuery).length >= 2;
+
+  const invitePlatformUsersQuery = useQuery({
+    queryKey: ['clic-invite-platform-users', inviteEmailQuery, invitePhoneQuery],
+    queryFn: async () => {
+      const terms = [inviteEmailQuery, invitePhoneQuery].filter(term => term.length >= 2);
+      const resultSets = await Promise.all(terms.map(term => searchPlatformUsers(term)));
+      return dedupePlatformUserResults(resultSets);
+    },
+    enabled: isContactDialogOpen && hasInviteLookupInput,
+    retry: 1,
+  });
+
+  const invitePlatformMatches = invitePlatformUsersQuery.data || [];
 
   // Expanded members inline state & pending card edits state
   const [expandedMembersMap, setExpandedMembersMap] = useState<Record<string, ClicMemberDetail[]>>({});
@@ -501,6 +686,17 @@ const GroupsHome = () => {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [unsavedGroupId]);
+
+  useEffect(() => {
+    if (isHomeTab(requestedTab) && requestedTab !== activeTab) {
+      setActiveTab(requestedTab);
+      return;
+    }
+
+    if (!requestedTab && activeTab !== 'all') {
+      setActiveTab('all');
+    }
+  }, [activeTab, requestedTab]);
 
   const toggleExpand = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -587,7 +783,7 @@ const GroupsHome = () => {
           || invitation.status.toLowerCase().includes(query))
       : list;
 
-    return filtered.sort((a, b) => {
+      return filtered.sort((a, b) => {
       const aDate = new Date(a.createdAtUtc || a.createdAt || '').getTime();
       const bDate = new Date(b.createdAtUtc || b.createdAt || '').getTime();
       if (sortBy === 'oldest') {
@@ -609,10 +805,12 @@ const GroupsHome = () => {
     }
 
     try {
+      const invitedMembers = addedGroupMembers.filter(member => !isLoggedInContact(member, user));
+
       const newClic = await createClic({
         name: newGroupName.trim(),
         description: newGroupDesc.trim() || undefined,
-        members: addedGroupMembers.map(m => ({
+        members: invitedMembers.map(m => ({
           displayName: m.name,
           email: m.contact.includes('@') ? m.contact : undefined,
           phoneNumber: !m.contact.includes('@') ? m.contact : undefined,
@@ -712,23 +910,41 @@ const GroupsHome = () => {
   const handleSelectContact = async (contact: PhoneContact) => {
     if (!selectedGroupId || !selectedGroup) return;
 
-    const trimmedContact = contact.contact.trim();
-    const isEmail = trimmedContact.includes('@');
-
     try {
-      await createClicInvitation(selectedGroupId, {
+      setIsSendingInvite(true);
+      const result = await sendClicInviteNotification({
+        groupId: selectedGroupId,
         displayName: contact.name,
-        memberContact: trimmedContact,
-        email: isEmail ? trimmedContact : undefined,
-        phoneNumber: !isEmail ? trimmedContact : undefined,
-        channel: 'platform',
+        contact: contact.contact,
+        email: contact.email,
+        phoneNumber: contact.phoneNumber,
+        platformUserId: contact.platformUserId,
       });
 
-      await queryClient.invalidateQueries({ queryKey: clicsKeys.all });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: clicsKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ['clic-invitations-me'] }),
+      ]);
       setIsContactDialogOpen(false);
-      toast.success(`Invitation sent to ${contact.name}!`);
+      toast.success(`Invitation sent to ${contact.name} via ${formatInviteChannels(result.channels)}.`);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to send invitation to contact.'));
+      toast.error(getApiErrorMessage(err, err instanceof Error ? err.message : 'Failed to send invitation to contact.'));
+    } finally {
+      setIsSendingInvite(false);
+    }
+  };
+
+  const handleSelectInviteProfile = (user: PlatformUserSearchResult) => {
+    setSelectedInviteUser(user);
+    setInviteName(user.fullName || inviteName);
+    setInviteEmail(user.email || '');
+    setInvitePhone(user.phoneNumber || '');
+  };
+
+  const handleContactDialogOpenChange = (open: boolean) => {
+    setIsContactDialogOpen(open);
+    if (!open) {
+      setSelectedInviteUser(null);
     }
   };
 
@@ -996,13 +1212,7 @@ const GroupsHome = () => {
     }
   };
 
-  const isValidEmail = (val: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
-  const isValidPhone = (val: string): boolean => {
-    const digits = val.replace(/\D/g, '');
-    return digits.length >= 10 && digits.length <= 15;
-  };
-
-  // Send invitation request to Clic participant via channel
+  // Send invitation request to Clic participant through the required notification channels.
   const handleSendInvite = async (targetGroupId?: string | React.FormEvent, e?: React.FormEvent) => {
     if (targetGroupId && typeof (targetGroupId as any).preventDefault === 'function') {
       (targetGroupId as React.FormEvent).preventDefault();
@@ -1014,67 +1224,56 @@ const GroupsHome = () => {
     const groupId = (typeof targetGroupId === 'string' ? targetGroupId : null) || selectedGroupId;
     if (!groupId) return;
 
-    if (!inviteName.trim()) {
+    const displayName = inviteName.trim() || selectedInviteUser?.fullName || '';
+    if (!displayName) {
       toast.error("Please enter the participant's name.");
       return;
     }
 
-    const trimmedContact = inviteContact.trim();
-    if (!trimmedContact) {
+    const trimmedEmail = inviteEmail.trim();
+    const trimmedPhone = invitePhone.trim();
+
+    if (!trimmedEmail && !trimmedPhone && !selectedInviteUser) {
       toast.error('Please enter an email address or phone number.');
       return;
     }
 
-    // Channel validation rules
-    if (inviteChannel === 'email') {
-      if (!isValidEmail(trimmedContact)) {
-        toast.error('Email channel requires a valid email address (e.g., user@example.com).');
-        return;
-      }
-    } else if (inviteChannel === 'sms') {
-      if (trimmedContact.includes('@') || !isValidPhone(trimmedContact)) {
-        toast.error('SMS channel requires a valid phone number (e.g., 09150714823 or +234...).');
-        return;
-      }
-    } else if (inviteChannel === 'platform') {
-      if (!isValidEmail(trimmedContact) && !isValidPhone(trimmedContact)) {
-        toast.error('In-App channel requires a valid email address or phone number.');
-        return;
-      }
+    if (trimmedEmail && !isValidEmail(trimmedEmail)) {
+      toast.error('Please enter a valid email address (e.g., user@example.com).');
+      return;
     }
 
-    const isEmail = trimmedContact.includes('@');
-
-    let matchedPlatformUserId: string | undefined = undefined;
-    try {
-      const searchResults = await searchPlatformUsers(trimmedContact);
-      const matchedUser = searchResults.find(
-        u => (u.email && u.email.toLowerCase() === trimmedContact.toLowerCase()) ||
-             (u.phoneNumber && u.phoneNumber.replace(/\s+/g, '') === trimmedContact.replace(/\s+/g, ''))
-      );
-      if (matchedUser) {
-        matchedPlatformUserId = matchedUser.userId;
-      }
-    } catch {
-      // Proceed with contact details if search fails
+    if (trimmedPhone && !isValidPhone(trimmedPhone)) {
+      toast.error('Please enter a valid phone number (e.g., 09150714823 or +234...).');
+      return;
     }
 
     try {
-      await createClicInvitation(groupId, {
-        platformUserId: matchedPlatformUserId,
-        displayName: inviteName.trim(),
-        memberContact: trimmedContact,
-        email: isEmail ? trimmedContact : undefined,
-        phoneNumber: !isEmail ? trimmedContact : undefined,
-        channel: inviteChannel,
+      setIsSendingInvite(true);
+      const result = await sendClicInviteNotification({
+        groupId,
+        displayName,
+        contact: trimmedEmail || trimmedPhone,
+        email: trimmedEmail || selectedInviteUser?.email,
+        phoneNumber: trimmedPhone || selectedInviteUser?.phoneNumber,
+        platformUser: selectedInviteUser,
+        platformUserId: selectedInviteUser?.userId,
       });
 
-      await queryClient.invalidateQueries({ queryKey: clicsKeys.all });
-      toast.success(`Invitation sent to "${inviteName.trim()}" via ${inviteChannel.toUpperCase()}!`);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: clicsKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ['clic-invitations-me'] }),
+      ]);
+      toast.success(`Invitation sent to "${displayName}" via ${formatInviteChannels(result.channels)}.`);
       setInviteName('');
-      setInviteContact('');
+      setInviteEmail('');
+      setInvitePhone('');
+      setSelectedInviteUser(null);
+      setIsContactDialogOpen(false);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to send invitation.'));
+      toast.error(getApiErrorMessage(err, err instanceof Error ? err.message : 'Failed to send invitation.'));
+    } finally {
+      setIsSendingInvite(false);
     }
   };
 
@@ -1136,9 +1335,56 @@ const GroupsHome = () => {
     toast.success('All notifications marked as read.');
   };
 
-  const unreadCount = useMemo(() => {
-    return notifications.filter(nt => !nt.read).length;
-  }, [notifications]);
+  const receivedInvitationCount = receivedInvitationsQuery.data?.length ?? 0;
+
+  const sentInvites = useMemo(() => {
+    const detailInvites = Array.isArray((selectedGroup as any)?.invitations)
+      ? (selectedGroup as any).invitations
+      : [];
+    const fallbackInvites = selectedGroupId ? (invitationsMap[selectedGroupId] || []) : [];
+    const rawSentInvites = (detailInvites.length > 0 ? detailInvites : fallbackInvites).filter((invite: any) => {
+      const status = String(invite.status || '').toLowerCase();
+      return status === 'pending' || status === 'rejected';
+    });
+
+    if (rawSentInvites.length > 0) {
+      return rawSentInvites;
+    }
+
+    return ((selectedGroup?.members || []) as any[])
+      .filter(member => getMemberStatus(member.status) === 'pending')
+      .map((member, idx) => ({
+        id: member.id || member.memberId || `pending_member_${idx}`,
+        invitationId: member.memberId || member.id,
+        inviteeName: member.name || member.displayName || 'Member',
+        email: member.email || '',
+        phone: member.phone || member.phoneNumber || '',
+        inviteeContact: member.email || member.phone || member.phoneNumber || member.contact || '',
+        channel: 'platform',
+        status: 'pending',
+        reinviteCount: 0,
+        createdAt: member.joinedAtUtc || selectedGroup?.createdAt || new Date().toISOString(),
+      }));
+  }, [invitationsMap, selectedGroup, selectedGroupId]);
+
+  const joinedMembers = useMemo(() => {
+    return ((selectedGroup?.members || []) as any[]).filter(isJoinedMember);
+  }, [selectedGroup]);
+
+  const joinedMembersCount = selectedGroup?.members ? joinedMembers.length : selectedGroup?.memberCount ?? 0;
+
+  const handleHomeTabChange = (tab: HomeTab) => {
+    handleProtectedAction(() => {
+      setActiveTab(tab);
+      const nextSearchParams = new URLSearchParams(searchParams);
+      if (tab === 'all') {
+        nextSearchParams.delete('tab');
+      } else {
+        nextSearchParams.set('tab', tab);
+      }
+      setSearchParams(nextSearchParams, { replace: true });
+    });
+  };
 
   return (
     <div className="px-4 py-6 safe-top pb-24 max-w-2xl mx-auto">
@@ -1181,34 +1427,38 @@ const GroupsHome = () => {
 
 
           {/* Filter Tabs */}
-          <div className="flex border-b border-border w-full justify-between pb-0.5">
-            {['all', 'admin', 'member', 'invitations'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => {
-                  handleProtectedAction(() => setActiveTab(tab as any));
-                }}
-                className={`flex-1 text-center pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 capitalize ${activeTab === tab
-                  ? 'border-accent text-accent'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
-              >
-                {tab === 'member' ? 'Member' : tab === 'invitations' ? 'Invitations' : tab}
-              </button>
-            ))}
-          </div>
+            <div className="flex border-b border-border w-full justify-between pb-0.5">
+            {homeTabs.map((tab) => (
+               <button
+                 key={tab}
+                 onClick={() => handleHomeTabChange(tab)}
+                 className={`flex-1 text-center pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 capitalize ${activeTab === tab
+                   ? 'border-accent text-accent'
+                   : 'border-transparent text-muted-foreground hover:text-foreground'
+                   }`}
+               >
+                 {tab === 'member'
+                   ? 'Member'
+                   : tab === 'invitations'
+                     ? `Invitations (${receivedInvitationCount})`
+                     : tab}
+               </button>
+             ))}
+           </div>
 
           {/* Search Controls */}
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder={activeTab === 'invitations' ? 'Search invitations...' : 'Search clics...'}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 h-10 rounded-xl"
-              />
+               <Input
+                 type="search"
+                 placeholder={activeTab === 'invitations'
+                   ? 'Search received invites...'
+                   : 'Search clics...'}
+                 value={search}
+                 onChange={(e) => setSearch(e.target.value)}
+                 className="pl-9 h-10 rounded-xl"
+               />
             </div>
             <Select
               value={sortBy}
@@ -1229,11 +1479,11 @@ const GroupsHome = () => {
           {/* Groups Listing */}
           <div className="space-y-3">
             {activeTab === 'invitations' ? (
-              receivedInvitationsQuery.isLoading ? (
-                <div className="flex items-center justify-center gap-2 rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin text-accent" />
-                  <span>Loading invitations...</span>
-                </div>
+               receivedInvitationsQuery.isLoading ? (
+                 <div className="flex items-center justify-center gap-2 rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">
+                   <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                   <span>Loading invitations...</span>
+                 </div>
               ) : filteredReceivedInvitations.length === 0 ? (
                 <EmptyTableState
                   title="No invitations received"
@@ -1292,8 +1542,8 @@ const GroupsHome = () => {
                       </div>
                     </div>
                   );
-                })
-              )
+                 })
+               )
             ) : filteredGroups.length === 0 ? (
               <EmptyTableState
                 title="No clics found"
@@ -1572,7 +1822,7 @@ const GroupsHome = () => {
                   <p className="text-xs text-muted-foreground mt-1.5">{selectedGroup.description}</p>
                 </div>
 
-                {/* Member Lists & Invitations Tab Switcher */}
+                {/* Member Lists & Sent Invites Tab Switcher */}
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between border-b border-border pb-2 gap-2">
                     <div className="flex gap-3 flex-wrap">
@@ -1581,15 +1831,15 @@ const GroupsHome = () => {
                         className={`pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${detailsTab === 'accepted' ? 'border-[#126989] text-[#126989]' : 'border-transparent text-muted-foreground hover:text-foreground'
                           }`}
                       >
-                        Members ({selectedGroup.memberCount ?? getActiveMemberCount(selectedGroup.members || [])})
+                        Members ({joinedMembersCount})
                       </button>
                       {selectedGroup.role === 'admin' && (
                         <button
-                          onClick={() => setDetailsTab('invitations')}
-                          className={`pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${detailsTab === 'invitations' ? 'border-[#126989] text-[#126989]' : 'border-transparent text-muted-foreground hover:text-foreground'
+                          onClick={() => setDetailsTab('sentInvites')}
+                          className={`pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${detailsTab === 'sentInvites' ? 'border-[#126989] text-[#126989]' : 'border-transparent text-muted-foreground hover:text-foreground'
                             }`}
                         >
-                          Invitations ({(selectedGroup as any).invitations?.length ?? invitationsMap[selectedGroupId]?.length ?? 0})
+                          Sent Invites ({sentInvites.length})
                         </button>
                       )}
                     </div>
@@ -1609,15 +1859,13 @@ const GroupsHome = () => {
                   {/* Content under Accepted tab */}
                   {detailsTab === 'accepted' && (
                     <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                      {(selectedGroup.members || []).length === 0 ? (
-                        <p className="text-xs text-muted-foreground text-center py-4">No members listed yet.</p>
+                      {joinedMembers.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">No joined members yet.</p>
                       ) : (
-                        [...(selectedGroup.members || [])].sort((a: any, b: any) => (a.role === 'admin' ? -1 : b.role === 'admin' ? 1 : 0)).map((member: any) => {
+                        [...joinedMembers].sort((a: any, b: any) => (a.role === 'admin' ? -1 : b.role === 'admin' ? 1 : 0)).map((member: any) => {
                           const displayEmail = member.email || (member.contact?.includes('@') ? member.contact : 'N/A');
                           const displayPhone = member.phone || member.phoneNumber || (member.contact && (member.contact.includes('+') || member.contact.match(/\d/)) ? member.contact : 'N/A');
                           const displayName = member.name || member.displayName || 'Member';
-                          const memberStatus = getMemberStatus(member.status);
-                          const StatusIcon = memberStatus === 'pending' ? Clock : CheckCircle2;
 
                           return (
                             <div key={member.id || member.memberId} className="flex items-center justify-between rounded-xl border border-border bg-card p-3 text-xs">
@@ -1642,7 +1890,7 @@ const GroupsHome = () => {
                               </div>
                               <div className="flex items-center gap-2.5">
                                 <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${getMemberStatusClassName(member.status)}`}>
-                                  <StatusIcon className="h-3.5 w-3.5" /> {getMemberStatusLabel(member.status)}
+                                  <CheckCircle2 className="h-3.5 w-3.5" /> {getMemberStatusLabel(member.status)}
                                 </span>
                               </div>
                             </div>
@@ -1652,20 +1900,16 @@ const GroupsHome = () => {
                     </div>
                   )}
 
-                  {/* Content under Invitations tab */}
-                  {selectedGroup.role === 'admin' && detailsTab === 'invitations' && (
+                  {/* Content under Sent Invites tab */}
+                  {selectedGroup.role === 'admin' && detailsTab === 'sentInvites' && (
                     <div className="space-y-4">
                       <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                         {(() => {
-                          const activeInvites = (selectedGroup as any).invitations && (selectedGroup as any).invitations.length > 0
-                            ? (selectedGroup as any).invitations
-                            : (invitationsMap[selectedGroupId] || []);
-
-                          if (activeInvites.length === 0) {
-                            return <p className="text-xs text-muted-foreground text-center py-4">No active invitations sent.</p>;
+                          if (sentInvites.length === 0) {
+                            return <p className="text-xs text-muted-foreground text-center py-4">No sent invites found.</p>;
                           }
 
-                          return activeInvites.map((inv: any) => {
+                          return sentInvites.map((inv: any) => {
                             const contactStr = inv.memberContact || inv.inviteeContact || inv.contact || '';
                             const displayEmail = inv.email || inv.inviteeEmail || inv.platformUserEmail || inv.platformUser?.email || (contactStr.includes('@') ? contactStr : 'N/A');
                             const displayPhone = inv.phone || inv.phoneNumber || inv.inviteePhone || inv.platformUserPhone || inv.platformUser?.phoneNumber || (!contactStr.includes('@') && contactStr ? contactStr : 'N/A');
@@ -1732,45 +1976,6 @@ const GroupsHome = () => {
                           });
                         })()}
                       </div>
-
-                      {/* Sending invitations form with channels (in-app, sms, email) */}
-                      {selectedGroup.role === 'admin' && (
-                        <form onSubmit={handleSendInvite} className="bg-muted/30 p-3 rounded-xl border border-border space-y-3">
-                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Invite Participant via Channel</p>
-                          <div className="grid grid-cols-2 gap-2">
-                            <Input
-                              placeholder="Name"
-                              value={inviteName}
-                              onChange={e => setInviteName(e.target.value)}
-                              className="h-9 text-xs"
-                            />
-                            <Input
-                              placeholder={inviteChannel === 'email' ? 'Email Address' : inviteChannel === 'sms' ? 'Phone Number' : 'Email or Phone'}
-                              value={inviteContact}
-                              onChange={e => setInviteContact(e.target.value)}
-                              className="h-9 text-xs"
-                            />
-                          </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <Select
-                              value={inviteChannel}
-                              onValueChange={val => setInviteChannel(val as typeof inviteChannel)}
-                            >
-                              <SelectTrigger className="h-9 text-xs w-[120px]">
-                                <SelectValue placeholder="Channel" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="platform">In-App</SelectItem>
-                                <SelectItem value="email">Email</SelectItem>
-                                <SelectItem value="sms">SMS</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <Button type="submit" size="sm" className="h-9 text-xs font-bold px-4 shrink-0 bg-accent text-accent-foreground">
-                              Send Invitation
-                            </Button>
-                          </div>
-                        </form>
-                      )}
                     </div>
                   )}
 
@@ -1882,29 +2087,129 @@ const GroupsHome = () => {
       </Dialog>
 
       {/* CONTACT SELECTION MODAL DIALOG */}
-      <Dialog open={isContactDialogOpen} onOpenChange={setIsContactDialogOpen}>
-        <DialogContent className="w-[90%] max-w-[400px] rounded-3xl p-6 bg-card gap-4">
+      <Dialog open={isContactDialogOpen} onOpenChange={handleContactDialogOpenChange}>
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-[460px] max-h-[calc(100svh-2rem)] overflow-y-auto rounded-3xl p-6 bg-card gap-4">
           <DialogHeader className="text-left font-display">
-            <DialogTitle className="text-lg font-bold text-foreground">Select from Contacts</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-foreground">Invite Member</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Select a phone/email contact to invite to the contribution group.
+              Search by email or phone to select an existing profile, or send an external invite.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-            {mockPhoneContacts.map((contact, idx) => (
-              <div
-                key={idx}
-                onClick={() => handleSelectContact(contact)}
-                className="flex items-center justify-between p-3 rounded-xl border border-border bg-card cursor-pointer hover:border-accent hover:bg-accent/5 transition-all text-xs"
-              >
-                <div>
-                  <p className="font-semibold text-foreground">{contact.name}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{contact.contact}</p>
-                </div>
-                <Badge variant="outline" className="text-[9px] uppercase tracking-wide">Select</Badge>
+          <form onSubmit={handleSendInvite} className="space-y-3 rounded-2xl border border-border bg-muted/20 p-3">
+            <div className="grid grid-cols-1 gap-2">
+              <Input
+                placeholder="Full name"
+                value={inviteName}
+                onChange={e => {
+                  setInviteName(e.target.value);
+                  setSelectedInviteUser(null);
+                }}
+                className="h-10 rounded-xl text-xs"
+              />
+              <Input
+                type="email"
+                placeholder="Email address"
+                value={inviteEmail}
+                onChange={e => {
+                  setInviteEmail(e.target.value);
+                  setSelectedInviteUser(null);
+                }}
+                className="h-10 rounded-xl text-xs"
+              />
+              <Input
+                type="tel"
+                placeholder="Phone number"
+                value={invitePhone}
+                onChange={e => {
+                  setInvitePhone(e.target.value);
+                  setSelectedInviteUser(null);
+                }}
+                className="h-10 rounded-xl text-xs"
+              />
+            </div>
+
+            {selectedInviteUser && (
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-[#126989]/20 bg-[#126989]/5 px-3 py-2 text-[10px]">
+                <span className="font-semibold text-[#126989]">Selected platform profile: {selectedInviteUser.fullName}</span>
+                <button type="button" className="font-bold text-muted-foreground hover:text-foreground" onClick={() => setSelectedInviteUser(null)}>
+                  Clear
+                </button>
               </div>
-            ))}
+            )}
+
+            <Button type="submit" disabled={isSendingInvite} className="h-10 w-full rounded-xl text-xs font-bold bg-accent text-accent-foreground">
+              {isSendingInvite ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  Sending Invitation...
+                </>
+              ) : 'Send Invitation'}
+            </Button>
+          </form>
+
+          {hasInviteLookupInput && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Matching Platform Profiles</p>
+                {invitePlatformUsersQuery.isFetching && <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />}
+              </div>
+
+              <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
+                {invitePlatformUsersQuery.isLoading ? (
+                  <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-muted-foreground">Searching profiles...</p>
+                ) : invitePlatformMatches.length === 0 ? (
+                  <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-muted-foreground">No platform profile found for this email or phone.</p>
+                ) : (
+                  invitePlatformMatches.map(user => {
+                    const isSelected = selectedInviteUser?.userId === user.userId;
+
+                    return (
+                      <button
+                        key={user.userId}
+                        type="button"
+                        onClick={() => handleSelectInviteProfile(user)}
+                        className={`flex w-full items-center justify-between rounded-xl border p-3 text-left text-xs transition-all ${isSelected
+                          ? 'border-[#126989] bg-[#126989]/10'
+                          : 'border-border bg-card hover:border-accent hover:bg-accent/5'
+                          }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-bold text-foreground">{user.fullName}</p>
+                          <p className="truncate text-[10px] text-muted-foreground mt-0.5">
+                            {[user.email, user.phoneNumber].filter(Boolean).join(' - ') || 'Profile contact hidden'}
+                          </p>
+                        </div>
+                        <Badge variant={isSelected ? 'default' : 'outline'} className="text-[9px] uppercase tracking-wide">
+                          {isSelected ? 'Selected' : 'Select'}
+                        </Badge>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Suggested Contacts</p>
+            <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+              {importablePlatformUsers.slice(0, 6).map((contact, idx) => (
+                <button
+                  key={`${contact.contact}_${idx}`}
+                  type="button"
+                  onClick={() => handleSelectContact(contact)}
+                  disabled={isSendingInvite}
+                  className="flex w-full items-center justify-between p-3 rounded-xl border border-border bg-card cursor-pointer hover:border-accent hover:bg-accent/5 transition-all text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <div className="text-left">
+                    <p className="font-semibold text-foreground">{contact.name}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{contact.contact}</p>
+                  </div>
+                  <Badge variant="outline" className="text-[9px] uppercase tracking-wide">Invite</Badge>
+                </button>
+              ))}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -2362,6 +2667,11 @@ const GroupsHome = () => {
                       toast.error('Please enter a valid phone number (at least 7 digits).');
                       return;
                     }
+                  }
+
+                  if (isLoggedInContact({ contact: trimmedContact }, user)) {
+                    toast.error('You are already the Clic creator, so you cannot add yourself as a member invite.');
+                    return;
                   }
 
                   setAddedGroupMembers(prev => [...prev, { name: trimmedName, contact: trimmedContact }]);
