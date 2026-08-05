@@ -11,8 +11,6 @@ import { platformUsersKeys, searchPlatformUsers, type PlatformUserSearchResult }
 import { getClics, getClic, clicsKeys } from '@/services/clicsApi';
 import { toast } from 'sonner';
 
-import { getApiErrorMessage } from '@/lib/api/http';
-
 type DirectInviteChannel = 'email' | 'sms';
 
 interface PlatformUserInvitePickerProps {
@@ -65,7 +63,7 @@ const PlatformUserInvitePicker = ({
   // Fetch Clics List Query
   const clicsListQuery = useQuery({
     queryKey: clicsKeys.list,
-    queryFn: () => getClics(1, 10),
+    queryFn: () => getClics(1, 50),
     enabled: isImportClicModalOpen,
   });
 
@@ -111,8 +109,8 @@ const PlatformUserInvitePicker = ({
       await onInvite(selectedUser);
       setSelectedUser(null);
       setQuery('');
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to send invite.'));
+    } catch {
+      // Parent handles error.
     }
   };
 
@@ -121,8 +119,8 @@ const PlatformUserInvitePicker = ({
     try {
       await onInviteContact(trimmedQuery, channel);
       setQuery('');
-    } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to send invite.'));
+    } catch {
+      // Parent handles error.
     }
   };
 
@@ -434,8 +432,8 @@ const PlatformUserInvitePicker = ({
                       toast.success(`Invited all ${members.length} members from ${selectedClicGroup.name}!`);
                       setIsImportClicModalOpen(false);
                       setSelectedClicGroup(null);
-                    } catch (err) {
-                      toast.error(getApiErrorMessage(err, 'Failed to invite some members.'));
+                    } catch {
+                      toast.error('Failed to invite some members.');
                     } finally {
                       setIsSelectingAll(false);
                     }
@@ -480,10 +478,6 @@ const PlatformUserInvitePicker = ({
                     const phone = member.phone || member.phoneNumber || '';
                     const isAlreadyInvited = invitedMemberIds.has(memberId);
 
-                    const isGroupAdmin = selectedClicGroup?.role === 'admin';
-                    const displayEmail = isGroupAdmin ? email : (email && email.includes('@') ? `${email.split('@')[0]}@....` : '');
-                    const displayPhone = isGroupAdmin ? phone : (phone ? '••••••••' : '');
-
                     return (
                       <div
                         key={memberId}
@@ -498,13 +492,13 @@ const PlatformUserInvitePicker = ({
                               </span>
                             )}
                           </div>
-                          {displayPhone && (
+                          {phone && (
                             <p className="text-[11px] font-medium text-muted-foreground truncate">
-                              Phone: <span className="text-foreground font-semibold">{displayPhone}</span>
+                              Phone: <span className="text-foreground font-semibold">{phone}</span>
                             </p>
                           )}
-                          {displayEmail && (
-                            <p className="text-[10px] text-muted-foreground truncate">{displayEmail}</p>
+                          {email && (
+                            <p className="text-[10px] text-muted-foreground truncate">{email}</p>
                           )}
                         </div>
 
@@ -517,8 +511,8 @@ const PlatformUserInvitePicker = ({
                               await onInvite({ userId: memberId, fullName, email, phoneNumber: phone });
                               setInvitedMemberIds((prev) => new Set(prev).add(memberId));
                               toast.success(`Selected ${fullName}.`);
-                            } catch (err) {
-                              toast.error(getApiErrorMessage(err, 'Failed to send invite.'));
+                            } catch {
+                              // error handled by parent
                             }
                           }}
                           className={cn(
@@ -527,10 +521,7 @@ const PlatformUserInvitePicker = ({
                           )}
                         >
                           {isAlreadyInvited ? (
-                            <>
-                              <Check className="mr-1 h-3 w-3 text-emerald-600" />
-                              <span className="text-emerald-700">Added</span>
-                            </>
+                            <span className="flex items-center gap-1"><Check className="h-3 w-3" /> Added</span>
                           ) : (
                             'Select'
                           )}
@@ -550,19 +541,9 @@ const PlatformUserInvitePicker = ({
 
 const isValidEmail = (value: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
-const formatNigerianPhoneNumber = (val: string): string => {
-  let cleaned = val.trim().replace(/[\s\-()]/g, '');
-  if (cleaned.startsWith('+234')) {
-    cleaned = '0' + cleaned.slice(4);
-  } else if (cleaned.startsWith('234') && cleaned.length > 10) {
-    cleaned = '0' + cleaned.slice(3);
-  }
-  return cleaned.replace(/\D/g, '');
-};
-
 const isValidPhoneNumber = (value: string): boolean => {
-  const normalized = formatNigerianPhoneNumber(value);
-  return /^\d{11}$/.test(normalized);
+  const digits = value.replace(/\D/g, '');
+  return digits.length >= 10 && digits.length <= 15;
 };
 
 export default PlatformUserInvitePicker;

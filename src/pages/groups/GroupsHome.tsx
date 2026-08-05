@@ -1,10 +1,9 @@
-import { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
   Users,
-  Clock,
   Calendar,
   ChevronRight,
   ChevronDown,
@@ -32,9 +31,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/api/http';
+import { useAuth } from '@/contexts/AuthContext';
 import { getClics, getClic, createClic, updateClic, deleteClic, addClicMember, updateClicMember, updateClicMembersBatch, createClicInvitation, resendClicInvitation, acceptClicInvitation, rejectClicInvitation, removeClicMember, removeClicInvitation, getMyClicInvitations, clicsKeys } from '@/services/clicsApi';
 import type { ClicInvitationItem } from '@/services/clicsApi';
-import { searchPlatformUsers } from '@/services/platformUsersApi';
+import { circlesKeys, getCircle, getCircles, type CircleDetail } from '@/services/circlesApi';
+import { getGroupGoal, getGroupGoals, groupGoalsKeys, type GroupGoalDetail } from '@/services/groupGoalsApi';
+import { searchPlatformUsers, type PlatformUserSearchResult } from '@/services/platformUsersApi';
 import { EmptyTableState } from '@/components/shared/EmptyTableState';
 
 // Self-contained helpers
@@ -56,6 +58,10 @@ const formatDate = (dateStr: string) => {
 };
 
 const getMemberStatus = (status?: string) => (status || 'active').trim().toLowerCase();
+const joinedMemberStatuses = new Set(['active', 'accepted', 'joined']);
+
+const isJoinedMember = (member: { role?: string; status?: string }) =>
+  member.role === 'admin' || joinedMemberStatuses.has(getMemberStatus(member.status));
 
 const getMemberStatusLabel = (status?: string) => {
   const normalized = getMemberStatus(status);
@@ -71,8 +77,8 @@ const getMemberStatusClassName = (status?: string) => {
   return 'bg-emerald-50 text-emerald-700 border-emerald-200';
 };
 
-const getActiveMemberCount = (members: Array<{ status?: string }> = []) =>
-  members.filter(member => getMemberStatus(member.status) === 'active').length;
+const getActiveMemberCount = (members: Array<{ role?: string; status?: string }> = []) =>
+  members.filter(isJoinedMember).length;
 
 const getInvitationStatusClassName = (status?: string) => {
   const normalized = (status || 'pending').trim().toLowerCase();
@@ -119,6 +125,8 @@ interface GroupNotification {
   description?: string;
   resolved?: boolean;
   actionStatus?: 'accepted' | 'rejected' | null;
+  clicId?: string;
+  invitationId?: string;
 }
 
 interface Group {
@@ -293,28 +301,186 @@ const initialNotifications: GroupNotification[] = [
 interface PhoneContact {
   name: string;
   contact: string;
+  email?: string;
+  phoneNumber?: string;
+  platformUserId?: string;
   circleName?: string;
   adminOf?: string;
+  sourceId?: string;
+  sourceLabel?: string;
+  sourceType?: 'clic' | 'circle' | 'groupGoal';
   role?: 'admin' | 'member';
 }
 
-const mockPhoneContacts: PhoneContact[] = [
-  { name: 'Chinedu O.', contact: 'chinedu@email.com', circleName: 'Youth Empowerment Club', adminOf: 'Youth Empowerment Club (Circle)', role: 'admin' },
-  { name: 'Tunde W.', contact: 'tunde@email.com', circleName: 'Tech Founders Cooperative', adminOf: 'Tech Founders Cooperative (Circle)', role: 'admin' },
-  { name: 'Zainab B.', contact: 'zainab@email.com', circleName: 'Youth Empowerment Club', role: 'member' },
-  { name: 'Bisi A.', contact: 'bisi@email.com', circleName: 'Lagos Investment Circle', adminOf: 'Lagos Real Estate Fund (Group Goal)', role: 'admin' },
-  { name: 'Kunle S.', contact: '+234 803 111 2222', circleName: 'Tech Founders Cooperative', role: 'member' },
-  { name: 'Halima F.', contact: 'halima@email.com', circleName: 'Youth Empowerment Club', adminOf: 'Youth Tech Hub (Group Goal)', role: 'admin' },
-];
+type ClicInviteChannel = 'platform' | 'email' | 'sms';
+type CurrentAuthUser = { id?: string; email?: string; phone?: string; phoneNumber?: string; firstName?: string; lastName?: string } | null | undefined;
+type AddedGroupMember = {
+  name: string;
+  contact: string;
+  email?: string;
+  phoneNumber?: string;
+  platformUserId?: string;
+};
+
+const isValidEmail = (val: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+
+const normalizeNameForCompare = (val?: string) => (val || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+const normalizePhoneForCompare = (val?: string) => (val || '').replace(/\D/g, '');
+
+const isValidPhone = (val: string): boolean => {
+  const digits = normalizePhoneForCompare(val);
+  return digits.length >= 10 && digits.length <= 15;
+};
+
+const isLoggedInContact = (
+  contact: { name?: string; contact?: string; email?: string; phoneNumber?: string; platformUserId?: string },
+  currentUser: CurrentAuthUser,
+) => {
+  if (!currentUser) return false;
+
+  const contactValue = contact.contact || '';
+  const contactEmail = (contact.email || (contactValue.includes('@') ? contactValue : '')).trim().toLowerCase();
+  const contactPhone = normalizePhoneForCompare(contact.phoneNumber || (!contactValue.includes('@') ? contactValue : ''));
+  const contactName = normalizeNameForCompare(contact.name);
+  const userEmail = currentUser.email?.trim().toLowerCase();
+  const userPhone = normalizePhoneForCompare(currentUser.phone || currentUser.phoneNumber);
+  const userName = normalizeNameForCompare([currentUser.firstName, currentUser.lastName].filter(Boolean).join(' '));
+
+  return (
+    (!!currentUser.id && contact.platformUserId === currentUser.id) ||
+    (!!contactEmail && !!userEmail && contactEmail === userEmail) ||
+    (!!contactPhone && !!userPhone && contactPhone === userPhone) ||
+    (!!contactName && !!userName && contactName === userName)
+  );
+};
+
+const formatInviteChannels = (channels: ClicInviteChannel[] | string[]) =>
+  channels
+    .map(channel => channel === 'platform' ? 'In-App' : channel.toUpperCase())
+    .join(' + ');
+
+const dedupePlatformUserResults = (results: PlatformUserSearchResult[][]) => {
+  const byId = new Map<string, PlatformUserSearchResult>();
+  results.flat().forEach(user => {
+    if (user.userId) {
+      byId.set(user.userId, user);
+    }
+  });
+  return Array.from(byId.values());
+};
+
+const findExactPlatformUserMatch = (
+  users: PlatformUserSearchResult[],
+  email?: string,
+  platformUserId?: string,
+) => {
+  const normalizedEmail = (email || '').trim().toLowerCase();
+
+  return users.find(user => (
+    (platformUserId && user.userId === platformUserId) ||
+    (normalizedEmail && user.email?.trim().toLowerCase() === normalizedEmail)
+  ));
+};
+
+const getInviteChannels = (isPlatformUser: boolean, email?: string, phoneNumber?: string): ClicInviteChannel[] => {
+  if (isPlatformUser) {
+    return email ? ['platform', 'email'] : ['platform'];
+  }
+
+  const channels: ClicInviteChannel[] = [];
+  if (email) channels.push('email');
+  if (phoneNumber) channels.push('sms');
+  return channels;
+};
+
+const sendClicInviteNotification = async ({
+  groupId,
+  displayName,
+  contact,
+  email,
+  phoneNumber,
+  platformUser,
+  platformUserId,
+}: {
+  groupId: string;
+  displayName: string;
+  contact?: string;
+  email?: string;
+  phoneNumber?: string;
+  platformUser?: PlatformUserSearchResult | null;
+  platformUserId?: string;
+}) => {
+  const trimmedEmail = email?.trim() || (contact && isValidEmail(contact.trim()) ? contact.trim() : '');
+  const trimmedPhone = phoneNumber?.trim() || (contact && !contact.includes('@') && isValidPhone(contact.trim()) ? contact.trim() : '');
+  const fallbackContact = contact?.trim() || trimmedEmail || trimmedPhone;
+
+  if (trimmedEmail && !isValidEmail(trimmedEmail)) {
+    throw new Error('Please enter a valid email address.');
+  }
+
+  if (trimmedPhone && !isValidPhone(trimmedPhone)) {
+    throw new Error('Please enter a valid phone number.');
+  }
+
+  if (!trimmedEmail && !trimmedPhone && !platformUserId && !platformUser?.userId) {
+    throw new Error('Please enter an email address or phone number.');
+  }
+
+  let matchedPlatformUser = platformUser || null;
+  let resolvedPlatformUserId = platformUserId || platformUser?.userId;
+
+  if (!resolvedPlatformUserId && (trimmedEmail || trimmedPhone)) {
+    const lookupTerms = [trimmedEmail, trimmedPhone].filter(Boolean);
+    try {
+      const lookupResults = await Promise.all(lookupTerms.map(term => searchPlatformUsers(term)));
+      matchedPlatformUser = findExactPlatformUserMatch(dedupePlatformUserResults(lookupResults), trimmedEmail) || null;
+      resolvedPlatformUserId = matchedPlatformUser?.userId;
+    } catch {
+      // If lookup fails, continue with email/SMS invite details.
+    }
+  }
+
+  const resolvedEmail = matchedPlatformUser?.email || trimmedEmail || undefined;
+  const resolvedPhone = trimmedPhone || undefined;
+  const channels = getInviteChannels(!!resolvedPlatformUserId, resolvedEmail, resolvedPhone);
+
+  if (channels.length === 0) {
+    throw new Error('Please enter an email address or phone number.');
+  }
+
+  await createClicInvitation(groupId, {
+    platformUserId: resolvedPlatformUserId,
+    displayName: displayName.trim() || matchedPlatformUser?.fullName || 'Invitee',
+    memberContact: fallbackContact,
+    email: resolvedEmail,
+    phoneNumber: resolvedPhone,
+    channel: channels[0],
+    channels,
+  });
+
+  return {
+    channels,
+    platformUser: matchedPlatformUser,
+  };
+};
+
+const homeTabs = ['all', 'admin', 'member', 'invitations'] as const;
+type HomeTab = typeof homeTabs[number];
+
+const isHomeTab = (value: string | null): value is HomeTab =>
+  !!value && homeTabs.includes(value as HomeTab);
 
 const GroupsHome = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
   const clicsQuery = useQuery({
     queryKey: clicsKeys.list,
-    queryFn: () => getClics(1, 10),
+    queryFn: () => getClics(1, 50),
     retry: 1,
   });
 
@@ -336,7 +502,8 @@ const GroupsHome = () => {
   }, [clicsQuery.data]);
 
   // Filtering & searching states
-  const [activeTab, setActiveTab] = useState<'all' | 'admin' | 'member' | 'invitations'>('all');
+  const requestedTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<HomeTab>(isHomeTab(requestedTab) ? requestedTab : 'all');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('newest');
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -347,7 +514,7 @@ const GroupsHome = () => {
   const [isAllNotifsDialogOpen, setIsAllNotifsDialogOpen] = useState(false);
 
   // Group Details - Members tabs ('accepted' vs 'invitations')
-  const [detailsTab, setDetailsTab] = useState<'accepted' | 'invitations'>('accepted');
+  const [detailsTab, setDetailsTab] = useState<'accepted' | 'sentInvites'>('accepted');
 
   // Contact Picker dialog modal
   const [isContactDialogOpen, setIsContactDialogOpen] = useState(false);
@@ -359,7 +526,7 @@ const GroupsHome = () => {
   const [editPhone, setEditPhone] = useState('');
 
   // Remove confirmation modal states
-  const [removingItem, setRemovingItem] = useState<{ id: string; altId?: string; groupId: string; name: string; type: 'member' | 'invite' } | null>(null);
+  const [removingItem, setRemovingItem] = useState<{ id: string; groupId: string; name: string; type: 'member' | 'invite' } | null>(null);
 
   // Create Group Form states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -368,26 +535,222 @@ const GroupsHome = () => {
   const [newGroupAmount, setNewGroupAmount] = useState('');
   const [newGroupFreq, setNewGroupFreq] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
   const [newGroupMaxMembers, setNewGroupMaxMembers] = useState('10');
+  const [isCreatingClic, setIsCreatingClic] = useState(false);
+  const isCreatingClicRef = useRef(false);
 
   // Group creation members state
-  const [addedGroupMembers, setAddedGroupMembers] = useState<Array<{ name: string; contact: string; email?: string; phone?: string }>>([]);
-  const [isGroupContactDialogOpen, setIsGroupContactDialogOpen] = useState(false);
+  const [addedGroupMembers, setAddedGroupMembers] = useState<AddedGroupMember[]>([]);
   const [isManualAddOpen, setIsManualAddOpen] = useState(false);
   const [manualName, setManualName] = useState('');
   const [manualEmail, setManualEmail] = useState('');
   const [manualPhone, setManualPhone] = useState('');
+  const [selectedManualFriend, setSelectedManualFriend] = useState<PlatformUserSearchResult | null>(null);
 
-  // Platform User Import Modal states
-  const [importSearchInput, setImportSearchInput] = useState('');
-  const [selectedImportClicGroup, setSelectedImportClicGroup] = useState<any | null>(null);
-  const [loadingImportGroupId, setLoadingImportGroupId] = useState<string | null>(null);
+  const shouldLoadSuggestedContacts = isManualAddOpen || isContactDialogOpen;
 
+  const currentUserDisplayName = useMemo(
+    () => [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim(),
+    [user?.firstName, user?.lastName],
+  );
 
+  const circlesForSuggestedContactsQuery = useQuery({
+    queryKey: circlesKeys.list,
+    queryFn: getCircles,
+    enabled: shouldLoadSuggestedContacts,
+    retry: 1,
+  });
 
-  // Derive receivedInvites dynamically from unresolved invite notifications
-  const receivedInvites = useMemo(() => {
-    return notifications.filter(n => n.type === 'invite' && !n.resolved);
-  }, [notifications]);
+  const groupGoalsForSuggestedContactsQuery = useQuery({
+    queryKey: groupGoalsKeys.list,
+    queryFn: getGroupGoals,
+    enabled: shouldLoadSuggestedContacts,
+    retry: 1,
+  });
+
+  const createdCircleSummaries = useMemo(
+    () => (circlesForSuggestedContactsQuery.data || []).filter(circle => circle.role === 'admin'),
+    [circlesForSuggestedContactsQuery.data],
+  );
+
+  const createdGroupGoalSummaries = useMemo(() => {
+    const currentUserName = normalizeNameForCompare(currentUserDisplayName);
+
+    return (groupGoalsForSuggestedContactsQuery.data || []).filter(goal => (
+      goal.createdByUserId === user?.id ||
+      goal.role === 'admin' ||
+      (!!currentUserName && normalizeNameForCompare(goal.creatorName) === currentUserName)
+    ));
+  }, [currentUserDisplayName, groupGoalsForSuggestedContactsQuery.data, user?.id]);
+
+  const circleDetailsForSuggestedContactsQuery = useQuery({
+    queryKey: ['clic-suggested-contacts-circle-details', createdCircleSummaries.map(circle => circle.id)],
+    queryFn: async () => {
+      const results = await Promise.allSettled(createdCircleSummaries.map(circle => getCircle(circle.id)));
+
+      return results.reduce<CircleDetail[]>((items, result) => {
+        if (result.status === 'fulfilled') {
+          items.push(result.value);
+        }
+        return items;
+      }, []);
+    },
+    enabled: shouldLoadSuggestedContacts && createdCircleSummaries.length > 0,
+    retry: 1,
+  });
+
+  const groupGoalDetailsForSuggestedContactsQuery = useQuery({
+    queryKey: ['clic-suggested-contacts-group-goal-details', createdGroupGoalSummaries.map(goal => goal.id)],
+    queryFn: async () => {
+      const results = await Promise.allSettled(createdGroupGoalSummaries.map(goal => getGroupGoal(goal.id)));
+
+      return results.reduce<GroupGoalDetail[]>((items, result) => {
+        if (result.status === 'fulfilled') {
+          items.push(result.value);
+        }
+        return items;
+      }, []);
+    },
+    enabled: shouldLoadSuggestedContacts && createdGroupGoalSummaries.length > 0,
+    retry: 1,
+  });
+
+  const isLoadingSuggestedContacts = shouldLoadSuggestedContacts && (
+    circlesForSuggestedContactsQuery.isLoading ||
+    groupGoalsForSuggestedContactsQuery.isLoading ||
+    circleDetailsForSuggestedContactsQuery.isLoading ||
+    circleDetailsForSuggestedContactsQuery.isFetching ||
+    groupGoalDetailsForSuggestedContactsQuery.isLoading ||
+    groupGoalDetailsForSuggestedContactsQuery.isFetching
+  );
+
+  const hasSuggestedContactsError = (
+    circlesForSuggestedContactsQuery.isError ||
+    groupGoalsForSuggestedContactsQuery.isError ||
+    circleDetailsForSuggestedContactsQuery.isError ||
+    groupGoalDetailsForSuggestedContactsQuery.isError
+  );
+
+  const importablePlatformUsers = useMemo(() => {
+    const suggestions = new Map<string, PhoneContact>();
+
+    const addSuggestion = (contact: PhoneContact) => {
+      const name = contact.name?.trim();
+      const email = contact.email?.trim();
+      const phoneNumber = contact.phoneNumber?.trim();
+      const contactValue = contact.contact?.trim() || email || phoneNumber || '';
+
+      if (!name || (!contact.platformUserId && !email && !phoneNumber)) {
+        return;
+      }
+
+      const candidate: PhoneContact = {
+        ...contact,
+        name,
+        contact: contactValue,
+        email,
+        phoneNumber,
+      };
+
+      if (isLoggedInContact(candidate, user)) {
+        return;
+      }
+
+      const key = candidate.platformUserId
+        ? `user:${candidate.platformUserId}`
+        : email
+          ? `email:${email.toLowerCase()}`
+          : phoneNumber
+            ? `phone:${normalizePhoneForCompare(phoneNumber)}`
+            : `name:${normalizeNameForCompare(name)}`;
+
+      if (!suggestions.has(key)) {
+        suggestions.set(key, candidate);
+      }
+    };
+
+    groups
+      .filter(group => group.role === 'admin')
+      .forEach(group => {
+        (group.members || [])
+          .filter(member => isJoinedMember(member))
+          .forEach(member => {
+            const rawContact = member.contact || '';
+            const email = member.email || (isValidEmail(rawContact) ? rawContact : undefined);
+            const rawPhone = member.phone || (member as any).phoneNumber || (!isValidEmail(rawContact) ? rawContact : '');
+            const phoneNumber = rawPhone && isValidPhone(rawPhone) ? rawPhone : undefined;
+
+            addSuggestion({
+              name: member.name || (member as any).displayName || 'Clic member',
+              contact: email || phoneNumber || '',
+              email,
+              phoneNumber,
+              platformUserId: (member as any).userId || (member as any).platformUserId,
+              circleName: group.name,
+              adminOf: member.role === 'admin' ? `${group.name} (Clic)` : undefined,
+              sourceId: group.id,
+              sourceLabel: `Clic: ${group.name}`,
+              sourceType: 'clic',
+              role: member.role || 'member',
+            });
+          });
+      });
+
+    (circleDetailsForSuggestedContactsQuery.data || []).forEach(circle => {
+      circle.members
+        .filter(member => isJoinedMember(member))
+        .forEach(member => {
+          addSuggestion({
+            name: member.name,
+            contact: member.email || member.phoneNumber || '',
+            email: member.email,
+            phoneNumber: member.phoneNumber,
+            platformUserId: member.userId,
+            circleName: circle.name,
+            sourceId: circle.id,
+            sourceLabel: `Circle: ${circle.name}`,
+            sourceType: 'circle',
+            role: member.role,
+          });
+        });
+    });
+
+    (groupGoalDetailsForSuggestedContactsQuery.data || []).forEach(goal => {
+      goal.members.forEach(member => {
+        addSuggestion({
+          name: member.name,
+          contact: member.email || member.phoneNumber || '',
+          email: member.email,
+          phoneNumber: member.phoneNumber,
+          platformUserId: member.userId,
+          circleName: goal.name,
+          adminOf: member.role === 'admin' ? `${goal.name} (Group Goal)` : undefined,
+          sourceId: goal.id,
+          sourceLabel: `Group Goal: ${goal.name}`,
+          sourceType: 'groupGoal',
+          role: member.role,
+        });
+      });
+    });
+
+    return Array.from(suggestions.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [circleDetailsForSuggestedContactsQuery.data, groupGoalDetailsForSuggestedContactsQuery.data, groups, user]);
+
+  const manualEmailQuery = manualEmail.trim();
+  const manualPhoneQuery = manualPhone.trim();
+  const hasManualFriendLookupInput = manualEmailQuery.length >= 2 || normalizePhoneForCompare(manualPhoneQuery).length >= 2;
+
+  const manualFriendSearchQuery = useQuery({
+    queryKey: ['clic-create-friend-platform-users', manualEmailQuery, manualPhoneQuery],
+    queryFn: async () => {
+      const terms = [manualEmailQuery, manualPhoneQuery].filter(term => term.length >= 2);
+      const resultSets = await Promise.all(terms.map(term => searchPlatformUsers(term)));
+      return dedupePlatformUserResults(resultSets);
+    },
+    enabled: isManualAddOpen && hasManualFriendLookupInput,
+    retry: 1,
+  });
+
+  const manualFriendMatches = manualFriendSearchQuery.data || [];
 
   // Invitation Maps
   const [invitationsMap, setInvitationsMap] = useState<Record<string, GroupInvitation[]>>({
@@ -407,10 +770,28 @@ const GroupsHome = () => {
   const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [invitePhone, setInvitePhone] = useState('');
+  const [selectedInviteUser, setSelectedInviteUser] = useState<PlatformUserSearchResult | null>(null);
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
 
-  // Expanded members & invitations inline state & pending card edits state
+  const inviteEmailQuery = inviteEmail.trim();
+  const invitePhoneQuery = invitePhone.trim();
+  const hasInviteLookupInput = inviteEmailQuery.length >= 2 || normalizePhoneForCompare(invitePhoneQuery).length >= 2;
+
+  const invitePlatformUsersQuery = useQuery({
+    queryKey: ['clic-invite-platform-users', inviteEmailQuery, invitePhoneQuery],
+    queryFn: async () => {
+      const terms = [inviteEmailQuery, invitePhoneQuery].filter(term => term.length >= 2);
+      const resultSets = await Promise.all(terms.map(term => searchPlatformUsers(term)));
+      return dedupePlatformUserResults(resultSets);
+    },
+    enabled: isContactDialogOpen && hasInviteLookupInput,
+    retry: 1,
+  });
+
+  const invitePlatformMatches = invitePlatformUsersQuery.data || [];
+
+  // Expanded members inline state & pending card edits state
   const [expandedMembersMap, setExpandedMembersMap] = useState<Record<string, ClicMemberDetail[]>>({});
-  const [expandedInvitationsMap, setExpandedInvitationsMap] = useState<Record<string, any[]>>({});
   const [loadingMembersMap, setLoadingMembersMap] = useState<Record<string, boolean>>({});
   const [hasPendingEditsMap, setHasPendingEditsMap] = useState<Record<string, boolean>>({});
   const [pendingMemberEditsMap, setPendingMemberEditsMap] = useState<Record<string, Record<string, { displayName?: string; email?: string; phoneNumber?: string }>>>({});
@@ -450,6 +831,17 @@ const GroupsHome = () => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [unsavedGroupId]);
 
+  useEffect(() => {
+    if (isHomeTab(requestedTab) && requestedTab !== activeTab) {
+      setActiveTab(requestedTab);
+      return;
+    }
+
+    if (!requestedTab && activeTab !== 'all') {
+      setActiveTab('all');
+    }
+  }, [activeTab, requestedTab]);
+
   const toggleExpand = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const willExpand = !expandedGroups[id];
@@ -459,17 +851,12 @@ const GroupsHome = () => {
       [id]: willExpand,
     }));
 
-    if (willExpand) {
+    if (willExpand && !expandedMembersMap[id]) {
       setLoadingMembersMap(prev => ({ ...prev, [id]: true }));
       try {
         const detail = await getClic(id);
-        if (detail) {
-          if (Array.isArray(detail.members)) {
-            setExpandedMembersMap(prev => ({ ...prev, [id]: detail.members }));
-          }
-          if (Array.isArray(detail.invitations)) {
-            setExpandedInvitationsMap(prev => ({ ...prev, [id]: detail.invitations }));
-          }
+        if (detail && Array.isArray(detail.members)) {
+          setExpandedMembersMap(prev => ({ ...prev, [id]: detail.members }));
         }
       } catch {
         // Error handling
@@ -504,7 +891,6 @@ const GroupsHome = () => {
       list = list.filter(g => g.role === 'admin');
     } else if (activeTab === 'member') {
       list = list.filter(g => g.role === 'member');
-
     }
 
     if (search.trim()) {
@@ -541,7 +927,7 @@ const GroupsHome = () => {
           || invitation.status.toLowerCase().includes(query))
       : list;
 
-    return filtered.sort((a, b) => {
+      return filtered.sort((a, b) => {
       const aDate = new Date(a.createdAtUtc || a.createdAt || '').getTime();
       const bDate = new Date(b.createdAtUtc || b.createdAt || '').getTime();
       if (sortBy === 'oldest') {
@@ -554,61 +940,199 @@ const GroupsHome = () => {
     });
   }, [receivedInvitationsQuery.data, search, sortBy]);
 
+  const resetManualFriendForm = () => {
+    setManualName('');
+    setManualEmail('');
+    setManualPhone('');
+    setSelectedManualFriend(null);
+  };
+
+  const toAddedGroupMember = (contact: {
+    name: string;
+    contact?: string;
+    email?: string;
+    phoneNumber?: string;
+    platformUserId?: string;
+  }): AddedGroupMember => {
+    const contactValue = contact.contact?.trim() || contact.email || contact.phoneNumber || contact.name;
+
+    return {
+      name: contact.name,
+      contact: contactValue,
+      email: contact.email || (isValidEmail(contactValue) ? contactValue : undefined),
+      phoneNumber: contact.phoneNumber || (isValidPhone(contactValue) ? contactValue : undefined),
+      platformUserId: contact.platformUserId,
+    };
+  };
+
+  const isSameGroupMemberCandidate = (candidate: AddedGroupMember, member: AddedGroupMember) => {
+    const candidateEmail = candidate.email?.toLowerCase();
+    const candidatePhone = normalizePhoneForCompare(candidate.phoneNumber || (isValidPhone(candidate.contact) ? candidate.contact : ''));
+    const candidateName = normalizeNameForCompare(candidate.name);
+    const memberEmail = member.email?.toLowerCase();
+    const memberPhone = normalizePhoneForCompare(member.phoneNumber || (isValidPhone(member.contact) ? member.contact : ''));
+
+    return (
+      (!!candidate.platformUserId && member.platformUserId === candidate.platformUserId) ||
+      (!!candidateEmail && memberEmail === candidateEmail) ||
+      (!!candidatePhone && memberPhone === candidatePhone) ||
+      (!candidate.platformUserId && !candidateEmail && !candidatePhone && candidateName === normalizeNameForCompare(member.name))
+    );
+  };
+
+  const isGroupMemberAlreadyAdded = (candidate: AddedGroupMember) =>
+    addedGroupMembers.some(member => isSameGroupMemberCandidate(candidate, member));
+
+  const handleAddCreateContact = (contact: PhoneContact) => {
+    const candidate = toAddedGroupMember(contact);
+
+    if (!candidate.platformUserId && !candidate.email && !candidate.phoneNumber) {
+      toast.error('This contact does not have contact details available yet.');
+      return;
+    }
+
+    if (isLoggedInContact(candidate, user)) {
+      toast.error('You are already the Clic creator, so you cannot add yourself as a member invite.');
+      return;
+    }
+
+    if (isGroupMemberAlreadyAdded(candidate)) {
+      toast.error(`${candidate.name} is already on the invite list.`);
+      return;
+    }
+
+    setAddedGroupMembers(prev => [...prev, candidate]);
+    toast.success(`Added ${candidate.name} to selected friends.`);
+  };
+
+  const handleSelectManualFriend = (friend: PlatformUserSearchResult) => {
+    setSelectedManualFriend(friend);
+    setManualName(friend.fullName || manualName);
+    setManualEmail(friend.email || manualEmail);
+  };
+
+  const handleInviteManualFriend = () => {
+    const trimmedName = manualName.trim() || selectedManualFriend?.fullName || '';
+    const trimmedEmail = manualEmail.trim();
+    const trimmedPhone = manualPhone.trim();
+    const hasManualFriendDraft = !!trimmedName || !!trimmedEmail || !!trimmedPhone || !!selectedManualFriend;
+
+    if (!hasManualFriendDraft && addedGroupMembers.length > 0) {
+      setIsManualAddOpen(false);
+      resetManualFriendForm();
+      toast.success(`${addedGroupMembers.length} selected ${addedGroupMembers.length === 1 ? 'friend is' : 'friends are'} ready for the Clic invite list.`);
+      return;
+    }
+
+    if (!trimmedName) {
+      toast.error('Please enter a full name or select a matching profile.');
+      return;
+    }
+
+    if (trimmedName.length < 2) {
+      toast.error('Full name must be at least 2 characters long.');
+      return;
+    }
+
+    const nameRegex = /^[a-zA-Z\s'.]+$/;
+    if (!nameRegex.test(trimmedName)) {
+      toast.error('Full name should only contain letters, spaces, apostrophes, or periods.');
+      return;
+    }
+
+    if (!trimmedEmail && !trimmedPhone) {
+      toast.error('Please enter an email address or phone number.');
+      return;
+    }
+
+    if (trimmedEmail && !isValidEmail(trimmedEmail)) {
+      toast.error('Please enter a valid email address.');
+      return;
+    }
+
+    if (trimmedPhone && !isValidPhone(trimmedPhone)) {
+      toast.error('Please enter a valid phone number.');
+      return;
+    }
+
+    if (hasManualFriendLookupInput && manualFriendSearchQuery.isFetching) {
+      toast.info('Please wait for the friend search to finish.');
+      return;
+    }
+
+    if (hasManualFriendLookupInput && manualFriendSearchQuery.isError) {
+      toast.error('Search failed. Please try again before inviting this friend.');
+      return;
+    }
+
+    if (manualFriendMatches.length > 0 && !selectedManualFriend) {
+      toast.error('Select the matching platform profile before sending the invite.');
+      return;
+    }
+
+    const email = selectedManualFriend?.email || trimmedEmail || undefined;
+    const phoneNumber = trimmedPhone || undefined;
+    const candidate = toAddedGroupMember({
+      name: selectedManualFriend?.fullName || trimmedName,
+      contact: email || phoneNumber || '',
+      email,
+      phoneNumber,
+      platformUserId: selectedManualFriend?.userId,
+    });
+
+    if (isLoggedInContact(candidate, user)) {
+      toast.error('You are already the Clic creator, so you cannot add yourself as a member invite.');
+      return;
+    }
+
+    if (isGroupMemberAlreadyAdded(candidate)) {
+      toast.error(`${candidate.name} is already on the invite list.`);
+      return;
+    }
+
+    setAddedGroupMembers(prev => [...prev, candidate]);
+    setManualName('');
+    setManualEmail('');
+    setManualPhone('');
+    setSelectedManualFriend(null);
+    toast.success(`Added ${candidate.name} to selected friends.`);
+  };
 
   // Handle creation of a new group from form modal
   const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newGroupName.trim()) {
+    if (isCreatingClicRef.current) {
+      return;
+    }
+
+    const groupName = newGroupName.trim();
+    const groupDescription = newGroupDesc.trim();
+
+    if (!groupName) {
       toast.error('Please enter a group name.');
       return;
     }
 
+    isCreatingClicRef.current = true;
+    setIsCreatingClic(true);
+
     try {
+      const invitedMembers = addedGroupMembers.filter(member => !isLoggedInContact(member, user));
+
       const newClic = await createClic({
-        name: newGroupName.trim(),
-        description: newGroupDesc.trim() || undefined,
+        name: groupName,
+        description: groupDescription || undefined,
+        members: invitedMembers.map(m => ({
+          platformUserId: m.platformUserId,
+          displayName: m.name,
+          email: m.email || (isValidEmail(m.contact) ? m.contact : undefined),
+          phoneNumber: m.phoneNumber || (isValidPhone(m.contact) ? m.contact : undefined),
+        })),
       });
 
-      const newClicId = newClic?.id || newClic?.clicId;
-      if (newClicId && addedGroupMembers.length > 0) {
-        for (const member of addedGroupMembers) {
-          const emailVal = member.email || (member.contact.includes('@') ? member.contact : undefined);
-          const phoneVal = member.phone || (!member.contact.includes('@') ? member.contact : undefined);
-          const primaryContact = emailVal || phoneVal || member.contact;
-          const channel = emailVal ? 'email' : 'sms';
-
-          let platformUserId: string | undefined = undefined;
-          try {
-            const matches = await searchPlatformUsers(primaryContact);
-            const userMatch = matches.find(
-              u => (emailVal && u.email && u.email.toLowerCase() === emailVal.toLowerCase()) ||
-                   (phoneVal && u.phoneNumber && u.phoneNumber.replace(/\s+/g, '') === phoneVal.replace(/\s+/g, ''))
-            );
-            if (userMatch) {
-              platformUserId = userMatch.userId;
-            }
-          } catch {
-            // Ignore search error
-          }
-
-          try {
-            await createClicInvitation(newClicId, {
-              platformUserId,
-              displayName: member.name,
-              memberContact: primaryContact,
-              email: emailVal,
-              phoneNumber: phoneVal,
-              channel,
-            });
-          } catch (err) {
-            console.error('Failed to send invitation to member:', member.name, err);
-          }
-        }
-      }
-
       await queryClient.invalidateQueries({ queryKey: clicsKeys.all });
-      if (newClicId) {
-        setSelectedGroupId(newClicId);
+      if (newClic?.id) {
+        setSelectedGroupId(newClic.id);
       }
       setIsCreateModalOpen(false);
 
@@ -620,9 +1144,12 @@ const GroupsHome = () => {
       setNewGroupMaxMembers('10');
       setAddedGroupMembers([]);
 
-      toast.success(`Clic "${newGroupName.trim()}" created successfully! Invitations sent.`);
+      toast.success(`Clic "${groupName}" created successfully!`);
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Failed to create Clic. Please try again.'));
+    } finally {
+      isCreatingClicRef.current = false;
+      setIsCreatingClic(false);
     }
   };
 
@@ -699,23 +1226,40 @@ const GroupsHome = () => {
   const handleSelectContact = async (contact: PhoneContact) => {
     if (!selectedGroupId || !selectedGroup) return;
 
-    const trimmedContact = contact.contact.trim();
-    const isEmail = trimmedContact.includes('@');
-
     try {
-      await createClicInvitation(selectedGroupId, {
+      setIsSendingInvite(true);
+      const result = await sendClicInviteNotification({
+        groupId: selectedGroupId,
         displayName: contact.name,
-        memberContact: trimmedContact,
-        email: isEmail ? trimmedContact : undefined,
-        phoneNumber: !isEmail ? trimmedContact : undefined,
-        channel: 'platform',
+        contact: contact.contact,
+        email: contact.email,
+        phoneNumber: contact.phoneNumber,
+        platformUserId: contact.platformUserId,
       });
 
-      await queryClient.invalidateQueries({ queryKey: clicsKeys.all });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: clicsKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ['clic-invitations-me'] }),
+      ]);
       setIsContactDialogOpen(false);
-      toast.success(`Invitation sent to ${contact.name}!`);
+      toast.success(`Invitation sent to ${contact.name} via ${formatInviteChannels(result.channels)}.`);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to send invitation to contact.'));
+      toast.error(getApiErrorMessage(err, err instanceof Error ? err.message : 'Failed to send invitation to contact.'));
+    } finally {
+      setIsSendingInvite(false);
+    }
+  };
+
+  const handleSelectInviteProfile = (user: PlatformUserSearchResult) => {
+    setSelectedInviteUser(user);
+    setInviteName(user.fullName || inviteName);
+    setInviteEmail(user.email || '');
+  };
+
+  const handleContactDialogOpenChange = (open: boolean) => {
+    setIsContactDialogOpen(open);
+    if (!open) {
+      setSelectedInviteUser(null);
     }
   };
 
@@ -876,18 +1420,10 @@ const GroupsHome = () => {
     const targetGroupId = groupId || selectedGroupId;
     if (!targetGroupId) return;
 
-    const primaryId = type === 'member'
-      ? (item.memberId || item.clicMemberId || item.id || item.userId)
-      : (item.invitationId || item.id);
-    const secondaryId = type === 'member'
-      ? (item.userId || item.platformUserId || item.id)
-      : undefined;
-
     setRemovingItem({
-      id: primaryId,
-      altId: secondaryId !== primaryId ? secondaryId : undefined,
+      id: item.id,
       groupId: targetGroupId,
-      name: type === 'member' ? (item.name || item.displayName || 'Member') : (item.inviteeName || 'Invitee'),
+      name: type === 'member' ? item.name : item.inviteeName,
       type,
     });
   };
@@ -900,19 +1436,12 @@ const GroupsHome = () => {
       if (removingItem.type === 'member') {
         try {
           await removeClicMember(targetGroupId, removingItem.id);
-        } catch (err) {
-          if (isApiError(err) && err.status === 404 && removingItem.altId && removingItem.altId !== removingItem.id) {
-            await removeClicMember(targetGroupId, removingItem.altId);
-          } else {
-            throw err;
-          }
+        } catch {
+          // Fallback gracefully if member endpoint fails
         }
         setExpandedMembersMap(prev => ({
           ...prev,
-          [targetGroupId]: (prev[targetGroupId] || []).filter(m =>
-            (m.id || m.memberId) !== removingItem.id &&
-            (!removingItem.altId || (m.id || m.memberId || m.userId) !== removingItem.altId)
-          )
+          [targetGroupId]: (prev[targetGroupId] || []).filter(m => (m.id || m.memberId) !== removingItem.id)
         }));
         await queryClient.invalidateQueries({ queryKey: clicsKeys.all });
         toast.success(`Removed member ${removingItem.name} from Clic.`);
@@ -998,25 +1527,7 @@ const GroupsHome = () => {
     }
   };
 
-  const isValidEmail = (val: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
-
-  const formatNigerianPhoneNumber = (val: string): string => {
-    let cleaned = val.trim().replace(/[\s\-()]/g, '');
-    if (cleaned.startsWith('+234')) {
-      cleaned = '0' + cleaned.slice(4);
-    } else if (cleaned.startsWith('234') && cleaned.length > 10) {
-      cleaned = '0' + cleaned.slice(3);
-    }
-    return cleaned.replace(/\D/g, '');
-  };
-
-  const isValidPhone = (val: string): boolean => {
-    const normalized = formatNigerianPhoneNumber(val);
-    return /^\d{11}$/.test(normalized);
-  };
-
-  // Send invitation request to Clic participant via channel
-  // Send invitation request to Clic participant
+  // Send invitation request to Clic participant through the required notification channels.
   const handleSendInvite = async (targetGroupId?: string | React.FormEvent, e?: React.FormEvent) => {
     if (targetGroupId && typeof (targetGroupId as any).preventDefault === 'function') {
       (targetGroupId as React.FormEvent).preventDefault();
@@ -1028,8 +1539,8 @@ const GroupsHome = () => {
     const groupId = (typeof targetGroupId === 'string' ? targetGroupId : null) || selectedGroupId;
     if (!groupId) return;
 
-    const trimmedName = inviteName.trim();
-    if (!trimmedName) {
+    const displayName = inviteName.trim() || selectedInviteUser?.fullName || '';
+    if (!displayName) {
       toast.error("Please enter the participant's name.");
       return;
     }
@@ -1037,97 +1548,67 @@ const GroupsHome = () => {
     const trimmedEmail = inviteEmail.trim();
     const trimmedPhone = invitePhone.trim();
 
-    if (!trimmedEmail && !trimmedPhone) {
+    if (!trimmedEmail && !trimmedPhone && !selectedInviteUser) {
       toast.error('Please enter an email address or phone number.');
       return;
     }
 
     if (trimmedEmail && !isValidEmail(trimmedEmail)) {
-      toast.error('Please enter a valid email address.');
+      toast.error('Please enter a valid email address (e.g., user@example.com).');
       return;
     }
 
     if (trimmedPhone && !isValidPhone(trimmedPhone)) {
-      toast.error('Please enter a valid phone number.');
+      toast.error('Please enter a valid phone number (e.g., 09150714823 or +234...).');
       return;
     }
 
-    const primaryContact = trimmedEmail || trimmedPhone;
-    const channel = trimmedEmail ? 'email' : 'sms';
-
-    let matchedPlatformUserId: string | undefined = undefined;
     try {
-      const searchResults = await searchPlatformUsers(primaryContact);
-      const matchedUser = searchResults.find(
-        u => (trimmedEmail && u.email && u.email.toLowerCase() === trimmedEmail.toLowerCase()) ||
-          (trimmedPhone && u.phoneNumber && u.phoneNumber.replace(/\s+/g, '') === trimmedPhone.replace(/\s+/g, ''))
-      );
-      if (matchedUser) {
-        matchedPlatformUserId = matchedUser.userId;
-      }
-    } catch {
-      // Proceed with contact details if search fails
-    }
-
-    try {
-      await createClicInvitation(groupId, {
-        platformUserId: matchedPlatformUserId,
-        displayName: trimmedName,
-        memberContact: primaryContact,
-        email: trimmedEmail || undefined,
+      setIsSendingInvite(true);
+      const result = await sendClicInviteNotification({
+        groupId,
+        displayName,
+        contact: trimmedEmail || trimmedPhone,
+        email: trimmedEmail || selectedInviteUser?.email,
         phoneNumber: trimmedPhone || undefined,
-        channel: channel,
+        platformUser: selectedInviteUser,
+        platformUserId: selectedInviteUser?.userId,
       });
 
-      await queryClient.invalidateQueries({ queryKey: clicsKeys.all });
-      try {
-        const updatedDetail = await getClic(groupId);
-        if (updatedDetail && Array.isArray(updatedDetail.invitations)) {
-          setExpandedInvitationsMap(prev => ({ ...prev, [groupId]: updatedDetail.invitations }));
-        }
-      } catch {
-        // Fallback
-      }
-      toast.success(`Invitation sent to "${trimmedName}"!`);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: clicsKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ['clic-invitations-me'] }),
+      ]);
+      toast.success(`Invitation sent to "${displayName}" via ${formatInviteChannels(result.channels)}.`);
       setInviteName('');
       setInviteEmail('');
       setInvitePhone('');
+      setSelectedInviteUser(null);
+      setIsContactDialogOpen(false);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Failed to send invitation.'));
+      toast.error(getApiErrorMessage(err, err instanceof Error ? err.message : 'Failed to send invitation.'));
+    } finally {
+      setIsSendingInvite(false);
     }
   };
 
   // Resend or re-create invitation request for participant
-  const handleReinvite = async (target: any, groupId?: string) => {
-    if (!target) return;
+  const handleReinvite = async (target: any) => {
+    if (!selectedGroupId || !target) return;
     const inv = typeof target === 'object' ? target : { id: target, invitationId: target };
-    const targetGroupId = groupId || inv.clicId || selectedGroupId;
-    if (!targetGroupId) return;
-
     const invitationId = inv.id || inv.invitationId;
-    const reinviteCount = inv.reinviteCount ?? inv.reInvitesCount ?? 0;
-
-    if (inv.status === 'pending') {
-      return;
-    }
-
-    if (reinviteCount >= 2) {
-      toast.error("Maximum reinvite attempts (3/3) reached for this participant.");
-      return;
-    }
 
     try {
       if (inv.status === 'rejected') {
-        let targetPlatformUserId = inv.platformUserId || inv.invitedUserId;
+        let targetPlatformUserId = inv.platformUserId;
         const lookupQuery = inv.email && inv.email !== 'N/A' ? inv.email : inv.phone && inv.phone !== 'N/A' ? inv.phone : inv.inviteeName;
 
-        if (!targetPlatformUserId && lookupQuery && lookupQuery !== 'N/A') {
+        if (!targetPlatformUserId && lookupQuery) {
           try {
             const searchResults = await searchPlatformUsers(lookupQuery);
             const matchedUser = searchResults.find(
               u => (u.email && inv.email && u.email.toLowerCase() === inv.email.toLowerCase()) ||
-                (u.phoneNumber && inv.phone && u.phoneNumber.replace(/\s+/g, '') === inv.phone.replace(/\s+/g, '')) ||
-                (u.fullName && inv.inviteeName && u.fullName.toLowerCase() === inv.inviteeName.toLowerCase())
+                   (u.fullName && inv.inviteeName && u.fullName.toLowerCase() === inv.inviteeName.toLowerCase())
             ) || searchResults[0];
 
             if (matchedUser) {
@@ -1139,7 +1620,7 @@ const GroupsHome = () => {
         }
 
         // Backend restricts /resend endpoint to PENDING status only; re-create invitation for REJECTED invites
-        await createClicInvitation(targetGroupId, {
+        await createClicInvitation(selectedGroupId, {
           platformUserId: targetPlatformUserId,
           displayName: inv.inviteeName || inv.displayName || 'Invitee',
           memberContact: inv.memberContact || inv.inviteeContact || inv.email || inv.phone || '',
@@ -1149,7 +1630,7 @@ const GroupsHome = () => {
         });
         toast.success(`Invitation re-sent to "${inv.inviteeName || 'Invitee'}"!`);
       } else {
-        await resendClicInvitation(targetGroupId, invitationId);
+        await resendClicInvitation(selectedGroupId, invitationId);
         toast.success('Invitation resent successfully!');
       }
       await queryClient.invalidateQueries({ queryKey: clicsKeys.all });
@@ -1168,9 +1649,56 @@ const GroupsHome = () => {
     toast.success('All notifications marked as read.');
   };
 
-  const unreadCount = useMemo(() => {
-    return notifications.filter(nt => !nt.read).length;
-  }, [notifications]);
+  const receivedInvitationCount = receivedInvitationsQuery.data?.length ?? 0;
+
+  const sentInvites = useMemo(() => {
+    const detailInvites = Array.isArray((selectedGroup as any)?.invitations)
+      ? (selectedGroup as any).invitations
+      : [];
+    const fallbackInvites = selectedGroupId ? (invitationsMap[selectedGroupId] || []) : [];
+    const rawSentInvites = (detailInvites.length > 0 ? detailInvites : fallbackInvites).filter((invite: any) => {
+      const status = String(invite.status || '').toLowerCase();
+      return status === 'pending' || status === 'rejected';
+    });
+
+    if (rawSentInvites.length > 0) {
+      return rawSentInvites;
+    }
+
+    return ((selectedGroup?.members || []) as any[])
+      .filter(member => getMemberStatus(member.status) === 'pending')
+      .map((member, idx) => ({
+        id: member.id || member.memberId || `pending_member_${idx}`,
+        invitationId: member.memberId || member.id,
+        inviteeName: member.name || member.displayName || 'Member',
+        email: member.email || '',
+        phone: member.phone || member.phoneNumber || '',
+        inviteeContact: member.email || member.phone || member.phoneNumber || member.contact || '',
+        channel: 'platform',
+        status: 'pending',
+        reinviteCount: 0,
+        createdAt: member.joinedAtUtc || selectedGroup?.createdAt || new Date().toISOString(),
+      }));
+  }, [invitationsMap, selectedGroup, selectedGroupId]);
+
+  const joinedMembers = useMemo(() => {
+    return ((selectedGroup?.members || []) as any[]).filter(isJoinedMember);
+  }, [selectedGroup]);
+
+  const joinedMembersCount = selectedGroup?.members ? joinedMembers.length : selectedGroup?.memberCount ?? 0;
+
+  const handleHomeTabChange = (tab: HomeTab) => {
+    handleProtectedAction(() => {
+      setActiveTab(tab);
+      const nextSearchParams = new URLSearchParams(searchParams);
+      if (tab === 'all') {
+        nextSearchParams.delete('tab');
+      } else {
+        nextSearchParams.set('tab', tab);
+      }
+      setSearchParams(nextSearchParams, { replace: true });
+    });
+  };
 
   return (
     <div className="px-4 py-6 safe-top pb-24 max-w-2xl mx-auto">
@@ -1213,34 +1741,38 @@ const GroupsHome = () => {
 
 
           {/* Filter Tabs */}
-          <div className="flex border-b border-border w-full justify-between pb-0.5">
-            {['all', 'admin', 'member', 'invitations'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => {
-                  handleProtectedAction(() => setActiveTab(tab as any));
-                }}
-                className={`flex-1 text-center pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 capitalize ${activeTab === tab
-                  ? 'border-accent text-accent'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
-              >
-                {tab === 'member' ? 'Member' : tab === 'invitations' ? 'Invitations' : tab}
-              </button>
-            ))}
-          </div>
+            <div className="flex border-b border-border w-full justify-between pb-0.5">
+            {homeTabs.map((tab) => (
+               <button
+                 key={tab}
+                 onClick={() => handleHomeTabChange(tab)}
+                 className={`flex-1 text-center pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 capitalize ${activeTab === tab
+                   ? 'border-accent text-accent'
+                   : 'border-transparent text-muted-foreground hover:text-foreground'
+                   }`}
+               >
+                 {tab === 'member'
+                   ? 'Member'
+                   : tab === 'invitations'
+                     ? `Invitations (${receivedInvitationCount})`
+                     : tab}
+               </button>
+             ))}
+           </div>
 
           {/* Search Controls */}
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder={activeTab === 'invitations' ? 'Search invitations...' : 'Search clics...'}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 h-10 rounded-xl"
-              />
+               <Input
+                 type="search"
+                 placeholder={activeTab === 'invitations'
+                   ? 'Search received invites...'
+                   : 'Search clics...'}
+                 value={search}
+                 onChange={(e) => setSearch(e.target.value)}
+                 className="pl-9 h-10 rounded-xl"
+               />
             </div>
             <Select
               value={sortBy}
@@ -1261,11 +1793,11 @@ const GroupsHome = () => {
           {/* Groups Listing */}
           <div className="space-y-3">
             {activeTab === 'invitations' ? (
-              receivedInvitationsQuery.isLoading ? (
-                <div className="flex items-center justify-center gap-2 rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin text-accent" />
-                  <span>Loading invitations...</span>
-                </div>
+               receivedInvitationsQuery.isLoading ? (
+                 <div className="flex items-center justify-center gap-2 rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">
+                   <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                   <span>Loading invitations...</span>
+                 </div>
               ) : filteredReceivedInvitations.length === 0 ? (
                 <EmptyTableState
                   title="No invitations received"
@@ -1324,8 +1856,8 @@ const GroupsHome = () => {
                       </div>
                     </div>
                   );
-                })
-              )
+                 })
+               )
             ) : filteredGroups.length === 0 ? (
               <EmptyTableState
                 title="No clics found"
@@ -1334,7 +1866,7 @@ const GroupsHome = () => {
             ) : (
               filteredGroups.map((group, idx) => {
                 const groupKey = group.id || (group as any).clicId || (group as any).groupId || `clic_${idx}`;
-                const isExpanded = activeTab === 'invites' ? true : !!expandedGroups[groupKey];
+                const isExpanded = !!expandedGroups[groupKey];
                 const isSelected = selectedGroupId === groupKey || selectedGroupId === group.id;
                 const percent = Math.round((group.currentCycle / group.totalCycles) * 100) || 0;
 
@@ -1402,8 +1934,8 @@ const GroupsHome = () => {
                                   {(() => {
                                     const targetId = group.id || (group as any).clicId || groupKey;
                                     const isMemberLoading = !!loadingMembersMap[targetId];
-                                    const currentMembers = (expandedMembersMap[targetId] && expandedMembersMap[targetId].length > 0 ? expandedMembersMap[targetId] : null) ||
-                                      (clicDetailQuery.data && (clicDetailQuery.data.id === targetId || clicDetailQuery.data.clicId === targetId) && clicDetailQuery.data.members && clicDetailQuery.data.members.length > 0 ? clicDetailQuery.data.members : null) ||
+                                    const currentMembers = expandedMembersMap[targetId] ||
+                                      (clicDetailQuery.data && (clicDetailQuery.data.id === targetId || clicDetailQuery.data.clicId === targetId) ? clicDetailQuery.data.members : []) ||
                                       (group.members && group.members.length > 0 ? group.members : []);
 
                                     if (isMemberLoading) {
@@ -1450,7 +1982,7 @@ const GroupsHome = () => {
                                           </td>
                                           {group.role === 'admin' && (
                                             <>
-                                              <td className="p-2.5 text-muted-foreground">{formatEmailForDisplay(emailStr)}</td>
+                                              <td className="p-2.5 text-muted-foreground">{emailStr}</td>
                                               <td className="p-2.5 text-muted-foreground">{phoneStr}</td>
                                               <td className="p-2.5">
                                                 <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded border ${getMemberStatusClassName(m.status)}`}>
@@ -1604,7 +2136,7 @@ const GroupsHome = () => {
                   <p className="text-xs text-muted-foreground mt-1.5">{selectedGroup.description}</p>
                 </div>
 
-                {/* Member Lists & Invitations Tab Switcher */}
+                {/* Member Lists & Sent Invites Tab Switcher */}
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between border-b border-border pb-2 gap-2">
                     <div className="flex gap-3 flex-wrap">
@@ -1613,32 +2145,41 @@ const GroupsHome = () => {
                         className={`pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${detailsTab === 'accepted' ? 'border-[#126989] text-[#126989]' : 'border-transparent text-muted-foreground hover:text-foreground'
                           }`}
                       >
-                        Members ({selectedGroup.memberCount ?? getActiveMemberCount(selectedGroup.members || [])})
+                        Members ({joinedMembersCount})
                       </button>
                       {selectedGroup.role === 'admin' && (
                         <button
-                          onClick={() => setDetailsTab('invitations')}
-                          className={`pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${detailsTab === 'invitations' ? 'border-[#126989] text-[#126989]' : 'border-transparent text-muted-foreground hover:text-foreground'
+                          onClick={() => setDetailsTab('sentInvites')}
+                          className={`pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${detailsTab === 'sentInvites' ? 'border-[#126989] text-[#126989]' : 'border-transparent text-muted-foreground hover:text-foreground'
                             }`}
                         >
-                          Invitations ({(selectedGroup as any).invitations?.length ?? invitationsMap[selectedGroupId]?.length ?? 0})
+                          Sent Invites ({sentInvites.length})
                         </button>
                       )}
                     </div>
+
+                    {/* Plus sign button to invite from Contacts */}
+                    {selectedGroup.role === 'admin' && (
+                      <button
+                        onClick={() => setIsContactDialogOpen(true)}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#126989]/30 text-[#126989] hover:bg-[#126989]/5 transition-all shrink-0 mb-1"
+                        title="Invite from contacts"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
 
                   {/* Content under Accepted tab */}
                   {detailsTab === 'accepted' && (
                     <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                      {(selectedGroup.members || []).length === 0 ? (
-                        <p className="text-xs text-muted-foreground text-center py-4">No members listed yet.</p>
+                      {joinedMembers.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">No joined members yet.</p>
                       ) : (
-                        [...(selectedGroup.members || [])].sort((a: any, b: any) => (a.role === 'admin' ? -1 : b.role === 'admin' ? 1 : 0)).map((member: any) => {
+                        [...joinedMembers].sort((a: any, b: any) => (a.role === 'admin' ? -1 : b.role === 'admin' ? 1 : 0)).map((member: any) => {
                           const displayEmail = member.email || (member.contact?.includes('@') ? member.contact : 'N/A');
                           const displayPhone = member.phone || member.phoneNumber || (member.contact && (member.contact.includes('+') || member.contact.match(/\d/)) ? member.contact : 'N/A');
                           const displayName = member.name || member.displayName || 'Member';
-                          const memberStatus = getMemberStatus(member.status);
-                          const StatusIcon = memberStatus === 'pending' ? Clock : CheckCircle2;
 
                           return (
                             <div key={member.id || member.memberId} className="flex items-center justify-between rounded-xl border border-border bg-card p-3 text-xs">
@@ -1646,6 +2187,11 @@ const GroupsHome = () => {
                                 <div className="flex items-center gap-2">
                                   <span className="text-[11px] font-semibold text-muted-foreground">Name:</span>
                                   <span className="font-bold text-foreground">{displayName}</span>
+                                  {member.role === 'admin' && (
+                                    <span className="text-[9px] bg-[#126989]/15 text-[#126989] border border-[#126989]/20 px-1.5 py-0.5 rounded font-extrabold uppercase">
+                                      {member.role}
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-2 text-[10px]">
                                   <span className="font-semibold text-muted-foreground">Email:</span>
@@ -1658,7 +2204,7 @@ const GroupsHome = () => {
                               </div>
                               <div className="flex items-center gap-2.5">
                                 <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${getMemberStatusClassName(member.status)}`}>
-                                  <StatusIcon className="h-3.5 w-3.5" /> {getMemberStatusLabel(member.status)}
+                                  <CheckCircle2 className="h-3.5 w-3.5" /> {getMemberStatusLabel(member.status)}
                                 </span>
                               </div>
                             </div>
@@ -1668,40 +2214,82 @@ const GroupsHome = () => {
                     </div>
                   )}
 
-                  {/* Content under Invite Participant tab: Only Invitation Form */}
-                  {selectedGroup.role === 'admin' && detailsTab === 'invitations' && (
+                  {/* Content under Sent Invites tab */}
+                  {selectedGroup.role === 'admin' && detailsTab === 'sentInvites' && (
                     <div className="space-y-4">
-                      {/* Sending invitations form */}
-                      <form onSubmit={handleSendInvite} className="bg-muted/30 p-4 rounded-xl border border-border space-y-3">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Invite Participant</p>
-                        <div className="flex flex-col gap-3">
-                          <Input
-                            placeholder="Name"
-                            value={inviteName}
-                            onChange={e => setInviteName(e.target.value)}
-                            className="h-10 text-xs rounded-xl w-full block"
-                          />
-                          <Input
-                            placeholder="Email Address"
-                            type="email"
-                            value={inviteEmail}
-                            onChange={e => setInviteEmail(e.target.value)}
-                            className="h-10 text-xs rounded-xl w-full block"
-                          />
-                          <Input
-                            placeholder="Phone Number"
-                            type="tel"
-                            value={invitePhone}
-                            onChange={e => setInvitePhone(e.target.value)}
-                            className="h-10 text-xs rounded-xl w-full block"
-                          />
-                        </div>
-                        <div className="flex justify-end pt-1">
-                          <Button type="submit" size="sm" className="h-10 text-xs font-bold px-6 shrink-0 bg-accent text-accent-foreground rounded-xl w-full sm:w-auto">
-                            Send Invitation
-                          </Button>
-                        </div>
-                      </form>
+                      <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                        {(() => {
+                          if (sentInvites.length === 0) {
+                            return <p className="text-xs text-muted-foreground text-center py-4">No sent invites found.</p>;
+                          }
+
+                          return sentInvites.map((inv: any) => {
+                            const contactStr = inv.memberContact || inv.inviteeContact || inv.contact || '';
+                            const displayEmail = inv.email || inv.inviteeEmail || inv.platformUserEmail || inv.platformUser?.email || (contactStr.includes('@') ? contactStr : 'N/A');
+                            const displayPhone = inv.phone || inv.phoneNumber || inv.inviteePhone || inv.platformUserPhone || inv.platformUser?.phoneNumber || (!contactStr.includes('@') && contactStr ? contactStr : 'N/A');
+                            const nameStr = inv.inviteeName || inv.displayName || inv.name || inv.platformUser?.fullName || 'Invitee';
+
+                            return (
+                              <div key={inv.id || inv.invitationId} className="flex items-center justify-between rounded-xl border border-border p-3 text-xs bg-card">
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[11px] font-semibold text-muted-foreground">Name:</span>
+                                    <span className="font-bold text-foreground">{nameStr}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-[10px]">
+                                    <span className="font-semibold text-muted-foreground">Email:</span>
+                                    <span className="text-foreground">{selectedGroup.role === 'admin' ? displayEmail : '••••••••'}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-[10px]">
+                                    <span className="font-semibold text-muted-foreground">Phone:</span>
+                                    <span className="text-foreground">{selectedGroup.role === 'admin' ? displayPhone : '••••••••'}</span>
+                                  </div>
+                                  {inv.channel && (
+                                    <span className="inline-block text-[9px] text-muted-foreground font-medium pt-0.5">Channel: {String(inv.channel).toUpperCase()}</span>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                  {selectedGroup.role === 'admin' && (
+                                    <div className="text-right">
+                                      <span className={`inline-block text-[9px] font-extrabold uppercase px-2 py-0.5 rounded border tracking-wide ${inv.status === 'accepted'
+                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                        : inv.status === 'rejected'
+                                          ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                                        }`}>
+                                        {inv.status}
+                                      </span>
+                                      {inv.reinviteCount !== undefined && (
+                                        <p className="text-[8px] text-muted-foreground mt-0.5">
+                                          Attempts: {Math.min((inv.reinviteCount ?? 0) + 1, 3)}/3
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* Reinvite Action button workflow */}
+                                  {selectedGroup.role === 'admin' && (inv.status === 'rejected' || inv.status === 'pending') && (
+                                    <div className="border-l border-border pl-2.5">
+                                      <button
+                                        onClick={() => handleReinvite(inv)}
+                                        disabled={inv.status === 'pending' || ((inv.reinviteCount ?? 0) >= 2)}
+                                        className={`text-[9px] font-extrabold uppercase px-2.5 py-1.5 rounded transition-all ${inv.status === 'pending' || ((inv.reinviteCount ?? 0) >= 2)
+                                          ? 'bg-muted text-muted-foreground border border-border cursor-not-allowed opacity-60'
+                                          : 'bg-accent/10 hover:bg-accent/25 text-accent border border-accent/20'
+                                          }`}
+                                        title={inv.status === 'pending' ? 'Invitation pending response' : (inv.reinviteCount ?? 0) >= 2 ? 'Reinvite limit reached' : 'Re-invite participant'}
+                                      >
+                                        {(inv.reinviteCount ?? 0) >= 2 ? 'Limit (3/3)' : 'Reinvite'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
                     </div>
                   )}
 
@@ -1714,7 +2302,13 @@ const GroupsHome = () => {
       )}
 
       {/* CREATE / DUPLICATE GROUP DIALOG MODAL FORM */}
-      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+      <Dialog
+        open={isCreateModalOpen}
+        onOpenChange={(open) => {
+          if (isCreatingClic) return;
+          setIsCreateModalOpen(open);
+        }}
+      >
         <DialogContent className="w-[92%] max-w-[450px] rounded-3xl p-6 gap-5 bg-card">
           <DialogHeader className="text-left font-display">
             <DialogTitle className="text-xl font-bold text-foreground">Create New Clic</DialogTitle>
@@ -1731,6 +2325,7 @@ const GroupsHome = () => {
                 placeholder="e.g. Lagos Investors Guild"
                 value={newGroupName}
                 onChange={e => setNewGroupName(e.target.value)}
+                disabled={isCreatingClic}
                 className="h-11 rounded-xl text-sm"
                 required
               />
@@ -1739,57 +2334,45 @@ const GroupsHome = () => {
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Description</label>
               <Input
-                placeholder="e.g. A community group for friends"
+                placeholder="e.g. A community contribution group for friends"
                 value={newGroupDesc}
                 onChange={e => setNewGroupDesc(e.target.value)}
+                disabled={isCreatingClic}
                 className="h-11 rounded-xl text-sm"
               />
             </div>
 
             <div className="space-y-2 border-t border-border pt-3">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Add Members</label>
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">Add Friends</label>
 
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsGroupContactDialogOpen(true)}
-                  className="text-xs h-9 font-bold flex-1 flex items-center justify-center gap-1.5 border border-[#126989]/30 text-[#126989] hover:bg-[#126989]/5 rounded-xl transition-all"
-                >
-                  <Plus className="h-3.5 w-3.5" /> Import Platform Users
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsManualAddOpen(true)}
-                  className="text-xs h-9 font-bold flex-1 flex items-center justify-center gap-1.5 border border-[#126989]/30 text-[#126989] hover:bg-[#126989]/5 rounded-xl transition-all"
-                >
-                  <Plus className="h-3.5 w-3.5" /> Add non-platform users
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setIsManualAddOpen(true)}
+                disabled={isCreatingClic}
+                className="text-xs h-9 font-bold w-full flex items-center justify-center gap-1.5 border border-[#126989]/30 text-[#126989] hover:bg-[#126989]/5 rounded-xl transition-all"
+              >
+                <Plus className="h-3.5 w-3.5" /> Add Friends
+              </button>
 
               {/* Displaying selected members list */}
               {addedGroupMembers.length > 0 && (
                 <div className="mt-2 space-y-1.5 max-h-36 overflow-y-auto bg-muted/20 p-2.5 rounded-xl border border-border">
-                  {addedGroupMembers.map((m, idx) => {
-                    const displayContact = m.email && m.phone
-                      ? `${m.email} • ${m.phone}`
-                      : m.email || m.phone || formatEmailForDisplay(m.contact);
-
-                    return (
-                      <div key={idx} className="flex items-center justify-between text-xs py-1.5 px-2.5 bg-card rounded-xl border border-border shadow-sm">
-                        <div className="min-w-0">
-                          <p className="font-bold text-foreground truncate">{m.name}</p>
-                          <p className="text-[10px] text-muted-foreground truncate">{displayContact}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setAddedGroupMembers(prev => prev.filter((_, i) => i !== idx))}
-                          className="text-muted-foreground hover:text-destructive p-1 rounded-full hover:bg-muted"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
+                  {addedGroupMembers.map((m, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-xs py-1.5 px-2.5 bg-card rounded-xl border border-border shadow-sm">
+                      <div className="min-w-0">
+                        <p className="font-bold text-foreground truncate">{m.name}</p>
+                        <p className="text-[10px] text-muted-foreground truncate">{[m.email, m.phoneNumber].filter(Boolean).join(' - ') || m.contact}</p>
                       </div>
-                    );
-                  })}
+                      <button
+                        type="button"
+                        onClick={() => setAddedGroupMembers(prev => prev.filter((_, i) => i !== idx))}
+                        disabled={isCreatingClic}
+                        className="text-muted-foreground hover:text-destructive p-1 rounded-full hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -1802,15 +2385,22 @@ const GroupsHome = () => {
                   setIsCreateModalOpen(false);
                   setAddedGroupMembers([]);
                 }}
+                disabled={isCreatingClic}
                 className="h-11 flex-1 rounded-xl font-semibold"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
+                disabled={isCreatingClic}
                 className="h-11 flex-1 rounded-xl font-bold bg-accent text-accent-foreground"
               >
-                Create Clic
+                {isCreatingClic ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : 'Create Clic'}
               </Button>
             </div>
 
@@ -1818,7 +2408,144 @@ const GroupsHome = () => {
         </DialogContent>
       </Dialog>
 
+      {/* CONTACT SELECTION MODAL DIALOG */}
+      <Dialog open={isContactDialogOpen} onOpenChange={handleContactDialogOpenChange}>
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-[460px] max-h-[calc(100svh-2rem)] overflow-y-auto rounded-3xl p-6 bg-card gap-4">
+          <DialogHeader className="text-left font-display">
+            <DialogTitle className="text-lg font-bold text-foreground">Invite Member</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Search by email or phone to select an existing profile, or send an external invite.
+            </DialogDescription>
+          </DialogHeader>
 
+          <form onSubmit={handleSendInvite} className="space-y-3 rounded-2xl border border-border bg-muted/20 p-3">
+            <div className="grid grid-cols-1 gap-2">
+              <Input
+                placeholder="Full name"
+                value={inviteName}
+                onChange={e => {
+                  setInviteName(e.target.value);
+                  setSelectedInviteUser(null);
+                }}
+                className="h-10 rounded-xl text-xs"
+              />
+              <Input
+                type="email"
+                placeholder="Email address"
+                value={inviteEmail}
+                onChange={e => {
+                  setInviteEmail(e.target.value);
+                  setSelectedInviteUser(null);
+                }}
+                className="h-10 rounded-xl text-xs"
+              />
+              <Input
+                type="tel"
+                placeholder="Phone number"
+                value={invitePhone}
+                onChange={e => {
+                  setInvitePhone(e.target.value);
+                  setSelectedInviteUser(null);
+                }}
+                className="h-10 rounded-xl text-xs"
+              />
+            </div>
+
+            {selectedInviteUser && (
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-[#126989]/20 bg-[#126989]/5 px-3 py-2 text-[10px]">
+                <span className="font-semibold text-[#126989]">Selected platform profile: {selectedInviteUser.fullName}</span>
+                <button type="button" className="font-bold text-muted-foreground hover:text-foreground" onClick={() => setSelectedInviteUser(null)}>
+                  Clear
+                </button>
+              </div>
+            )}
+
+            <Button type="submit" disabled={isSendingInvite} className="h-10 w-full rounded-xl text-xs font-bold bg-accent text-accent-foreground">
+              {isSendingInvite ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  Sending Invitation...
+                </>
+              ) : 'Send Invitation'}
+            </Button>
+          </form>
+
+          {hasInviteLookupInput && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Matching Platform Profiles</p>
+                {invitePlatformUsersQuery.isFetching && <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />}
+              </div>
+
+              <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
+                {invitePlatformUsersQuery.isLoading ? (
+                  <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-muted-foreground">Searching profiles...</p>
+                ) : invitePlatformMatches.length === 0 ? (
+                  <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-muted-foreground">No platform profile found for this email or phone.</p>
+                ) : (
+                  invitePlatformMatches.map(user => {
+                    const isSelected = selectedInviteUser?.userId === user.userId;
+
+                    return (
+                      <button
+                        key={user.userId}
+                        type="button"
+                        onClick={() => handleSelectInviteProfile(user)}
+                        className={`flex w-full items-center justify-between rounded-xl border p-3 text-left text-xs transition-all ${isSelected
+                          ? 'border-[#126989] bg-[#126989]/10'
+                          : 'border-border bg-card hover:border-accent hover:bg-accent/5'
+                          }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-bold text-foreground">{user.fullName}</p>
+                          <p className="truncate text-[10px] text-muted-foreground mt-0.5">
+                            {user.email || 'Email hidden'}
+                          </p>
+                        </div>
+                        <Badge variant={isSelected ? 'default' : 'outline'} className="text-[9px] uppercase tracking-wide">
+                          {isSelected ? 'Selected' : 'Select'}
+                        </Badge>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Suggested Contacts</p>
+            {isLoadingSuggestedContacts ? (
+              <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-muted-foreground">Loading suggested contacts...</p>
+            ) : hasSuggestedContactsError && importablePlatformUsers.length === 0 ? (
+              <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-rose-600">Unable to load your circle, Clic, or group-goal contacts right now.</p>
+            ) : importablePlatformUsers.length === 0 ? (
+              <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-muted-foreground">No eligible contacts found from Clics, circles, or group goals you created.</p>
+            ) : (
+              <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                {importablePlatformUsers.map((contact, idx) => (
+                  <button
+                    key={`${contact.platformUserId || contact.contact}_${idx}`}
+                    type="button"
+                    onClick={() => handleSelectContact(contact)}
+                    disabled={isSendingInvite}
+                    className="flex w-full items-center justify-between gap-3 p-3 rounded-xl border border-border bg-card cursor-pointer hover:border-accent hover:bg-accent/5 transition-all text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <div className="min-w-0 text-left">
+                      <p className="font-semibold text-foreground truncate">{contact.name}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{contact.contact}</p>
+                      {contact.sourceLabel && (
+                        <p className="text-[10px] font-semibold text-accent mt-0.5 truncate">{contact.sourceLabel}</p>
+                      )}
+                    </div>
+                    <Badge variant="outline" className="shrink-0 text-[9px] uppercase tracking-wide">Invite</Badge>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* MEMBER / INVITATION EDIT DIALOG MODAL */}
       <Dialog open={editingMember !== null} onOpenChange={(open) => !open && setEditingMember(null)}>
@@ -1892,9 +2619,9 @@ const GroupsHome = () => {
           </div>
 
           <div className="space-y-2">
-            <h3 className="font-display text-lg font-bold text-foreground">Remove from Clic</h3>
+            <h3 className="font-display text-lg font-bold text-foreground">Remove from Group</h3>
             <p className="text-xs text-muted-foreground">
-              Are you sure you want to remove <strong className='font-semibold text-black'>{removingItem?.name}</strong>? This action cannot be undone.
+              Are you sure you want to remove <strong>{removingItem?.name}</strong>? This action cannot be undone.
             </p>
           </div>
 
@@ -2058,321 +2785,207 @@ const GroupsHome = () => {
         </DialogContent>
       </Dialog>
 
-      {/* GROUP CREATION: IMPORT FROM CLICS DIALOG */}
-      <Dialog
-        open={isGroupContactDialogOpen}
-        onOpenChange={(open) => {
-          setIsGroupContactDialogOpen(open);
-          if (!open) {
-            setSelectedImportClicGroup(null);
-            setImportSearchInput('');
-          }
-        }}
-      >
-        <DialogContent className="w-[90%] max-w-[440px] rounded-3xl p-6 bg-card gap-4">
-          {!selectedImportClicGroup ? (
-            /* STEP 1: SELECT A CLIC GROUP */
-            <>
-              <DialogHeader className="text-left font-display">
-                <DialogTitle className="text-lg font-bold text-foreground">Import from Clics</DialogTitle>
-                <DialogDescription className="text-xs text-muted-foreground">
-                  Select a Clic group to view its members.
-                </DialogDescription>
-              </DialogHeader>
-
-              {/* Search Box */}
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  type="text"
-                  placeholder="Search Clic groups..."
-                  value={importSearchInput}
-                  onChange={(e) => setImportSearchInput(e.target.value)}
-                  className="pl-9 pr-8 h-10 rounded-xl text-xs"
-                />
-                {importSearchInput && (
-                  <button
-                    type="button"
-                    onClick={() => setImportSearchInput('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Clic Groups List calling api/clics */}
-              <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
-                {groups.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-6">No Clics found.</p>
-                ) : (
-                  groups
-                    .filter(g => !importSearchInput.trim() || g.name.toLowerCase().includes(importSearchInput.trim().toLowerCase()))
-                    .map((group: any) => {
-                      const targetId = group.id || group.clicId;
-                      const isLoadingThis = loadingImportGroupId === targetId;
-
-                      return (
-                        <div
-                          key={targetId}
-                          onClick={async () => {
-                            setLoadingImportGroupId(targetId);
-                            try {
-                              const detail = await getClic(targetId);
-                              setSelectedImportClicGroup(detail || group);
-                            } catch {
-                              setSelectedImportClicGroup(group);
-                            } finally {
-                              setLoadingImportGroupId(null);
-                            }
-                          }}
-                          className="flex items-center justify-between p-3.5 rounded-2xl border border-border bg-card hover:border-accent/40 hover:shadow-sm cursor-pointer transition-all text-xs"
-                        >
-                          <div className="min-w-0 pr-2">
-                            <div className="flex items-center gap-2">
-                              <p className="font-bold text-foreground truncate">{group.name}</p>
-                              {group.role === 'admin' && (
-                                <span className="text-[9px] font-extrabold bg-[#126989]/15 text-[#126989] border border-[#126989]/20 px-1.5 py-0.5 rounded uppercase">
-                                  Admin
-                                </span>
-                              )}
-                            </div>
-                            {group.description && <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{group.description}</p>}
-                            <p className="text-[10px] text-accent font-semibold mt-0.5">
-                              {(group.members?.length || group.maxMembers || 0)} Members
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1 text-accent font-bold text-xs shrink-0">
-                            {isLoadingThis ? (
-                              <Loader2 className="h-4 w-4 animate-spin text-accent" />
-                            ) : (
-                              <span>View &gt;</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
-                )}
-              </div>
-            </>
-          ) : (
-            /* STEP 2: SELECT MEMBERS FROM SELECTED CLIC GROUP */
-            <>
-              <div className="flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => setSelectedImportClicGroup(null)}
-                  className="text-xs text-muted-foreground hover:text-foreground font-bold flex items-center gap-1"
-                >
-                  &larr; Back to Clics
-                </button>
-              </div>
-
-              <DialogHeader className="text-left font-display">
-                <DialogTitle className="text-lg font-bold text-foreground">{selectedImportClicGroup.name}</DialogTitle>
-                <DialogDescription className="text-xs text-muted-foreground">
-                  Select members to add to your new Clic.
-                </DialogDescription>
-              </DialogHeader>
-
-              {/* Members List */}
-              <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
-                {(!selectedImportClicGroup.members || selectedImportClicGroup.members.length === 0) ? (
-                  <p className="text-xs text-muted-foreground text-center py-6">No members listed in this Clic.</p>
-                ) : (
-                  selectedImportClicGroup.members.map((member: any, idx: number) => {
-                    const memberName = member.name || member.displayName || 'Member';
-                    const contactStr = member.email || member.phone || member.phoneNumber || (member.contact?.includes('@') ? member.contact : '') || 'N/A';
-                    const isAdded = addedGroupMembers.some(m => m.contact === contactStr || m.name === memberName);
-
-                    return (
-                      <div
-                        key={member.id || member.memberId || idx}
-                        onClick={() => {
-                          if (isAdded) {
-                            setAddedGroupMembers(prev => prev.filter(m => m.contact !== contactStr && m.name !== memberName));
-                          } else {
-                            setAddedGroupMembers(prev => [...prev, { name: memberName, contact: contactStr }]);
-                          }
-                        }}
-                        className={`flex items-center justify-between p-3.5 rounded-2xl border cursor-pointer transition-all text-xs ${isAdded
-                          ? 'border-accent bg-accent/5 ring-1 ring-accent/30'
-                          : 'border-border bg-card hover:border-accent/40'
-                        }`}
-                      >
-                        <div className="min-w-0 pr-2">
-                          <p className="font-bold text-foreground truncate">{memberName}</p>
-                          <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{formatEmailForDisplay(contactStr)}</p>
-                        </div>
-                        <button
-                          type="button"
-                          className={`h-8 px-3.5 text-[10px] font-extrabold uppercase tracking-wider rounded-full border transition-all shrink-0 ${isAdded
-                            ? 'bg-accent text-accent-foreground border-accent shadow-sm'
-                            : 'bg-background hover:bg-muted text-foreground border-border'
-                          }`}
-                        >
-                          {isAdded ? 'Selected' : 'Select'}
-                        </button>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              <Button
-                onClick={() => {
-                  setSelectedImportClicGroup(null);
-                  setIsGroupContactDialogOpen(false);
-                }}
-                className="w-full h-11 rounded-xl text-xs font-bold bg-accent text-accent-foreground mt-1 shadow-md"
-              >
-                Done
-              </Button>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* GROUP CREATION: ADD INDIVIDUAL DIALOG */}
-      <Dialog open={isManualAddOpen} onOpenChange={setIsManualAddOpen}>
-        <DialogContent className="w-[90%] max-w-[400px] rounded-3xl p-6 bg-card gap-4">
+      {/* GROUP CREATION: ADD FRIEND DIALOG */}
+      <Dialog open={isManualAddOpen} onOpenChange={(open) => {
+        setIsManualAddOpen(open);
+        if (!open) resetManualFriendForm();
+      }}>
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-[420px] max-h-[calc(100svh-2rem)] overflow-y-auto rounded-3xl p-6 bg-card gap-4">
           <DialogHeader className="text-left font-display">
-            <DialogTitle className="text-lg font-bold text-foreground">Add Member Manually</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-foreground">Add Friends</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Manually input a new participant's name and contact details to invite them.
+              Input new friend details. We will send invites to them whether they exist on our platform or not.
             </DialogDescription>
           </DialogHeader>
 
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const trimmedName = manualName.trim();
-              const trimmedEmail = manualEmail.trim();
-              const trimmedPhone = manualPhone.trim();
+          <div className="space-y-4">
+            {addedGroupMembers.length > 0 && (
+              <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Selected Friends</p>
+                  <Badge variant="outline" className="text-[9px] uppercase tracking-wide">
+                    {addedGroupMembers.length} selected
+                  </Badge>
+                </div>
+                <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                  {addedGroupMembers.map((friend, idx) => (
+                    <div key={`${friend.platformUserId || friend.email || friend.phoneNumber || friend.contact}_${idx}`} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2 text-xs shadow-sm">
+                      <div className="min-w-0">
+                        <p className="truncate font-bold text-foreground">{friend.name}</p>
+                        <p className="truncate text-[10px] text-muted-foreground">
+                          {[friend.email, friend.phoneNumber].filter(Boolean).join(' - ') || friend.contact}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAddedGroupMembers(prev => prev.filter((_, itemIdx) => itemIdx !== idx))}
+                        className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                        title={`Remove ${friend.name}`}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-              if (!trimmedName) {
-                toast.error("Please enter a full name.");
-                return;
-              }
+            <div className="space-y-3 rounded-2xl border border-border bg-muted/20 p-3">
+              <div className="grid grid-cols-1 gap-2">
+                <Input
+                  placeholder="Full name"
+                  value={manualName}
+                  onChange={e => {
+                    setManualName(e.target.value);
+                    setSelectedManualFriend(null);
+                  }}
+                  className="h-10 rounded-xl text-xs"
+                />
+                <Input
+                  type="email"
+                  placeholder="Email address"
+                  value={manualEmail}
+                  onChange={e => {
+                    setManualEmail(e.target.value);
+                    setSelectedManualFriend(null);
+                  }}
+                  className="h-10 rounded-xl text-xs"
+                />
+                <Input
+                  type="tel"
+                  placeholder="Phone number"
+                  value={manualPhone}
+                  onChange={e => {
+                    setManualPhone(e.target.value);
+                    setSelectedManualFriend(null);
+                  }}
+                  className="h-10 rounded-xl text-xs"
+                />
+              </div>
 
-              if (trimmedName.length < 2) {
-                toast.error("Full name must be at least 2 characters long.");
-                return;
-              }
-
-              if (!trimmedEmail) {
-                toast.error("Please enter an email address.");
-                return;
-              }
-
-              if (!isValidEmail(trimmedEmail)) {
-                toast.error("Please enter a valid email address (e.g. user@example.com).");
-                return;
-              }
-
-              if (!trimmedPhone) {
-                toast.error("Please enter a phone number.");
-                return;
-              }
-
-              if (!isValidPhone(trimmedPhone)) {
-                toast.error("Phone number must be exactly 11 digits (e.g. 08012345678 or +234 801 234 5678).");
-                return;
-              }
-
-              const normalizedPhone = formatNigerianPhoneNumber(trimmedPhone);
-
-              const isDuplicate = addedGroupMembers.some(m =>
-                (m.email && m.email.toLowerCase() === trimmedEmail.toLowerCase()) ||
-                (m.phone && formatNigerianPhoneNumber(m.phone) === normalizedPhone)
-              );
-
-              if (isDuplicate) {
-                toast.error("A member with this email address or phone number is already added.");
-                return;
-              }
-
-              const primaryContact = trimmedEmail;
-              setAddedGroupMembers(prev => [
-                ...prev,
-                {
-                  name: trimmedName,
-                  contact: primaryContact,
-                  email: trimmedEmail,
-                  phone: normalizedPhone,
-                }
-              ]);
-              setManualName('');
-              setManualEmail('');
-              setManualPhone('');
-              setIsManualAddOpen(false);
-              toast.success(`Added ${trimmedName} to clic list.`);
-            }}
-            className="space-y-4"
-          >
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                Full Name <span className="text-destructive">*</span>
-              </label>
-              <Input
-                placeholder="e.g. John Doe"
-                value={manualName}
-                onChange={e => setManualName(e.target.value)}
-                className="h-11 rounded-xl text-xs"
-                required
-              />
+              {selectedManualFriend && (
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-[#126989]/20 bg-[#126989]/5 px-3 py-2 text-[10px]">
+                  <span className="font-semibold text-[#126989]">Selected platform profile: {selectedManualFriend.fullName}</span>
+                  <button type="button" className="font-bold text-muted-foreground hover:text-foreground" onClick={() => setSelectedManualFriend(null)}>
+                    Clear
+                  </button>
+                </div>
+              )}
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                Email Address <span className="text-destructive">*</span>
-              </label>
-              <Input
-                placeholder="e.g. john@email.com"
-                type="email"
-                value={manualEmail}
-                onChange={e => setManualEmail(e.target.value)}
-                className="h-11 rounded-xl text-xs"
-                required
-              />
-            </div>
+            {hasManualFriendLookupInput && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Matching Platform Profiles</p>
+                  {manualFriendSearchQuery.isFetching && <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />}
+                </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                Phone Number <span className="text-destructive">*</span>
-              </label>
-              <Input
-                placeholder="e.g. +234 801 234 5678"
-                type="tel"
-                value={manualPhone}
-                onChange={e => setManualPhone(e.target.value)}
-                className="h-11 rounded-xl text-xs"
-                required
-              />
+                <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
+                  {manualFriendSearchQuery.isLoading ? (
+                    <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-muted-foreground">Searching profiles...</p>
+                  ) : manualFriendSearchQuery.isError ? (
+                    <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-rose-600">Unable to search platform users. Try again.</p>
+                  ) : manualFriendMatches.length === 0 ? (
+                    <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-muted-foreground">No platform profile found for this email or phone.</p>
+                  ) : (
+                    manualFriendMatches.map(friend => {
+                      const isSelected = selectedManualFriend?.userId === friend.userId;
+
+                      return (
+                        <button
+                          key={friend.userId}
+                          type="button"
+                          onClick={() => handleSelectManualFriend(friend)}
+                          className={`flex w-full items-center justify-between rounded-xl border p-3 text-left text-xs transition-all ${isSelected
+                            ? 'border-[#126989] bg-[#126989]/10'
+                            : 'border-border bg-card hover:border-accent hover:bg-accent/5'
+                            }`}
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-bold text-foreground">{friend.fullName}</p>
+                            <p className="truncate text-[10px] text-muted-foreground mt-0.5">
+                              {friend.email || 'Email hidden'}
+                            </p>
+                          </div>
+                          <Badge variant={isSelected ? 'default' : 'outline'} className="text-[9px] uppercase tracking-wide">
+                            {isSelected ? 'Selected' : 'Select'}
+                          </Badge>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Suggested Contacts</p>
+              {isLoadingSuggestedContacts ? (
+                <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-muted-foreground">Loading suggested contacts...</p>
+              ) : hasSuggestedContactsError && importablePlatformUsers.length === 0 ? (
+                <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-rose-600">Unable to load your circle, Clic, or group-goal contacts right now.</p>
+              ) : importablePlatformUsers.length === 0 ? (
+                <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-muted-foreground">No eligible contacts found from Clics, circles, or group goals you created.</p>
+              ) : (
+                <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                  {importablePlatformUsers.map((contact, idx) => {
+                    const candidate = toAddedGroupMember(contact);
+                    const isSelected = isGroupMemberAlreadyAdded(candidate);
+                    const canAdd = !!candidate.platformUserId || !!candidate.email || !!candidate.phoneNumber;
+
+                    return (
+                      <button
+                        key={`${contact.platformUserId || contact.contact}_${idx}`}
+                        type="button"
+                        onClick={() => handleAddCreateContact(contact)}
+                        disabled={!canAdd || isSelected}
+                        className={`flex w-full items-center justify-between gap-3 p-3 rounded-xl border bg-card cursor-pointer transition-all text-xs disabled:cursor-not-allowed disabled:opacity-60 ${isSelected
+                          ? 'border-accent bg-accent/5'
+                          : 'border-border hover:border-accent hover:bg-accent/5'
+                          }`}
+                      >
+                        <div className="min-w-0 text-left">
+                          <p className="font-semibold text-foreground truncate">{contact.name}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{contact.contact}</p>
+                          {contact.sourceLabel && (
+                            <p className="text-[10px] font-semibold text-accent mt-0.5 truncate">{contact.sourceLabel}</p>
+                          )}
+                        </div>
+                        <Badge variant={isSelected ? 'default' : 'outline'} className="shrink-0 text-[9px] uppercase tracking-wide">
+                          {isSelected ? 'Selected' : canAdd ? 'Add' : 'No Contact'}
+                        </Badge>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2.5 pt-2">
               <Button
-                type="button"
                 variant="outline"
                 onClick={() => {
                   setIsManualAddOpen(false);
-                  setManualName('');
-                  setManualEmail('');
-                  setManualPhone('');
+                  resetManualFriendForm();
                 }}
                 className="h-11 flex-1 rounded-xl text-xs"
               >
                 Cancel
               </Button>
               <Button
-                type="submit"
+                onClick={handleInviteManualFriend}
+                disabled={manualFriendSearchQuery.isFetching}
                 className="h-11 flex-1 rounded-xl text-xs font-bold bg-accent text-accent-foreground"
               >
-                Add Member
+                {manualFriendSearchQuery.isFetching ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    Checking...
+                  </>
+                ) : manualName.trim() || manualEmail.trim() || manualPhone.trim() || selectedManualFriend ? 'Add to List' : addedGroupMembers.length > 0 ? 'Done' : 'Add to List'}
               </Button>
             </div>
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
 

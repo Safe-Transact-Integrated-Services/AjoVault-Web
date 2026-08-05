@@ -113,7 +113,7 @@ const mapClicMembers = (rawMembers: any[] = []): ClicMemberDetail[] =>
 
 export const getClics = async (page: number | any = 1, pageSize: number = 50): Promise<ClicGroup[]> => {
   const pageNum = typeof page === 'number' && !isNaN(page) ? page : 1;
-  const sizeNum = typeof pageSize === 'number' && !isNaN(pageSize) ? Math.min(pageSize, 10) : 10;
+  const sizeNum = typeof pageSize === 'number' && !isNaN(pageSize) ? pageSize : 50;
 
   const queryParams = new URLSearchParams({
     page: pageNum.toString(),
@@ -122,34 +122,7 @@ export const getClics = async (page: number | any = 1, pageSize: number = 50): P
   const response = await apiRequest<any>(`/api/clics?${queryParams.toString()}`);
   const rawList = Array.isArray(response)
     ? response
-    : Array.isArray(response?.data)
-      ? response.data
-      : Array.isArray(response?.items)
-        ? response.items
-        : Array.isArray(response?.data?.items)
-          ? response.data.items
-          : Array.isArray(response?.result)
-            ? response.result
-            : Array.isArray(response?.result?.items)
-              ? response.result.items
-              : [];
-
-  return rawList.map((rawItem: any, idx: number) => {
-    const item = (rawItem && typeof rawItem === 'object' && ('data' in rawItem || 'result' in rawItem))
-      ? (rawItem.data || rawItem.result || rawItem)
-      : rawItem;
-
-    const rawMembers = Array.isArray(item.members)
-      ? item.members
-      : Array.isArray(item.participants)
-        ? item.participants
-        : Array.isArray(item.clicMembers)
-          ? item.clicMembers
-          : Array.isArray(item.userMembers)
-            ? item.userMembers
-            : Array.isArray(item.data?.members)
-              ? item.data.members
-              : [];
+    : (Array.isArray(response?.items) ? response.items : []);
 
     return {
       ...item,
@@ -229,30 +202,7 @@ export const getClic = async (id: string): Promise<ClicGroupDetail> => {
 
   const members = mapClicMembers(acceptedRawMembers);
 
-  const pendingMemberInvitations: any[] = pendingRawMembers.map((m: any, idx: number) => {
-    const contact = m.email || m.phoneNumber || m.phone || '';
-    return {
-      id: m.memberId || m.id || `pending_m_${idx}`,
-      invitationId: m.memberId || m.id,
-      clicId: id,
-      invitedUserId: m.userId,
-      platformUserId: m.userId,
-      inviteeName: m.displayName || m.fullName || m.name || 'Invitee',
-      email: m.email || (contact.includes('@') ? contact : 'N/A'),
-      phone: m.phoneNumber || m.phone || (!contact.includes('@') ? contact : 'N/A'),
-      phoneNumber: m.phoneNumber || m.phone || (!contact.includes('@') ? contact : 'N/A'),
-      inviteeContact: contact,
-      memberContact: contact,
-      channel: m.email ? 'email' : 'sms',
-      status: 'pending',
-      reinviteCount: 0,
-      createdAt: m.joinedAtUtc || new Date().toISOString(),
-    };
-  });
-
-  const combinedRawInvitations = [...rawInvitations, ...pendingMemberInvitations];
-
-  const invitations: ClicInvitationDetail[] = await Promise.all(combinedRawInvitations.map(async (inv: any, idx: number) => {
+  const invitations: ClicInvitationDetail[] = await Promise.all(rawInvitations.map(async (inv: any, idx: number) => {
     const rawContact =
       inv.memberContact ||
       inv.inviteeContact ||
@@ -283,7 +233,6 @@ export const getClic = async (id: string): Promise<ClicGroupDetail> => {
         if (match) {
           matchedPlatformUserId = match.userId;
           if (match.email) extractedEmail = match.email;
-          if (match.phoneNumber) extractedPhone = match.phoneNumber;
         }
       } catch {
         // Continue with extracted fields
@@ -305,7 +254,7 @@ export const getClic = async (id: string): Promise<ClicGroupDetail> => {
       memberContact: rawContact || extractedEmail || extractedPhone,
       channel: inv.channel || 'platform',
       status: inv.status || 'pending',
-      reinviteCount: inv.reinviteCount ?? inv.reInvitesCount ?? inv.reinvite_count ?? inv.attemptsCount ?? 0,
+      reinviteCount: inv.reinviteCount ?? 0,
       createdAt: inv.createdAtUtc || inv.createdAt || new Date().toISOString(),
     };
   }));
@@ -315,7 +264,7 @@ export const getClic = async (id: string): Promise<ClicGroupDetail> => {
   const groupedInvitesMap = new Map<string, { main: ClicInvitationDetail; totalAttempts: number }>();
 
   for (const inv of invitations) {
-    const key = (inv.invitedUserId || inv.platformUserId || inv.email || inv.phone || inv.memberContact || inv.inviteeContact || inv.inviteeName || '').toLowerCase().trim();
+    const key = (inv.platformUserId || inv.email || inv.phone || inv.inviteeName || '').toLowerCase().trim();
     if (!key || key === 'n/a' || key === 'invitee') {
       groupedInvitesMap.set(inv.id, { main: inv, totalAttempts: Math.max(1, (inv.reinviteCount ?? 0) + 1) });
       continue;
@@ -390,16 +339,49 @@ export interface ClicInvitationItem {
 }
 
 export const getMyClicInvitations = async (): Promise<ClicInvitationItem[]> => {
-  const response = await apiRequest<any[]>('/api/clics/invitations/me');
-  return (response || []).map((item, idx) => ({
-    ...item,
-    id: item.invitationId || item.id || `clic_inv_${idx}`,
-    invitationId: item.invitationId || item.id,
-    clicId: item.clicId || item.groupId || item.clic?.id,
-    groupName: item.groupName || item.clicName || item.clic?.name || item.name || 'Group',
-    inviterName: item.inviterName || item.invitedBy || item.inviter?.fullName || item.inviter?.name,
-    status: item.status || 'pending',
-  }));
+  const response = await apiRequest<any>('/api/clics/invitations/me');
+  const rawList = Array.isArray(response)
+    ? response
+    : Array.isArray(response?.data)
+      ? response.data
+      : Array.isArray(response?.items)
+        ? response.items
+        : Array.isArray(response?.data?.items)
+          ? response.data.items
+          : Array.isArray(response?.result)
+            ? response.result
+            : Array.isArray(response?.result?.items)
+              ? response.result.items
+              : [];
+
+  return rawList.map((item, idx) => {
+    const rawStatus = String(item.status || 'pending').trim().toLowerCase();
+    const status =
+      rawStatus === 'accepted'
+        ? 'accepted'
+        : rawStatus === 'rejected' || rawStatus === 'declined'
+          ? 'rejected'
+          : 'pending';
+
+    return {
+      ...item,
+      id: item.invitationId || item.id || `clic_inv_${idx}`,
+      invitationId: item.invitationId || item.id,
+      clicId: item.clicId || item.groupId || item.clic?.id || item.clic?.clicId,
+      groupName: item.groupName || item.clicName || item.clic?.name || item.name || 'Clic',
+      clicName: item.clicName || item.groupName || item.clic?.name || item.name || 'Clic',
+      inviterName:
+        item.inviterName ||
+        item.invitedBy ||
+        item.senderName ||
+        item.createdByName ||
+        item.inviter?.fullName ||
+        item.inviter?.name ||
+        item.createdBy?.fullName ||
+        item.createdBy?.name,
+      status,
+    };
+  });
 };
 
 export const acceptClicInvitation = async (clicId: string, invitationId: string): Promise<void> => {
@@ -494,6 +476,7 @@ export interface CreateClicInvitationInput {
   email?: string;
   phoneNumber?: string;
   channel?: string;
+  channels?: string[];
 }
 
 export const createClicInvitation = async (clicId: string, input: CreateClicInvitationInput): Promise<void> => {
@@ -508,6 +491,7 @@ export const createClicInvitation = async (clicId: string, input: CreateClicInvi
       email: input.email?.trim() || undefined,
       phoneNumber: input.phoneNumber?.trim() || undefined,
       channel: input.channel || undefined,
+      channels: input.channels && input.channels.length > 0 ? input.channels : undefined,
     },
   });
 };
