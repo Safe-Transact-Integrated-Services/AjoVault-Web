@@ -175,7 +175,6 @@ export const getClic = async (id: string): Promise<ClicGroupDetail> => {
         if (match) {
           matchedPlatformUserId = match.userId;
           if (match.email) extractedEmail = match.email;
-          if (match.phoneNumber) extractedPhone = match.phoneNumber;
         }
       } catch {
         // Continue with extracted fields

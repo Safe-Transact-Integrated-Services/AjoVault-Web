@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -313,7 +313,7 @@ interface PhoneContact {
 }
 
 type ClicInviteChannel = 'platform' | 'email' | 'sms';
-type CurrentAuthUser = { id?: string; email?: string; phone?: string; firstName?: string; lastName?: string } | null | undefined;
+type CurrentAuthUser = { id?: string; email?: string; phone?: string; phoneNumber?: string; firstName?: string; lastName?: string } | null | undefined;
 type AddedGroupMember = {
   name: string;
   contact: string;
@@ -327,9 +327,6 @@ const isValidEmail = (val: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test
 const normalizeNameForCompare = (val?: string) => (val || '').trim().replace(/\s+/g, ' ').toLowerCase();
 
 const normalizePhoneForCompare = (val?: string) => (val || '').replace(/\D/g, '');
-
-const formatFriendSourceFilterLabel = (val: string) =>
-  val === 'all' ? 'All' : val.replace(/^Clic: /, '').replace(/^Circle: /, '').replace(/^Group Goal: /, '');
 
 const isValidPhone = (val: string): boolean => {
   const digits = normalizePhoneForCompare(val);
@@ -347,7 +344,7 @@ const isLoggedInContact = (
   const contactPhone = normalizePhoneForCompare(contact.phoneNumber || (!contactValue.includes('@') ? contactValue : ''));
   const contactName = normalizeNameForCompare(contact.name);
   const userEmail = currentUser.email?.trim().toLowerCase();
-  const userPhone = normalizePhoneForCompare(currentUser.phone);
+  const userPhone = normalizePhoneForCompare(currentUser.phone || currentUser.phoneNumber);
   const userName = normalizeNameForCompare([currentUser.firstName, currentUser.lastName].filter(Boolean).join(' '));
 
   return (
@@ -376,16 +373,13 @@ const dedupePlatformUserResults = (results: PlatformUserSearchResult[][]) => {
 const findExactPlatformUserMatch = (
   users: PlatformUserSearchResult[],
   email?: string,
-  phoneNumber?: string,
   platformUserId?: string,
 ) => {
   const normalizedEmail = (email || '').trim().toLowerCase();
-  const normalizedPhone = normalizePhoneForCompare(phoneNumber);
 
   return users.find(user => (
     (platformUserId && user.userId === platformUserId) ||
-    (normalizedEmail && user.email?.trim().toLowerCase() === normalizedEmail) ||
-    (normalizedPhone && normalizePhoneForCompare(user.phoneNumber) === normalizedPhone)
+    (normalizedEmail && user.email?.trim().toLowerCase() === normalizedEmail)
   ));
 };
 
@@ -440,7 +434,7 @@ const sendClicInviteNotification = async ({
     const lookupTerms = [trimmedEmail, trimmedPhone].filter(Boolean);
     try {
       const lookupResults = await Promise.all(lookupTerms.map(term => searchPlatformUsers(term)));
-      matchedPlatformUser = findExactPlatformUserMatch(dedupePlatformUserResults(lookupResults), trimmedEmail, trimmedPhone) || null;
+      matchedPlatformUser = findExactPlatformUserMatch(dedupePlatformUserResults(lookupResults), trimmedEmail) || null;
       resolvedPlatformUserId = matchedPlatformUser?.userId;
     } catch {
       // If lookup fails, continue with email/SMS invite details.
@@ -448,7 +442,7 @@ const sendClicInviteNotification = async ({
   }
 
   const resolvedEmail = matchedPlatformUser?.email || trimmedEmail || undefined;
-  const resolvedPhone = matchedPlatformUser?.phoneNumber || trimmedPhone || undefined;
+  const resolvedPhone = trimmedPhone || undefined;
   const channels = getInviteChannels(!!resolvedPlatformUserId, resolvedEmail, resolvedPhone);
 
   if (channels.length === 0) {
@@ -470,15 +464,6 @@ const sendClicInviteNotification = async ({
     platformUser: matchedPlatformUser,
   };
 };
-
-const mockPhoneContacts: PhoneContact[] = [
-  { name: 'Chinedu O.', contact: 'chinedu@email.com', circleName: 'Youth Empowerment Club', adminOf: 'Youth Empowerment Club (Circle)', role: 'admin' },
-  { name: 'Tunde W.', contact: 'tunde@email.com', circleName: 'Tech Founders Cooperative', adminOf: 'Tech Founders Cooperative (Circle)', role: 'admin' },
-  { name: 'Zainab B.', contact: 'zainab@email.com', circleName: 'Youth Empowerment Club', role: 'member' },
-  { name: 'Bisi A.', contact: 'bisi@email.com', circleName: 'Lagos Investment Circle', adminOf: 'Lagos Real Estate Fund (Group Goal)', role: 'admin' },
-  { name: 'Kunle S.', contact: '+234 803 111 2222', circleName: 'Tech Founders Cooperative', role: 'member' },
-  { name: 'Halima F.', contact: 'halima@email.com', circleName: 'Youth Empowerment Club', adminOf: 'Youth Tech Hub (Group Goal)', role: 'admin' },
-];
 
 const homeTabs = ['all', 'admin', 'member', 'invitations'] as const;
 type HomeTab = typeof homeTabs[number];
@@ -550,6 +535,8 @@ const GroupsHome = () => {
   const [newGroupAmount, setNewGroupAmount] = useState('');
   const [newGroupFreq, setNewGroupFreq] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
   const [newGroupMaxMembers, setNewGroupMaxMembers] = useState('10');
+  const [isCreatingClic, setIsCreatingClic] = useState(false);
+  const isCreatingClicRef = useRef(false);
 
   // Group creation members state
   const [addedGroupMembers, setAddedGroupMembers] = useState<AddedGroupMember[]>([]);
@@ -558,142 +545,126 @@ const GroupsHome = () => {
   const [manualEmail, setManualEmail] = useState('');
   const [manualPhone, setManualPhone] = useState('');
   const [selectedManualFriend, setSelectedManualFriend] = useState<PlatformUserSearchResult | null>(null);
-  const [friendSourceSearchInput, setFriendSourceSearchInput] = useState('');
-  const [activeFriendSourceSearchQuery, setActiveFriendSourceSearchQuery] = useState('');
-  const [selectedFriendSourceFilter, setSelectedFriendSourceFilter] = useState('all');
 
-  const importablePlatformUsers = useMemo(() => {
-    const userList: PhoneContact[] = [];
-    const seenContacts = new Set<string>();
-
-    groups.forEach(g => {
-      (g.members || []).forEach(m => {
-        const email = m.email || ((m as any).contact?.includes('@') ? (m as any).contact : '');
-        const phoneNumber = m.phone || (m as any).phoneNumber || ((m as any).contact && !(m as any).contact.includes('@') ? (m as any).contact : '');
-        const contactStr = email || phoneNumber || '';
-        if (!contactStr) return;
-
-        const key = `${m.name || (m as any).displayName}_${contactStr}`;
-        if (!seenContacts.has(key)) {
-          seenContacts.add(key);
-          const isMemberAdmin = m.role === 'admin' || (g.role === 'admin' && m.name === 'Abdul-azeez Baruwa');
-          userList.push({
-            name: m.name || (m as any).displayName || 'Platform User',
-            contact: contactStr,
-            email: email || undefined,
-            phoneNumber: phoneNumber || undefined,
-            platformUserId: (m as any).userId || (m as any).platformUserId,
-            circleName: g.name,
-            adminOf: isMemberAdmin ? `${g.name} (Circle)` : undefined,
-            role: m.role || 'member',
-          });
-        }
-      });
-    });
-
-    if (userList.length > 0) {
-      return userList;
-    }
-
-    return mockPhoneContacts;
-  }, [groups]);
-
-  const manualEmailQuery = manualEmail.trim();
-  const manualPhoneQuery = manualPhone.trim();
-  const hasManualFriendLookupInput = manualEmailQuery.length >= 2 || normalizePhoneForCompare(manualPhoneQuery).length >= 2;
-
-  const manualFriendSearchQuery = useQuery({
-    queryKey: ['clic-create-friend-platform-users', manualEmailQuery, manualPhoneQuery],
-    queryFn: async () => {
-      const terms = [manualEmailQuery, manualPhoneQuery].filter(term => term.length >= 2);
-      const resultSets = await Promise.all(terms.map(term => searchPlatformUsers(term)));
-      return dedupePlatformUserResults(resultSets);
-    },
-    enabled: isManualAddOpen && hasManualFriendLookupInput,
-    retry: 1,
-  });
-
-  const manualFriendMatches = manualFriendSearchQuery.data || [];
-
-  const circlesForFriendSuggestionsQuery = useQuery({
-    queryKey: circlesKeys.list,
-    queryFn: getCircles,
-    enabled: isManualAddOpen,
-    retry: 1,
-  });
-
-  const groupGoalsForFriendSuggestionsQuery = useQuery({
-    queryKey: groupGoalsKeys.list,
-    queryFn: getGroupGoals,
-    enabled: isManualAddOpen,
-    retry: 1,
-  });
+  const shouldLoadSuggestedContacts = isManualAddOpen || isContactDialogOpen;
 
   const currentUserDisplayName = useMemo(
     () => [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim(),
     [user?.firstName, user?.lastName],
   );
 
-  const groupGoalsCreatedByUser = useMemo(() => {
+  const circlesForSuggestedContactsQuery = useQuery({
+    queryKey: circlesKeys.list,
+    queryFn: getCircles,
+    enabled: shouldLoadSuggestedContacts,
+    retry: 1,
+  });
+
+  const groupGoalsForSuggestedContactsQuery = useQuery({
+    queryKey: groupGoalsKeys.list,
+    queryFn: getGroupGoals,
+    enabled: shouldLoadSuggestedContacts,
+    retry: 1,
+  });
+
+  const createdCircleSummaries = useMemo(
+    () => (circlesForSuggestedContactsQuery.data || []).filter(circle => circle.role === 'admin'),
+    [circlesForSuggestedContactsQuery.data],
+  );
+
+  const createdGroupGoalSummaries = useMemo(() => {
     const currentUserName = normalizeNameForCompare(currentUserDisplayName);
 
-    return (groupGoalsForFriendSuggestionsQuery.data || []).filter(goal => (
+    return (groupGoalsForSuggestedContactsQuery.data || []).filter(goal => (
       goal.createdByUserId === user?.id ||
       goal.role === 'admin' ||
       (!!currentUserName && normalizeNameForCompare(goal.creatorName) === currentUserName)
     ));
-  }, [currentUserDisplayName, groupGoalsForFriendSuggestionsQuery.data, user?.id]);
+  }, [currentUserDisplayName, groupGoalsForSuggestedContactsQuery.data, user?.id]);
 
-  const createFriendSourceIds = useMemo(() => ({
-    circleIds: (circlesForFriendSuggestionsQuery.data || []).map(circle => circle.id).filter(Boolean),
-    groupGoalIds: groupGoalsCreatedByUser.map(goal => goal.id).filter(Boolean),
-  }), [circlesForFriendSuggestionsQuery.data, groupGoalsCreatedByUser]);
-
-  const friendSourceDetailsQuery = useQuery({
-    queryKey: ['clic-create-friend-source-details', createFriendSourceIds.circleIds, createFriendSourceIds.groupGoalIds],
+  const circleDetailsForSuggestedContactsQuery = useQuery({
+    queryKey: ['clic-suggested-contacts-circle-details', createdCircleSummaries.map(circle => circle.id)],
     queryFn: async () => {
-      const [circleResults, groupGoalResults] = await Promise.all([
-        Promise.allSettled(createFriendSourceIds.circleIds.map(id => getCircle(id))),
-        Promise.allSettled(createFriendSourceIds.groupGoalIds.map(id => getGroupGoal(id))),
-      ]);
+      const results = await Promise.allSettled(createdCircleSummaries.map(circle => getCircle(circle.id)));
 
-      return {
-        circles: circleResults.reduce<CircleDetail[]>((items, result) => {
-          if (result.status === 'fulfilled') {
-            items.push(result.value);
-          }
-          return items;
-        }, []),
-        groupGoals: groupGoalResults.reduce<GroupGoalDetail[]>((items, result) => {
-          if (result.status === 'fulfilled') {
-            items.push(result.value);
-          }
-          return items;
-        }, []),
-      };
+      return results.reduce<CircleDetail[]>((items, result) => {
+        if (result.status === 'fulfilled') {
+          items.push(result.value);
+        }
+        return items;
+      }, []);
     },
-    enabled: isManualAddOpen && (createFriendSourceIds.circleIds.length > 0 || createFriendSourceIds.groupGoalIds.length > 0),
+    enabled: shouldLoadSuggestedContacts && createdCircleSummaries.length > 0,
     retry: 1,
   });
 
-  const createFriendSuggestions = useMemo(() => {
+  const groupGoalDetailsForSuggestedContactsQuery = useQuery({
+    queryKey: ['clic-suggested-contacts-group-goal-details', createdGroupGoalSummaries.map(goal => goal.id)],
+    queryFn: async () => {
+      const results = await Promise.allSettled(createdGroupGoalSummaries.map(goal => getGroupGoal(goal.id)));
+
+      return results.reduce<GroupGoalDetail[]>((items, result) => {
+        if (result.status === 'fulfilled') {
+          items.push(result.value);
+        }
+        return items;
+      }, []);
+    },
+    enabled: shouldLoadSuggestedContacts && createdGroupGoalSummaries.length > 0,
+    retry: 1,
+  });
+
+  const isLoadingSuggestedContacts = shouldLoadSuggestedContacts && (
+    circlesForSuggestedContactsQuery.isLoading ||
+    groupGoalsForSuggestedContactsQuery.isLoading ||
+    circleDetailsForSuggestedContactsQuery.isLoading ||
+    circleDetailsForSuggestedContactsQuery.isFetching ||
+    groupGoalDetailsForSuggestedContactsQuery.isLoading ||
+    groupGoalDetailsForSuggestedContactsQuery.isFetching
+  );
+
+  const hasSuggestedContactsError = (
+    circlesForSuggestedContactsQuery.isError ||
+    groupGoalsForSuggestedContactsQuery.isError ||
+    circleDetailsForSuggestedContactsQuery.isError ||
+    groupGoalDetailsForSuggestedContactsQuery.isError
+  );
+
+  const importablePlatformUsers = useMemo(() => {
     const suggestions = new Map<string, PhoneContact>();
 
     const addSuggestion = (contact: PhoneContact) => {
-      if (!contact.name.trim() || isLoggedInContact(contact, user)) {
+      const name = contact.name?.trim();
+      const email = contact.email?.trim();
+      const phoneNumber = contact.phoneNumber?.trim();
+      const contactValue = contact.contact?.trim() || email || phoneNumber || '';
+
+      if (!name || (!contact.platformUserId && !email && !phoneNumber)) {
         return;
       }
 
-      const key = contact.platformUserId
-        ? `user:${contact.platformUserId}`
-        : contact.email
-          ? `email:${contact.email.toLowerCase()}`
-          : contact.phoneNumber
-            ? `phone:${normalizePhoneForCompare(contact.phoneNumber)}`
-            : `name:${normalizeNameForCompare(contact.name)}`;
+      const candidate: PhoneContact = {
+        ...contact,
+        name,
+        contact: contactValue,
+        email,
+        phoneNumber,
+      };
+
+      if (isLoggedInContact(candidate, user)) {
+        return;
+      }
+
+      const key = candidate.platformUserId
+        ? `user:${candidate.platformUserId}`
+        : email
+          ? `email:${email.toLowerCase()}`
+          : phoneNumber
+            ? `phone:${normalizePhoneForCompare(phoneNumber)}`
+            : `name:${normalizeNameForCompare(name)}`;
 
       if (!suggestions.has(key)) {
-        suggestions.set(key, contact);
+        suggestions.set(key, candidate);
       }
     };
 
@@ -724,24 +695,26 @@ const GroupsHome = () => {
           });
       });
 
-    (friendSourceDetailsQuery.data?.circles || []).forEach(circle => {
-      circle.members.forEach(member => {
-        addSuggestion({
-          name: member.name,
-          contact: member.email || member.phoneNumber || '',
-          email: member.email,
-          phoneNumber: member.phoneNumber,
-          platformUserId: member.userId,
-          circleName: circle.name,
-          sourceId: circle.id,
-          sourceLabel: `Circle: ${circle.name}`,
-          sourceType: 'circle',
-          role: member.role,
+    (circleDetailsForSuggestedContactsQuery.data || []).forEach(circle => {
+      circle.members
+        .filter(member => isJoinedMember(member))
+        .forEach(member => {
+          addSuggestion({
+            name: member.name,
+            contact: member.email || member.phoneNumber || '',
+            email: member.email,
+            phoneNumber: member.phoneNumber,
+            platformUserId: member.userId,
+            circleName: circle.name,
+            sourceId: circle.id,
+            sourceLabel: `Circle: ${circle.name}`,
+            sourceType: 'circle',
+            role: member.role,
+          });
         });
-      });
     });
 
-    (friendSourceDetailsQuery.data?.groupGoals || []).forEach(goal => {
+    (groupGoalDetailsForSuggestedContactsQuery.data || []).forEach(goal => {
       goal.members.forEach(member => {
         addSuggestion({
           name: member.name,
@@ -760,50 +733,24 @@ const GroupsHome = () => {
     });
 
     return Array.from(suggestions.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [friendSourceDetailsQuery.data, groups, user]);
+  }, [circleDetailsForSuggestedContactsQuery.data, groupGoalDetailsForSuggestedContactsQuery.data, groups, user]);
 
-  const availableFriendSourceFilterPills = useMemo(() => {
-    const sourceLabels = Array.from(new Set(
-      createFriendSuggestions
-        .map(contact => contact.sourceLabel)
-        .filter((label): label is string => !!label),
-    ));
+  const manualEmailQuery = manualEmail.trim();
+  const manualPhoneQuery = manualPhone.trim();
+  const hasManualFriendLookupInput = manualEmailQuery.length >= 2 || normalizePhoneForCompare(manualPhoneQuery).length >= 2;
 
-    return ['all', ...sourceLabels];
-  }, [createFriendSuggestions]);
+  const manualFriendSearchQuery = useQuery({
+    queryKey: ['clic-create-friend-platform-users', manualEmailQuery, manualPhoneQuery],
+    queryFn: async () => {
+      const terms = [manualEmailQuery, manualPhoneQuery].filter(term => term.length >= 2);
+      const resultSets = await Promise.all(terms.map(term => searchPlatformUsers(term)));
+      return dedupePlatformUserResults(resultSets);
+    },
+    enabled: isManualAddOpen && hasManualFriendLookupInput,
+    retry: 1,
+  });
 
-  const filteredCreateFriendSuggestions = useMemo(() => {
-    const query = activeFriendSourceSearchQuery.trim().toLowerCase();
-
-    return createFriendSuggestions.filter(contact => {
-      const matchesSearch = !query ||
-        contact.name.toLowerCase().includes(query) ||
-        (contact.contact && contact.contact.toLowerCase().includes(query)) ||
-        (contact.email && contact.email.toLowerCase().includes(query)) ||
-        (contact.phoneNumber && contact.phoneNumber.toLowerCase().includes(query)) ||
-        (contact.adminOf && contact.adminOf.toLowerCase().includes(query)) ||
-        (contact.circleName && contact.circleName.toLowerCase().includes(query)) ||
-        (contact.sourceLabel && contact.sourceLabel.toLowerCase().includes(query));
-
-      const matchesSource = selectedFriendSourceFilter === 'all' ||
-        contact.sourceLabel === selectedFriendSourceFilter;
-
-      return matchesSearch && matchesSource;
-    });
-  }, [activeFriendSourceSearchQuery, createFriendSuggestions, selectedFriendSourceFilter]);
-
-  const isLoadingCreateFriendSuggestions = (
-    circlesForFriendSuggestionsQuery.isLoading ||
-    groupGoalsForFriendSuggestionsQuery.isLoading ||
-    friendSourceDetailsQuery.isLoading ||
-    friendSourceDetailsQuery.isFetching
-  );
-
-  const hasCreateFriendSuggestionError = (
-    circlesForFriendSuggestionsQuery.isError ||
-    groupGoalsForFriendSuggestionsQuery.isError ||
-    friendSourceDetailsQuery.isError
-  );
+  const manualFriendMatches = manualFriendSearchQuery.data || [];
 
   // Invitation Maps
   const [invitationsMap, setInvitationsMap] = useState<Record<string, GroupInvitation[]>>({
@@ -998,9 +945,6 @@ const GroupsHome = () => {
     setManualEmail('');
     setManualPhone('');
     setSelectedManualFriend(null);
-    setFriendSourceSearchInput('');
-    setActiveFriendSourceSearchQuery('');
-    setSelectedFriendSourceFilter('all');
   };
 
   const toAddedGroupMember = (contact: {
@@ -1039,11 +983,11 @@ const GroupsHome = () => {
   const isGroupMemberAlreadyAdded = (candidate: AddedGroupMember) =>
     addedGroupMembers.some(member => isSameGroupMemberCandidate(candidate, member));
 
-  const handleAddSuggestedFriend = (contact: PhoneContact) => {
+  const handleAddCreateContact = (contact: PhoneContact) => {
     const candidate = toAddedGroupMember(contact);
 
     if (!candidate.platformUserId && !candidate.email && !candidate.phoneNumber) {
-      toast.error('This friend does not have contact details available yet.');
+      toast.error('This contact does not have contact details available yet.');
       return;
     }
 
@@ -1058,26 +1002,13 @@ const GroupsHome = () => {
     }
 
     setAddedGroupMembers(prev => [...prev, candidate]);
-    toast.success(`Added ${candidate.name} to invite list.`);
-  };
-
-  const handleToggleSuggestedFriend = (contact: PhoneContact) => {
-    const candidate = toAddedGroupMember(contact);
-
-    if (isGroupMemberAlreadyAdded(candidate)) {
-      setAddedGroupMembers(prev => prev.filter(member => !isSameGroupMemberCandidate(candidate, member)));
-      toast.info(`Removed ${candidate.name} from invite list.`);
-      return;
-    }
-
-    handleAddSuggestedFriend(contact);
+    toast.success(`Added ${candidate.name} to selected friends.`);
   };
 
   const handleSelectManualFriend = (friend: PlatformUserSearchResult) => {
     setSelectedManualFriend(friend);
     setManualName(friend.fullName || manualName);
     setManualEmail(friend.email || manualEmail);
-    setManualPhone(friend.phoneNumber || manualPhone);
   };
 
   const handleInviteManualFriend = () => {
@@ -1140,7 +1071,7 @@ const GroupsHome = () => {
     }
 
     const email = selectedManualFriend?.email || trimmedEmail || undefined;
-    const phoneNumber = selectedManualFriend?.phoneNumber || trimmedPhone || undefined;
+    const phoneNumber = trimmedPhone || undefined;
     const candidate = toAddedGroupMember({
       name: selectedManualFriend?.fullName || trimmedName,
       contact: email || phoneNumber || '',
@@ -1170,17 +1101,27 @@ const GroupsHome = () => {
   // Handle creation of a new group from form modal
   const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newGroupName.trim()) {
+    if (isCreatingClicRef.current) {
+      return;
+    }
+
+    const groupName = newGroupName.trim();
+    const groupDescription = newGroupDesc.trim();
+
+    if (!groupName) {
       toast.error('Please enter a group name.');
       return;
     }
+
+    isCreatingClicRef.current = true;
+    setIsCreatingClic(true);
 
     try {
       const invitedMembers = addedGroupMembers.filter(member => !isLoggedInContact(member, user));
 
       const newClic = await createClic({
-        name: newGroupName.trim(),
-        description: newGroupDesc.trim() || undefined,
+        name: groupName,
+        description: groupDescription || undefined,
         members: invitedMembers.map(m => ({
           platformUserId: m.platformUserId,
           displayName: m.name,
@@ -1203,9 +1144,12 @@ const GroupsHome = () => {
       setNewGroupMaxMembers('10');
       setAddedGroupMembers([]);
 
-      toast.success(`Clic "${newGroupName.trim()}" created successfully!`);
+      toast.success(`Clic "${groupName}" created successfully!`);
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Failed to create Clic. Please try again.'));
+    } finally {
+      isCreatingClicRef.current = false;
+      setIsCreatingClic(false);
     }
   };
 
@@ -1310,7 +1254,6 @@ const GroupsHome = () => {
     setSelectedInviteUser(user);
     setInviteName(user.fullName || inviteName);
     setInviteEmail(user.email || '');
-    setInvitePhone(user.phoneNumber || '');
   };
 
   const handleContactDialogOpenChange = (open: boolean) => {
@@ -1627,7 +1570,7 @@ const GroupsHome = () => {
         displayName,
         contact: trimmedEmail || trimmedPhone,
         email: trimmedEmail || selectedInviteUser?.email,
-        phoneNumber: trimmedPhone || selectedInviteUser?.phoneNumber,
+        phoneNumber: trimmedPhone || undefined,
         platformUser: selectedInviteUser,
         platformUserId: selectedInviteUser?.userId,
       });
@@ -1665,7 +1608,6 @@ const GroupsHome = () => {
             const searchResults = await searchPlatformUsers(lookupQuery);
             const matchedUser = searchResults.find(
               u => (u.email && inv.email && u.email.toLowerCase() === inv.email.toLowerCase()) ||
-                   (u.phoneNumber && inv.phone && u.phoneNumber.replace(/\s+/g, '') === inv.phone.replace(/\s+/g, '')) ||
                    (u.fullName && inv.inviteeName && u.fullName.toLowerCase() === inv.inviteeName.toLowerCase())
             ) || searchResults[0];
 
@@ -2360,7 +2302,13 @@ const GroupsHome = () => {
       )}
 
       {/* CREATE / DUPLICATE GROUP DIALOG MODAL FORM */}
-      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+      <Dialog
+        open={isCreateModalOpen}
+        onOpenChange={(open) => {
+          if (isCreatingClic) return;
+          setIsCreateModalOpen(open);
+        }}
+      >
         <DialogContent className="w-[92%] max-w-[450px] rounded-3xl p-6 gap-5 bg-card">
           <DialogHeader className="text-left font-display">
             <DialogTitle className="text-xl font-bold text-foreground">Create New Clic</DialogTitle>
@@ -2377,6 +2325,7 @@ const GroupsHome = () => {
                 placeholder="e.g. Lagos Investors Guild"
                 value={newGroupName}
                 onChange={e => setNewGroupName(e.target.value)}
+                disabled={isCreatingClic}
                 className="h-11 rounded-xl text-sm"
                 required
               />
@@ -2388,6 +2337,7 @@ const GroupsHome = () => {
                 placeholder="e.g. A community contribution group for friends"
                 value={newGroupDesc}
                 onChange={e => setNewGroupDesc(e.target.value)}
+                disabled={isCreatingClic}
                 className="h-11 rounded-xl text-sm"
               />
             </div>
@@ -2398,6 +2348,7 @@ const GroupsHome = () => {
               <button
                 type="button"
                 onClick={() => setIsManualAddOpen(true)}
+                disabled={isCreatingClic}
                 className="text-xs h-9 font-bold w-full flex items-center justify-center gap-1.5 border border-[#126989]/30 text-[#126989] hover:bg-[#126989]/5 rounded-xl transition-all"
               >
                 <Plus className="h-3.5 w-3.5" /> Add Friends
@@ -2415,7 +2366,8 @@ const GroupsHome = () => {
                       <button
                         type="button"
                         onClick={() => setAddedGroupMembers(prev => prev.filter((_, i) => i !== idx))}
-                        className="text-muted-foreground hover:text-destructive p-1 rounded-full hover:bg-muted"
+                        disabled={isCreatingClic}
+                        className="text-muted-foreground hover:text-destructive p-1 rounded-full hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
@@ -2433,15 +2385,22 @@ const GroupsHome = () => {
                   setIsCreateModalOpen(false);
                   setAddedGroupMembers([]);
                 }}
+                disabled={isCreatingClic}
                 className="h-11 flex-1 rounded-xl font-semibold"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
+                disabled={isCreatingClic}
                 className="h-11 flex-1 rounded-xl font-bold bg-accent text-accent-foreground"
               >
-                Create Clic
+                {isCreatingClic ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : 'Create Clic'}
               </Button>
             </div>
 
@@ -2540,7 +2499,7 @@ const GroupsHome = () => {
                         <div className="min-w-0">
                           <p className="truncate font-bold text-foreground">{user.fullName}</p>
                           <p className="truncate text-[10px] text-muted-foreground mt-0.5">
-                            {[user.email, user.phoneNumber].filter(Boolean).join(' - ') || 'Profile contact hidden'}
+                            {user.email || 'Email hidden'}
                           </p>
                         </div>
                         <Badge variant={isSelected ? 'default' : 'outline'} className="text-[9px] uppercase tracking-wide">
@@ -2556,23 +2515,34 @@ const GroupsHome = () => {
 
           <div className="space-y-2">
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Suggested Contacts</p>
-            <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
-              {importablePlatformUsers.slice(0, 6).map((contact, idx) => (
-                <button
-                  key={`${contact.contact}_${idx}`}
-                  type="button"
-                  onClick={() => handleSelectContact(contact)}
-                  disabled={isSendingInvite}
-                  className="flex w-full items-center justify-between p-3 rounded-xl border border-border bg-card cursor-pointer hover:border-accent hover:bg-accent/5 transition-all text-xs disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <div className="text-left">
-                    <p className="font-semibold text-foreground">{contact.name}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{contact.contact}</p>
-                  </div>
-                  <Badge variant="outline" className="text-[9px] uppercase tracking-wide">Invite</Badge>
-                </button>
-              ))}
-            </div>
+            {isLoadingSuggestedContacts ? (
+              <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-muted-foreground">Loading suggested contacts...</p>
+            ) : hasSuggestedContactsError && importablePlatformUsers.length === 0 ? (
+              <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-rose-600">Unable to load your circle, Clic, or group-goal contacts right now.</p>
+            ) : importablePlatformUsers.length === 0 ? (
+              <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-muted-foreground">No eligible contacts found from Clics, circles, or group goals you created.</p>
+            ) : (
+              <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                {importablePlatformUsers.map((contact, idx) => (
+                  <button
+                    key={`${contact.platformUserId || contact.contact}_${idx}`}
+                    type="button"
+                    onClick={() => handleSelectContact(contact)}
+                    disabled={isSendingInvite}
+                    className="flex w-full items-center justify-between gap-3 p-3 rounded-xl border border-border bg-card cursor-pointer hover:border-accent hover:bg-accent/5 transition-all text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <div className="min-w-0 text-left">
+                      <p className="font-semibold text-foreground truncate">{contact.name}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{contact.contact}</p>
+                      {contact.sourceLabel && (
+                        <p className="text-[10px] font-semibold text-accent mt-0.5 truncate">{contact.sourceLabel}</p>
+                      )}
+                    </div>
+                    <Badge variant="outline" className="shrink-0 text-[9px] uppercase tracking-wide">Invite</Badge>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -2829,130 +2799,6 @@ const GroupsHome = () => {
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="space-y-2 rounded-2xl border border-[#126989]/15 bg-[#126989]/5 p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-bold text-[#126989] uppercase tracking-wider">In-Platform Friends</p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">
-                    Select members from your created Clics, circles, and group goals.
-                  </p>
-                </div>
-                {isLoadingCreateFriendSuggestions && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#126989]" />}
-              </div>
-
-              {!isLoadingCreateFriendSuggestions && !hasCreateFriendSuggestionError && createFriendSuggestions.length > 0 && (
-                <>
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        type="search"
-                        placeholder="Search in-platform friends..."
-                        value={friendSourceSearchInput}
-                        onChange={e => setFriendSourceSearchInput(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            setActiveFriendSourceSearchQuery(friendSourceSearchInput.trim());
-                          }
-                        }}
-                        className="h-10 rounded-xl pl-9 pr-8 text-xs"
-                      />
-                      {friendSourceSearchInput && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFriendSourceSearchInput('');
-                            setActiveFriendSourceSearchQuery('');
-                          }}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                    <Button
-                      type="button"
-                      onClick={() => setActiveFriendSourceSearchQuery(friendSourceSearchInput.trim())}
-                      className="h-10 shrink-0 rounded-xl bg-accent px-3.5 text-xs font-bold text-accent-foreground shadow-sm"
-                    >
-                      <Search className="mr-1.5 h-3.5 w-3.5" />
-                      Search
-                    </Button>
-                  </div>
-
-                  {availableFriendSourceFilterPills.length > 1 && (
-                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-                      {availableFriendSourceFilterPills.map(source => (
-                        <button
-                          key={source}
-                          type="button"
-                          onClick={() => setSelectedFriendSourceFilter(source)}
-                          className={`whitespace-nowrap rounded-full px-3 py-1 text-[10px] font-bold transition-all ${selectedFriendSourceFilter === source
-                            ? 'bg-accent text-accent-foreground shadow-sm'
-                            : 'bg-muted/60 text-muted-foreground hover:bg-muted'
-                            }`}
-                        >
-                          {formatFriendSourceFilterLabel(source)}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-
-              {isLoadingCreateFriendSuggestions ? (
-                <p className="rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">Loading in-platform friends...</p>
-              ) : hasCreateFriendSuggestionError ? (
-                <p className="rounded-xl border border-border bg-card p-3 text-xs text-rose-600">Unable to load circle or group-goal friends right now.</p>
-              ) : createFriendSuggestions.length === 0 ? (
-                <p className="rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">No eligible in-platform friends found from your created Clics, circles, or group goals.</p>
-              ) : filteredCreateFriendSuggestions.length === 0 ? (
-                <p className="rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">No in-platform friends found matching your search.</p>
-              ) : (
-                <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
-                  {filteredCreateFriendSuggestions.map((contact, idx) => {
-                    const candidate = toAddedGroupMember(contact);
-                    const isAdded = isGroupMemberAlreadyAdded(candidate);
-                    const canInvite = !!candidate.platformUserId || !!candidate.email || !!candidate.phoneNumber;
-
-                    return (
-                      <button
-                        key={`${contact.sourceType || 'friend'}_${contact.sourceId || 'source'}_${contact.platformUserId || contact.contact || contact.name}_${idx}`}
-                        type="button"
-                        onClick={() => handleToggleSuggestedFriend(contact)}
-                        disabled={!canInvite}
-                        className={`flex w-full items-center justify-between gap-3 rounded-2xl border p-3.5 text-left text-xs transition-all disabled:cursor-not-allowed disabled:opacity-60 ${isAdded
-                          ? 'border-accent bg-accent/5 ring-1 ring-accent/30'
-                          : 'border-border bg-card hover:border-accent/40 hover:shadow-sm'
-                          }`}
-                      >
-                        <div className="min-w-0 pr-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="truncate font-bold text-foreground">{contact.name}</p>
-                            {contact.role === 'admin' && (
-                              <span className="rounded border border-amber-500/30 bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-extrabold uppercase text-amber-600">
-                                Admin
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                            {[contact.email, contact.phoneNumber].filter(Boolean).join(' - ') || 'Contact unavailable'}
-                          </p>
-                          <p className="mt-0.5 truncate text-[10px] font-semibold text-accent">
-                            {contact.sourceLabel}
-                          </p>
-                        </div>
-                        <Badge variant={isAdded ? 'default' : 'outline'} className="shrink-0 text-[9px] uppercase tracking-wide">
-                          {isAdded ? 'Selected' : canInvite ? 'Select' : 'Needs contact'}
-                        </Badge>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
             {addedGroupMembers.length > 0 && (
               <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-3">
                 <div className="flex items-center justify-between gap-3">
@@ -3058,7 +2904,7 @@ const GroupsHome = () => {
                           <div className="min-w-0">
                             <p className="truncate font-bold text-foreground">{friend.fullName}</p>
                             <p className="truncate text-[10px] text-muted-foreground mt-0.5">
-                              {[friend.email, friend.phoneNumber].filter(Boolean).join(' - ') || 'Profile contact hidden'}
+                              {friend.email || 'Email hidden'}
                             </p>
                           </div>
                           <Badge variant={isSelected ? 'default' : 'outline'} className="text-[9px] uppercase tracking-wide">
@@ -3071,6 +2917,49 @@ const GroupsHome = () => {
                 </div>
               </div>
             )}
+
+            <div className="space-y-2">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Suggested Contacts</p>
+              {isLoadingSuggestedContacts ? (
+                <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-muted-foreground">Loading suggested contacts...</p>
+              ) : hasSuggestedContactsError && importablePlatformUsers.length === 0 ? (
+                <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-rose-600">Unable to load your circle, Clic, or group-goal contacts right now.</p>
+              ) : importablePlatformUsers.length === 0 ? (
+                <p className="rounded-xl border border-border bg-card p-3 text-center text-xs text-muted-foreground">No eligible contacts found from Clics, circles, or group goals you created.</p>
+              ) : (
+                <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                  {importablePlatformUsers.map((contact, idx) => {
+                    const candidate = toAddedGroupMember(contact);
+                    const isSelected = isGroupMemberAlreadyAdded(candidate);
+                    const canAdd = !!candidate.platformUserId || !!candidate.email || !!candidate.phoneNumber;
+
+                    return (
+                      <button
+                        key={`${contact.platformUserId || contact.contact}_${idx}`}
+                        type="button"
+                        onClick={() => handleAddCreateContact(contact)}
+                        disabled={!canAdd || isSelected}
+                        className={`flex w-full items-center justify-between gap-3 p-3 rounded-xl border bg-card cursor-pointer transition-all text-xs disabled:cursor-not-allowed disabled:opacity-60 ${isSelected
+                          ? 'border-accent bg-accent/5'
+                          : 'border-border hover:border-accent hover:bg-accent/5'
+                          }`}
+                      >
+                        <div className="min-w-0 text-left">
+                          <p className="font-semibold text-foreground truncate">{contact.name}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{contact.contact}</p>
+                          {contact.sourceLabel && (
+                            <p className="text-[10px] font-semibold text-accent mt-0.5 truncate">{contact.sourceLabel}</p>
+                          )}
+                        </div>
+                        <Badge variant={isSelected ? 'default' : 'outline'} className="shrink-0 text-[9px] uppercase tracking-wide">
+                          {isSelected ? 'Selected' : canAdd ? 'Add' : 'No Contact'}
+                        </Badge>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             <div className="flex gap-2.5 pt-2">
               <Button
