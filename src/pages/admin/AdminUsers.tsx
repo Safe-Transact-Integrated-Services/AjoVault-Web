@@ -42,9 +42,14 @@ const dateFormatter = new Intl.DateTimeFormat('en-NG', {
 
 const normalizeStatus = (user: AdminUserListItem) => (user.isActive ? 'active' : 'suspended');
 
-const getDisplayEmail = (email: string) => {
+const getDisplayEmail = (email: string, maxLen = 20) => {
   if (!email || email.endsWith('@phone.ajovault.local')) return 'Not provided';
-  return email;
+  if (email.length <= maxLen) return email;
+  const atIdx = email.indexOf('@');
+  if (atIdx > 0 && atIdx <= maxLen) {
+    return `${email.slice(0, atIdx)}...`;
+  }
+  return `${email.slice(0, maxLen)}...`;
 };
 
 const getInitials = (fullName: string) =>

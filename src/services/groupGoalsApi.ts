@@ -13,6 +13,7 @@ interface GroupGoalSummaryResponse {
   deadline: string;
   status: GroupGoalStatus;
   creatorName: string;
+  createdByUserId?: string | null;
   memberCount: number;
   role: GroupGoalRole;
   progressPercent: number;
@@ -21,7 +22,10 @@ interface GroupGoalSummaryResponse {
 
 interface GroupGoalMemberResponse {
   memberId: string;
+  userId?: string | null;
   name: string;
+  email?: string | null;
+  phoneNumber?: string | null;
   role: GroupGoalRole;
   totalContributed: number;
   lastContributionAtUtc?: string | null;
@@ -111,6 +115,7 @@ export interface GroupGoalSummary {
   deadline: string;
   status: GroupGoalStatus;
   creatorName: string;
+  createdByUserId?: string;
   memberCount: number;
   role: GroupGoalRole;
   progressPercent: number;
@@ -119,7 +124,10 @@ export interface GroupGoalSummary {
 
 export interface GroupGoalMember {
   id: string;
+  userId?: string;
   name: string;
+  email?: string;
+  phoneNumber?: string;
   role: GroupGoalRole;
   totalContributed: number;
   lastContributionAt?: string;
@@ -222,6 +230,7 @@ export const getGroupGoal = async (goalId: string): Promise<GroupGoalDetail> => 
       deadline: '2026-12-31',
       status: 'active',
       creatorName: 'Adaeze Okafor',
+      createdByUserId: undefined,
       memberCount: 3,
       role: 'admin',
       progressPercent: 30,
@@ -322,6 +331,7 @@ const mapSummary = (goal: GroupGoalSummaryResponse): GroupGoalSummary => ({
   deadline: goal.deadline,
   status: goal.status,
   creatorName: goal.creatorName,
+  createdByUserId: goal.createdByUserId ?? undefined,
   memberCount: goal.memberCount,
   role: goal.role,
   progressPercent: goal.progressPercent,
@@ -335,7 +345,10 @@ const mapDetail = (goal: GroupGoalDetailResponse): GroupGoalDetail => ({
   canContribute: goal.canContribute,
   members: goal.members.map(member => ({
     id: member.memberId,
+    userId: member.userId ?? undefined,
     name: member.name,
+    email: member.email ?? undefined,
+    phoneNumber: member.phoneNumber ?? undefined,
     role: member.role,
     totalContributed: member.totalContributed,
     lastContributionAt: member.lastContributionAtUtc ?? undefined,

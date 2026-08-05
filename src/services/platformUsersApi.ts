@@ -4,14 +4,12 @@ interface PlatformUserLookupResponse {
   userId: string;
   fullName: string;
   email?: string | null;
-  phoneNumber?: string | null;
 }
 
 export interface PlatformUserSearchResult {
   userId: string;
   fullName: string;
   email?: string;
-  phoneNumber?: string;
 }
 
 export const platformUsersKeys = {
@@ -32,6 +30,5 @@ export const searchPlatformUsers = async (query: string, take = 8): Promise<Plat
     userId: user.userId,
     fullName: user.fullName,
     email: user.email ?? undefined,
-    phoneNumber: user.phoneNumber ?? undefined,
   }));
 };

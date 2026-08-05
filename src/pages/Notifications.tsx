@@ -95,7 +95,7 @@ const Notifications = () => {
         category: 'clic',
         read: currentStatus !== 'pending',
         date: inv.createdAtUtc || inv.createdAt || new Date().toISOString(),
-        link: '/clics',
+        link: '/clics?tab=invitations',
         inviteStatus: currentStatus,
         clicId: inv.clicId,
         invitationId: inv.invitationId || inv.id,
