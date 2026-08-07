@@ -30,7 +30,10 @@ interface GroupSummaryResponse {
 
 interface GroupMemberResponse {
   memberId: string;
+  userId?: string | null;
   name: string;
+  email?: string | null;
+  phoneNumber?: string | null;
   hasPaid: boolean;
   payoutPosition: number;
   hasReceivedPayout: boolean;
@@ -172,7 +175,10 @@ export interface CircleSummary {
 
 export interface CircleMember {
   id: string;
+  userId?: string;
   name: string;
+  email?: string;
+  phoneNumber?: string;
   hasPaid: boolean;
   payoutPosition: number;
   hasReceivedPayout: boolean;
@@ -708,7 +714,10 @@ const mapCircleDetail = (circle: GroupDetailResponse): CircleDetail => ({
   payoutAmount: circle.payoutAmount,
   members: circle.members.map(member => ({
     id: member.memberId,
+    userId: member.userId ?? undefined,
     name: member.name,
+    email: member.email ?? undefined,
+    phoneNumber: member.phoneNumber ?? undefined,
     hasPaid: member.hasPaid,
     payoutPosition: member.payoutPosition,
     hasReceivedPayout: member.hasReceivedPayout,
