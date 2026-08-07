@@ -24,6 +24,8 @@ import {
   Calendar,
   CheckCircle2,
   Star,
+  LogIn,
+  UserPlus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +33,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { EmptyTableState } from '@/components/shared/EmptyTableState';
 import { getApiErrorMessage } from '@/lib/api/http';
+import { useAuth } from '@/contexts/AuthContext';
 import { getFundraisers, fundraisingKeys, type FundraiserSummary } from '@/services/fundraisingApi';
 import { formatCurrency } from '@/services/mockData';
 import { formatCampaignCategoryLabel } from './campaignTypes';
@@ -224,6 +227,7 @@ const getInitials = (name: string) => {
 
 const FundraisingHome = () => {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
 
@@ -296,9 +300,32 @@ const FundraisingHome = () => {
         <div className="relative mx-auto max-w-7xl">
           <div className="grid items-center gap-8 lg:grid-cols-12 lg:gap-12">
             <div className="lg:col-span-7">
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-blue-400/30 bg-blue-500/10 px-3.5 py-1 text-xs font-semibold text-blue-300">
-                <Sparkles className="h-3.5 w-3.5 text-blue-400" />
-                <span>AjoVault Crowdfunding Platform</span>
+              {/* Header Row: Badge + Login/Signup Prompt if unauthenticated */}
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="inline-flex items-center gap-2 rounded-full border border-blue-400/30 bg-blue-500/10 px-3.5 py-1 text-xs font-semibold text-blue-300">
+                  <Sparkles className="h-3.5 w-3.5 text-blue-400" />
+                  <span>AjoVault Crowdfunding Platform</span>
+                </div>
+
+                {!isAuthenticated && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => navigate('/login', { state: { from: { pathname: '/fundraising' } } })}
+                      className="text-xs font-semibold text-slate-200 hover:bg-white/10 hover:text-white"
+                    >
+                      <LogIn className="mr-1.5 h-3.5 w-3.5" /> Sign In
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => navigate('/signup')}
+                      className="bg-[#3B82F6] text-xs font-bold text-white hover:bg-blue-600 shadow-sm"
+                    >
+                      <UserPlus className="mr-1.5 h-3.5 w-3.5" /> Sign Up
+                    </Button>
+                  </div>
+                )}
               </div>
 
               <h1 className="mb-4 font-display text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl">
@@ -309,6 +336,7 @@ const FundraisingHome = () => {
                 The easiest, most transparent way to raise and donate funds in Nigeria. Raise money for healthcare, emergencies, education, projects, and community goals.
               </p>
 
+              {/* Action Buttons */}
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   size="lg"
@@ -317,6 +345,28 @@ const FundraisingHome = () => {
                 >
                   <Plus className="h-5 w-5" /> Start a Campaign
                 </Button>
+
+                {!isAuthenticated && (
+                  <>
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      onClick={() => navigate('/login', { state: { from: { pathname: '/fundraising' } } })}
+                      className="gap-2 border-blue-400/40 bg-blue-500/10 font-bold text-blue-200 hover:bg-blue-500/20 hover:text-white"
+                    >
+                      <LogIn className="h-4.5 w-4.5" /> Sign In
+                    </Button>
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      onClick={() => navigate('/signup')}
+                      className="gap-2 border-white/20 bg-white/5 font-semibold text-white hover:bg-white/10"
+                    >
+                      <UserPlus className="h-4.5 w-4.5" /> Create Account
+                    </Button>
+                  </>
+                )}
+
                 <Button
                   size="lg"
                   variant="outline"
@@ -416,9 +466,21 @@ const FundraisingHome = () => {
             <h2 className="font-display text-2xl font-bold text-foreground">Campaigns You Can Support</h2>
             <p className="text-xs text-muted-foreground">Discover verified fundraisers and make an immediate impact.</p>
           </div>
-          <Button size="sm" onClick={() => navigate('/fundraising/create')} className="gap-1.5 self-start sm:self-auto bg-[#102A56] hover:bg-[#15366f] text-white">
-            <Plus className="h-4 w-4" /> New Campaign
-          </Button>
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            {!isAuthenticated && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => navigate('/login', { state: { from: { pathname: '/fundraising' } } })}
+                className="gap-1.5 text-xs font-semibold"
+              >
+                <LogIn className="h-3.5 w-3.5 text-primary" /> Sign In
+              </Button>
+            )}
+            <Button size="sm" onClick={() => navigate('/fundraising/create')} className="gap-1.5 bg-[#102A56] hover:bg-[#15366f] text-white">
+              <Plus className="h-4 w-4" /> New Campaign
+            </Button>
+          </div>
         </div>
 
         {/* Search Bar & Filters */}
