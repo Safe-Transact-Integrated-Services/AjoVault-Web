@@ -716,6 +716,14 @@ const FundraisingHome = () => {
           </div>
         </div>
       </section>
+
+      {/* 7. Footer Strip */}
+      <footer className="bg-[#102A56] py-6 text-white border-t border-white/10">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 text-[10px] font-bold uppercase text-white/40 sm:flex-row sm:px-6 lg:px-8">
+          <p>COPYRIGHT 2026 SAFE TRANSACT INTEGRATED SERVICES LTD. ALL RIGHTS RESERVED.</p>
+          <p>BUILT BY THE AJOVAULT TEAM</p>
+        </div>
+      </footer>
     </div>
   );
 };
