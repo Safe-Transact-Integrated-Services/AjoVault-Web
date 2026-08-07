@@ -50,10 +50,10 @@ type IconCard = {
 };
 
 const featureMenuItems = [
-  { name: 'Rotating group contributions', href: '#features' },
-  { name: 'Personal goals', href: '#features' },
-  { name: 'Group goals', href: '#features' },
-  { name: 'Fundraising', href: '#features' },
+  { name: 'Rotating group contributions', href: '/circles' },
+  { name: 'Personal goals', href: '/savings' },
+  { name: 'Group goals', href: '/group-goals' },
+  { name: 'Fundraising', href: '/fundraising' },
 ];
 
 const navLinks: NavLink[] = [
@@ -148,36 +148,42 @@ const howItWorks = [
   },
 ];
 
-const services: IconCard[] = [
+const services: (IconCard & { href?: string })[] = [
   {
     title: 'Smart Personal Savings',
     description: 'Set financial goals, save consistently, and manage your money with ease.',
     icon: UserPlus,
+    href: '/savings',
   },
   {
     title: 'Group & Cooperative Savings',
     description: 'Create groups, onboard members, and track contributions transparently.',
     icon: Users,
+    href: '/circles',
   },
   {
     title: 'Credit & Loan Access',
     description: 'Access structured credit with clear eligibility rules and repayment visibility.',
     icon: Banknote,
+    href: '/credit-passport',
   },
   {
     title: 'Wallet & Transactions',
     description: 'Fund your wallet, transfer money, withdraw funds, and pay bills securely.',
     icon: Wallet,
+    href: '/wallet/fund',
   },
   {
     title: 'Fundraising Campaigns',
     description: 'Launch personal or community fundraising goals with transparent tracking.',
     icon: Megaphone,
+    href: '/fundraising',
   },
   {
     title: 'Admin & Insights',
     description: 'Manage programs, set rules, and review operational reports in real time.',
     icon: BarChart3,
+    href: '/dashboard',
   },
 ];
 
@@ -928,15 +934,21 @@ const BenefitCard = ({ title, description, icon: Icon }: IconCard) => (
   </div>
 );
 
-const ServiceCard = ({ title, description, icon: Icon }: IconCard) => (
-  <div className="group flex flex-col items-center rounded-lg border border-slate-100 bg-white p-10 text-center transition-all hover:shadow-2xl hover:shadow-blue-900/5">
-    <div className="mb-8 flex h-20 w-20 items-center justify-center rounded-lg bg-[#F0F7FF] text-[#102A56] shadow-sm transition-all group-hover:bg-[#3B82F6] group-hover:text-white">
-      <Icon className="h-10 w-10" />
+const ServiceCard = ({ title, description, icon: Icon, href }: IconCard & { href?: string }) => {
+  const navigate = useNavigate();
+  return (
+    <div
+      onClick={() => href && navigate(href)}
+      className={`group flex flex-col items-center rounded-lg border border-slate-100 bg-white p-10 text-center transition-all hover:shadow-2xl hover:shadow-blue-900/5 ${href ? 'cursor-pointer' : ''}`}
+    >
+      <div className="mb-8 flex h-20 w-20 items-center justify-center rounded-lg bg-[#F0F7FF] text-[#102A56] shadow-sm transition-all group-hover:bg-[#3B82F6] group-hover:text-white">
+        <Icon className="h-10 w-10" />
+      </div>
+      <h3 className="mb-4 font-display text-2xl font-black text-[#102A56]">{title}</h3>
+      <p className="font-medium leading-relaxed text-slate-500">{description}</p>
     </div>
-    <h3 className="mb-4 font-display text-2xl font-black text-[#102A56]">{title}</h3>
-    <p className="font-medium leading-relaxed text-slate-500">{description}</p>
-  </div>
-);
+  );
+};
 
 type FooterLinkItem =
   | string
@@ -1014,10 +1026,16 @@ const FooterLinks = ({
                     if (label === 'Contact Us' && onContactClick) {
                       e.preventDefault();
                       onContactClick();
+                      return;
                     }
                     if (label === 'Platform' && onPlatformClick) {
                       e.preventDefault();
                       onPlatformClick();
+                      return;
+                    }
+                    if (href.startsWith('/')) {
+                      e.preventDefault();
+                      navigate(href);
                     }
                   }}
                 >

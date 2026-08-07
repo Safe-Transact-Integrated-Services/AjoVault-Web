@@ -1,5 +1,6 @@
 import { Heart, Home, Target, Users, MoreHorizontal } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 
 const tabs = [
@@ -14,6 +15,12 @@ const tabs = [
 const BottomNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+
+  // Hide bottom navigation if user is not authenticated
+  if (!isAuthenticated) {
+    return null;
+  }
 
   const isActive = (path: string) => location.pathname.startsWith(path);
 
