@@ -138,10 +138,18 @@ const App = () => (
               <Route path="/agent/login" element={<AgentLogin />} />
               <Route path="/agent/apply" element={<BecomeAgent />} />
 
+              {/* Publicly Accessible Fundraising Routes (AppLayout wrapper) */}
+              <Route element={<AppLayout />}>
+                <Route path="/fundraising" element={<FundraisingHome />} />
+                <Route path="/fundraising/:id" element={<FundraiserDetail />} />
+                <Route path="/fundraising/:id/donate" element={<DonateFundraiser />} />
+              </Route>
+
               <Route element={<MobilePageLayout />}>
                 <Route path="/fundraising/donate/:code" element={<DonateFundraiser />} />
               </Route>
 
+              {/* Protected Routes (Require Authentication) */}
               <Route element={<AuthRouteGuard />}>
                 <Route element={<AppLayout />}>
                   <Route path="/dashboard" element={<Dashboard />} />
@@ -190,28 +198,27 @@ const App = () => (
                   <Route path="/cooperative/members" element={<CooperativeMembers />} />
                   <Route path="/cooperative/programs" element={<CooperativePrograms />} />
                   <Route path="/cooperative/loans" element={<CooperativeLoans />} />
-                  <Route path="/fundraising" element={<FundraisingHome />} />
+
+                  {/* Protected Fundraising Action Routes */}
                   <Route path="/fundraising/create" element={<CreateFundraiser />} />
-                  <Route path="/fundraising/:id" element={<FundraiserDetail />} />
                   <Route path="/fundraising/:id/invite" element={<FundraiserInvite />} />
                   <Route path="/fundraising/:id/manage" element={<FundraiserManage />} />
                   <Route path="/fundraising/:id/withdraw" element={<FundraiserWithdraw />} />
-                  <Route path="/fundraising/:id/donate" element={<DonateFundraiser />} />
                 </Route>
               </Route>
 
               <Route element={<AgentRouteGuard />}>
                 <Route element={<AgentLayout />}>
-                <Route path="/agent" element={<AgentDashboard />} />
-                <Route path="/agent/transact" element={<AgentTransact />} />
-                <Route path="/agent/register" element={<AgentRegister />} />
-                <Route path="/agent/history" element={<AgentHistory />} />
-                <Route path="/agent/customers" element={<AgentCustomers />} />
-                <Route path="/agent/commissions" element={<AgentCommissions />} />
-                <Route path="/agent/ledger" element={<AgentLedger />} />
-                <Route path="/agent/settlements" element={<AgentSettlements />} />
-                <Route path="/agent/help" element={<AgentHelpSupport />} />
-                <Route path="/agent/more" element={<AgentMore />} />
+                  <Route path="/agent" element={<AgentDashboard />} />
+                  <Route path="/agent/transact" element={<AgentTransact />} />
+                  <Route path="/agent/register" element={<AgentRegister />} />
+                  <Route path="/agent/history" element={<AgentHistory />} />
+                  <Route path="/agent/customers" element={<AgentCustomers />} />
+                  <Route path="/agent/commissions" element={<AgentCommissions />} />
+                  <Route path="/agent/ledger" element={<AgentLedger />} />
+                  <Route path="/agent/settlements" element={<AgentSettlements />} />
+                  <Route path="/agent/help" element={<AgentHelpSupport />} />
+                  <Route path="/agent/more" element={<AgentMore />} />
                 </Route>
               </Route>
 
@@ -237,4 +244,3 @@ const App = () => (
 );
 
 export default App;
-
