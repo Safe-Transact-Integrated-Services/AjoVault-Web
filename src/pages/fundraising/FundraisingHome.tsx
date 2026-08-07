@@ -291,7 +291,7 @@ const FundraisingHome = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-12 safe-top">
+    <div className="min-h-screen bg-background safe-top">
       {/* 1. Hero Section */}
       <section className="relative overflow-hidden bg-[#102A56] px-4 py-12 text-white sm:px-6 lg:px-8">
         <div className="absolute right-0 top-0 h-96 w-96 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
