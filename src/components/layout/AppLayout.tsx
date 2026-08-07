@@ -1,5 +1,6 @@
 import { Outlet, useLocation } from 'react-router-dom';
 import BottomNav from './BottomNav';
+import PublicNavbar from './PublicNavbar';
 import { useAuth } from '@/contexts/AuthContext';
 
 const AppLayout = () => {
@@ -9,6 +10,8 @@ const AppLayout = () => {
 
   return (
     <div className="mx-auto min-h-screen bg-background">
+      {!isAuthenticated && <PublicNavbar />}
+
       <main
         className={
           isFullWidthPage
